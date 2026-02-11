@@ -94,3 +94,69 @@ select_talent <- function(query, root = get_staging_root(), ignore_case = TRUE) 
     paste(hits$name, collapse = ", ")
   )
 }
+
+talent_slugify <- function(x) {
+  x <- enc2utf8(as.character(x))
+  x <- str_to_lower(x)
+  x <- str_replace_all(x, "[^a-z0-9]+", "_")
+  x <- str_replace_all(x, "^_+|_+$", "")
+  if (!nzchar(x)) "talent" else x
+}
+
+ensure_talent_id <- function(con, talent_name, table = "talents") {
+  if (!requireNamespace("DBI", quietly = TRUE)) {
+    stop("Package `DBI` is required for ensure_talent_id().")
+  }
+
+  if (!DBI::dbExistsTable(con, table)) {
+    DBI::dbExecute(
+      con,
+      sprintf(
+        "CREATE TABLE %s (
+           talent_num INTEGER PRIMARY KEY,
+           talent_name TEXT UNIQUE,
+           talent_slug TEXT,
+           talent_id TEXT UNIQUE,
+           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+         )",
+        table
+      )
+    )
+  }
+
+  existing <- DBI::dbGetQuery(
+    con,
+    sprintf(
+      "SELECT talent_num, talent_slug, talent_id FROM %s WHERE talent_name = ? LIMIT 1",
+      table
+    ),
+    params = list(talent_name)
+  )
+  if (nrow(existing) == 1) {
+    return(existing)
+  }
+
+  next_num <- DBI::dbGetQuery(
+    con,
+    sprintf("SELECT COALESCE(MAX(talent_num), 0) + 1 AS next_num FROM %s", table)
+  )$next_num[[1]]
+
+  talent_slug <- talent_slugify(talent_name)
+  talent_id <- sprintf("%04d_%s", next_num, talent_slug)
+
+  DBI::dbExecute(
+    con,
+    sprintf(
+      "INSERT INTO %s (talent_num, talent_name, talent_slug, talent_id) VALUES (?, ?, ?, ?)",
+      table
+    ),
+    params = list(next_num, talent_name, talent_slug, talent_id)
+  )
+
+  data.frame(
+    talent_num = next_num,
+    talent_slug = talent_slug,
+    talent_id = talent_id,
+    stringsAsFactors = FALSE
+  )
+}
