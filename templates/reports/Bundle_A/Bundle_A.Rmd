@@ -1,0 +1,162 @@
+---
+title: "BundleA"
+author: "Jonathon Sun"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(
+  echo     = TRUE,
+  message  = FALSE, 
+  warning  = FALSE,
+  fig.align = "center"
+)
+
+knitr::opts_knit$set(root.dir = here::here())
+
+if (knitr::is_latex_output()) {
+  knitr::opts_chunk$set(
+    fig.width  = 14,
+    fig.height = 7,
+    out.width  = "0.8\\linewidth"
+  )
+} else {
+  knitr::opts_chunk$set(
+    fig.width  = 10,
+    fig.height = 5
+  )
+}
+
+
+```
+
+```{r libraries, include=FALSE}
+
+library(tidyverse)
+library(purrr)
+library(here)
+library(ggplot2)
+library(DT)
+library(plotly)
+
+```
+
+```{r modules, include=FALSE}
+
+source("scripts/lib/utils/staging_root.R")
+
+list.files(here("scripts","lib","plots","report","bundle_A"), full.names = TRUE) %>%
+    walk(source)
+list.files(here("scripts","lib","utils"), full.names = TRUE) %>%
+    walk(source)
+list.files(here("scripts", "lib", "import_data"), pattern = "[rR]$", full.names = TRUE) %>%
+  walk(source)
+list.files(here("scripts", "lib", "report_tables"), pattern = "[rR]$", full.names = TRUE) %>%
+  walk(source)
+source(here("scripts","lib","plots","PlottingThemes.R"))
+source(here::here("scripts","lib","clean_data","CleanData.R"))
+
+root <- get_staging_root()
+```
+
+```{r load_data, include = FALSE}
+talent_root <- list.files(root, full.names = TRUE)
+
+Talent <- c("Ava")
+
+talent_root <- select_talent(Talent)
+files <- TalentFiles(talent_root)
+
+df <- video_analytics_prep(files, talent = Talent)
+
+monetary <- video_monetary_prep(files, talent = Talent) %>%
+            drop_na()
+```
+# Overall Performance Snapshot
+
+## Overall views by Content Type
+```{r views by content, fig.width=10}
+ggplotly(
+  total_views_content_type(df, Talent) +
+  theme_nyt()
+)
+
+```
+
+
+## Total Revenue by content type 
+```{r views by content over time, fig.width=10, fig.height=10}
+ggplotly(
+  total_metric_content_type(
+    monetary,
+    Talent,
+    metric_col = "Estimated Revenue",
+    metric_label = "Revenue",
+    bar_position = "stack",
+    show_counts = TRUE
+  )
+)
+
+```
+
+```{r}
+UIdf<- df %>%
+  select(
+    Title,
+    publish_date,
+    `Content Type`,
+    matches("estimated|average", ignore.case = TRUE)
+  ) %>%
+  mutate(across(any_of(factorCols), as.factor))
+
+decimal_cols <- detect_decimals(UIdf)
+
+DTSettings(UIdf) %>%
+  DT::formatRound(columns = decimal_cols)
+```
+
+# Trends Over Time
+
+## Views over time by content type
+```{r import monetary data}
+ggplotly(
+  Content_duration_views(df, Talent) +
+  theme_nyt()
+)
+
+```
+
+## Revenue over time by content type
+```{r monetary data by content}
+
+ggplotly(
+  content_duration_metric(monetary, Talent, "Estimated Revenue") +
+  theme_nyt()
+
+)
+
+
+```
+
+# Monetization Quality (Views to Dollars)
+```{r monetary data table}
+
+Table <- revenue_stream_ratio_table(monetary)
+
+decimal_cols <- detect_decimals(Table)
+
+DTSettings(
+  Table,
+  class = "display stripe hover",
+  scroll_x = TRUE
+) %>%
+  formatRound(columns = decimal_cols , digits = 2)
+
+```
+
+# Wrap-up: What this means
+
+
+
