@@ -1,6 +1,8 @@
 library(dplyr)
 library(stringr)
 
+EXCLUDED_TALENT_FOLDERS <- c("VarianceProject")
+
 normalize_talent_path <- function(x) {
   # 1. Universally decode <U+XXXX> Unicode placeholders
   x <- str_replace_all(x, "<U\\+([0-9a-fA-F]+)>", function(m) {
@@ -52,11 +54,16 @@ list_talents <- function(root = get_staging_root()) {
     name = safe_basename(paths),
     path = paths
   ) %>%
+    filter(!(name %in% EXCLUDED_TALENT_FOLDERS)) %>%
     arrange(name)
 }
 
 select_talent <- function(query, root = get_staging_root(), ignore_case = TRUE) {
   talents <- list_talents(root)
+
+  if (is.character(query) && length(query) == 1 && str_to_lower(query) %in% c("all", "*")) {
+    return(talents$path)
+  }
   
   if (is.numeric(query)) {
     if (length(query) != 1 || query < 1 || query > nrow(talents)) {
