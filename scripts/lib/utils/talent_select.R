@@ -40,6 +40,38 @@ safe_basename <- function(x) {
   str_extract(x, "[^/\\\\]+$") %>% enc2utf8()
 }
 
+clean_talent_name <- function(x, underscores = FALSE) {
+  x <- enc2utf8(as.character(x))
+  
+  # Decode <U+XXXX> placeholders when present.
+  x <- str_replace_all(x, "<U\\+([0-9a-fA-F]+)>", function(m) {
+    hex <- str_remove_all(m, "<U\\+|>")
+    unname(sapply(hex, function(h) intToUtf8(strtoi(h, 16L))))
+  })
+  
+  # Decode <xx><yy> byte runs and fall back to a single space on failure.
+  x <- str_replace_all(x, "(?:<[0-9a-fA-F]{2}>)+", function(m) {
+    unname(sapply(m, function(seq) {
+      hex_bytes <- str_extract_all(seq, "[0-9a-fA-F]{2}")[[1]]
+      raw_bytes <- as.raw(strtoi(hex_bytes, 16L))
+      decoded <- suppressWarnings(tryCatch(rawToChar(raw_bytes), error = function(e) " "))
+      Encoding(decoded) <- "UTF-8"
+      decoded
+    }))
+  })
+  
+  # Replace common bracket wrappers and split collapsed word boundaries.
+  x <- str_replace_all(x, "[\\[\\]【】<>]", " ")
+  x <- str_replace_all(x, "([[:lower:]])([[:upper:]])", "\\1 \\2")
+  x <- str_squish(x)
+  
+  if (isTRUE(underscores)) {
+    x <- str_replace_all(x, "\\s+", "_")
+  }
+  
+  x
+}
+
 list_talents <- function(root = get_staging_root()) {
   has_use_bytes <- "useBytes" %in% names(formals(list.dirs))
   paths <- if (has_use_bytes) {

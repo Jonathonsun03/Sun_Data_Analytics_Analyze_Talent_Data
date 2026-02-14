@@ -16,6 +16,8 @@ source("scripts/lib/duckdb/db_schema.R")
 source("scripts/lib/duckdb/ingest_videos.R")
 source("scripts/lib/duckdb/pending.R")
 source("scripts/lib/ChatGPT/chatgpt_load_all.R")
+source("scripts/lib/stream_classification/talent_rules.R")
+source("scripts/lib/stream_classification/prompt_builder.R")
 
 con <- duckdb_connect()
 on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
@@ -31,8 +33,6 @@ talent_id <- talent_meta$talent_id[[1]]
 to_ingest <- build_to_ingest(Classification, talent_id, talent_name)
 
 # Classification run controls
-taxonomy_version <- "v1"
-prompt_version <- "v1"
 model <- Sys.getenv("OPENAI_MODEL", unset = "gpt-5-mini")
 
 # Choose how to avoid rework:
@@ -52,30 +52,16 @@ if (is.na(max_retries) || max_retries < 0) {
   max_retries <- 2L
 }
 
-prompt_path <- file.path(
-  "classification",
-  "prompts",
-  "title_classification_prompt.txt"
-)
-schema_path <- file.path(
-  "classification",
-  "prompts",
-  "title_classification_schema.json"
-)
-if (!file.exists(prompt_path)) {
-  stop("Missing prompt file: ", prompt_path)
-}
-if (!file.exists(schema_path)) {
-  stop("Missing schema file: ", schema_path)
-}
-
-system_prompt <- paste(
-  "You classify YouTube video titles into a strict JSON structure.",
-  "Return only valid JSON and nothing else."
-)
-user_prompt_template <- paste(readLines(prompt_path, warn = FALSE), collapse = "\n")
-schema_text <- paste(readLines(schema_path, warn = FALSE), collapse = "\n")
-schema <- jsonlite::fromJSON(schema_path, simplifyVector = FALSE)
+prompt_bundle <- load_prompt_bundle(talent_name = talent_name)
+taxonomy_version <- prompt_bundle$taxonomy_version
+prompt_version <- prompt_bundle$prompt_version
+system_prompt <- prompt_bundle$system_prompt
+user_prompt_template <- prompt_bundle$user_prompt_template
+talent_profile <- prompt_bundle$profile_name
+talent_rules_text <- prompt_bundle$talent_rules_text
+schema_text <- prompt_bundle$schema_text
+schema <- prompt_bundle$schema
+message("Using talent prompt profile: ", talent_profile)
 
 strip_code_fences <- function(x) {
   if (!is.character(x) || length(x) == 0 || is.na(x[[1]])) {
@@ -170,7 +156,18 @@ validate_batch_response <- function(response_text, expected_video_ids, schema) {
   out
 }
 
-classify_batch <- function(batch_df, user_prompt_template, schema_text, schema, model, max_retries) {
+classify_batch <- function(
+    batch_df,
+    user_prompt_template,
+    schema_text,
+    schema,
+    system_prompt,
+    model,
+    max_retries,
+    talent_name,
+    talent_profile,
+    talent_rules_text
+) {
   records <- lapply(seq_len(nrow(batch_df)), function(i) {
     list(
       video_id = batch_df$video_id[[i]],
@@ -185,7 +182,10 @@ classify_batch <- function(batch_df, user_prompt_template, schema_text, schema, 
     user_prompt_template,
     list(
       records_json = records_json,
-      schema_json = schema_text
+      schema_json = schema_text,
+      talent_name = talent_name,
+      talent_profile = talent_profile,
+      talent_rules_text = talent_rules_text
     )
   )
   messages <- chatgpt_make_messages(
@@ -289,8 +289,12 @@ if (nrow(pending) == 0) {
       user_prompt_template = user_prompt_template,
       schema_text = schema_text,
       schema = schema,
+      system_prompt = system_prompt,
       model = model,
-      max_retries = max_retries
+      max_retries = max_retries,
+      talent_name = talent_name,
+      talent_profile = talent_profile,
+      talent_rules_text = talent_rules_text
     )
 
     to_insert <- batch_df %>%

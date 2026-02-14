@@ -19,16 +19,26 @@ source(here::here("scripts","lib","clean_data","CleanData.R"))
 root <- get_staging_root()
 talent_root <- select_talent("all", root = root)
 
+talent_path <- talent_root[4]
+files <- TalentFiles(talent_path)
+analytics <- video_analytics_prep(files, talent = basename(talent_path))
+glimpse(analytics)
+
 titles <- lapply(talent_root, function(talent_path) {
   Talent <- basename(talent_path)
   files <- TalentFiles(talent_path)
 
   analytics <- video_analytics_prep(files, talent = Talent)
   analytics %>%
-    select(video_id, title) %>%
+    select(`Video ID`, Title, `Content Type`) %>%
     distinct() %>%
-    filter(!is.na(title)) %>%
+    filter(!is.na(Title)) %>%
     mutate(talent = Talent)
 }) %>%
   bind_rows() %>%
-  distinct(talent, video_id, title)
+  distinct(talent, `Video ID`, Title, `Content Type`) %>%
+  mutate(talent = clean_talent_name(talent, underscores = TRUE))
+
+glimpse(titles)
+View(titles)
+write.csv(titles, here("notes", "titles.csv"), row.names = FALSE)
