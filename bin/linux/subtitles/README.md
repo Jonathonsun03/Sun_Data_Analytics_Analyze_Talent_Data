@@ -50,6 +50,9 @@ bin/linux/subtitles/run_subtitle_clean.sh --talent-query "Avaritia"
   - Sets `SUBTITLE_WRITE_ENA_TXT=true` and writes a human-readable ENA text file
 - `--reclean`
   - Sets `SUBTITLE_RECLEAN=true` and reprocesses existing subtitle files (`skip_existing = FALSE`)
+- `--ena-as-final`
+  - Sets `SUBTITLE_ENA_AS_FINAL=true` and writes ENA rows back to each video's
+  - `<Talent>/Subtitles/Processed/<video>_subtitles.csv` as the final per-video format
 - `-h`, `--help`
   - Show help
 
@@ -62,12 +65,18 @@ bin/linux/subtitles/run_subtitle_clean.sh \
   --pause-gap-sec 2.0 \
   --n-cores 4 \
   --write-ena-txt
+```
 
 Force full reclean (overwrite processed subtitle CSVs):
 
 ```bash
 bin/linux/subtitles/run_subtitle_clean.sh --reclean
 ```
+
+Force ENA as final per-video output format:
+
+```bash
+bin/linux/subtitles/run_subtitle_clean.sh --reclean --ena-as-final
 ```
 
 ### Weekly run (cron example)

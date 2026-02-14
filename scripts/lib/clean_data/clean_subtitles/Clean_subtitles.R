@@ -21,7 +21,8 @@ process_talent_subtitle <- function(talent_name,
                                     save_rdata = TRUE,
                                     rdata_filename = NULL,
                                     skip_existing = TRUE,
-                                    subtitle_root = NULL) {
+                                    subtitle_root = NULL,
+                                    n_cores = 1) {
   path <- if (is.null(subtitle_root)) TalentSubtitlePath(talent_name) else subtitle_root
   input_dir <- file.path(path, "Original")
   output_dir <- file.path(path, "Processed")
@@ -70,16 +71,18 @@ process_talent_subtitle <- function(talent_name,
     return(NULL)
   }
 
+  if (is.na(n_cores) || n_cores < 1) n_cores <- 1
+
   dfs <- existing_dfs
 
-  for (f in files) {
+  process_one_file <- function(f) {
     if (!file.exists(f)) {
       f_decoded <- decode_placeholder_bytes(f)
       if (file.exists(f_decoded)) {
         f <- f_decoded
       } else {
         message("Skipping missing subtitle file: ", f)
-        next
+        return(NULL)
       }
     }
 
@@ -91,9 +94,9 @@ process_talent_subtitle <- function(talent_name,
       message("Skipping re-clean (exists): ", out_name)
       if (is.null(dfs[[out_name]])) {
         df <- read_csv(out_path, show_col_types = FALSE)
-        dfs[[out_name]] <- df
+        return(list(out_name = out_name, df = df))
       }
-      next
+      return(NULL)
     }
 
     df <- tryCatch(
@@ -103,13 +106,24 @@ process_talent_subtitle <- function(talent_name,
         NULL
       }
     )
-    if (is.null(df)) next
+    if (is.null(df)) return(NULL)
 
     df <- SplitTimeStamp(df)
     df <- CleanDuplicateTimestamps(df)
 
     write_csv(df, out_path)
-    dfs[[out_name]] <- df
+    list(out_name = out_name, df = df)
+  }
+
+  file_results <- if (n_cores > 1 && .Platform$OS.type != "windows") {
+    parallel::mclapply(files, process_one_file, mc.cores = n_cores, mc.preschedule = TRUE)
+  } else {
+    lapply(files, process_one_file)
+  }
+
+  for (res in file_results) {
+    if (is.null(res)) next
+    dfs[[res$out_name]] <- res$df
   }
 
   if (save_rdata && length(dfs) > 0) {
@@ -151,6 +165,50 @@ load_all_talent_rdata <- function(talents, rdata_filename = NULL) {
   Filter(Negate(is.null), results)
 }
 
+period_to_seconds <- function(x) {
+  if (is.numeric(x)) return(as.numeric(x))
+
+  x <- as.character(x)
+  x <- stringr::str_trim(x)
+  out <- rep(NA_real_, length(x))
+
+  missing <- is.na(x) | x == ""
+  if (all(missing)) return(out)
+
+  x_work <- toupper(x)
+
+  # HH:MM:SS(.sss) or MM:SS(.sss)
+  colon_idx <- !missing & stringr::str_detect(x_work, "^\\d{1,2}:\\d{2}(:\\d{2}(\\.\\d+)?)?$")
+  if (any(colon_idx)) {
+    parts <- strsplit(x_work[colon_idx], ":", fixed = TRUE)
+    out[colon_idx] <- vapply(parts, function(p) {
+      if (length(p) == 2) {
+        as.numeric(p[1]) * 60 + as.numeric(p[2])
+      } else if (length(p) == 3) {
+        as.numeric(p[1]) * 3600 + as.numeric(p[2]) * 60 + as.numeric(p[3])
+      } else {
+        NA_real_
+      }
+    }, numeric(1))
+  }
+
+  # 1H 2M 3S, 2M 19S, 14S
+  period_idx <- !missing & is.na(out) & stringr::str_detect(x_work, "^(?=.*\\d\\s*[HMS])[0-9HMS\\s\\.]+$")
+  if (any(period_idx)) {
+    p <- x_work[period_idx]
+    h <- suppressWarnings(as.numeric(stringr::str_match(p, "(\\d+(?:\\.\\d+)?)\\s*H")[, 2]))
+    m <- suppressWarnings(as.numeric(stringr::str_match(p, "(\\d+(?:\\.\\d+)?)\\s*M")[, 2]))
+    s <- suppressWarnings(as.numeric(stringr::str_match(p, "(\\d+(?:\\.\\d+)?)\\s*S")[, 2]))
+
+    h[is.na(h)] <- 0
+    m[is.na(m)] <- 0
+    s[is.na(s)] <- 0
+    out[period_idx] <- h * 3600 + m * 60 + s
+  }
+
+  out
+}
+
 SplitTimeStamp <- function(df) {
   nm <- names(df)
   nm_lower <- tolower(nm)
@@ -188,10 +246,10 @@ SplitTimeStamp <- function(df) {
 
   clean_df <- df %>%
     dplyr::mutate(
-      start_time = lubridate::hms(.data$start_chr),
-      stop_time = lubridate::hms(.data$stop_chr),
-      start_sec = as.numeric(.data$start_time),
-      stop_sec = as.numeric(.data$stop_time),
+      start_sec = period_to_seconds(.data$start_chr),
+      stop_sec = period_to_seconds(.data$stop_chr),
+      start_time = as.character(lubridate::seconds_to_period(.data$start_sec)),
+      stop_time = as.character(lubridate::seconds_to_period(.data$stop_sec)),
       VideoID = as.character(.data[[video_id_col]]),
       VideoTitle = as.character(.data[[video_title_col]]),
       Text = as.character(.data[[text_col]])

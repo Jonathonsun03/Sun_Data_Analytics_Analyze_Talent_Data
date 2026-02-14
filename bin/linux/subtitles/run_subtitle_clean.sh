@@ -24,6 +24,7 @@ Options:
   --n-cores N                    SUBTITLE_N_CORES for parallel work (default: 1)
   --write-ena-txt                Also write subtitle_ena_units.txt
   --reclean                      Reprocess existing subtitle CSVs (skip_existing = FALSE)
+  --ena-as-final                 Write ENA output back to each Subtitles/Processed video CSV
   -h, --help                     Show this help
 
 Examples:
@@ -42,7 +43,8 @@ Examples:
       --pause-gap-sec 2.5 \
       --n-cores 4 \
       --write-ena-txt \
-      --reclean
+      --reclean \
+      --ena-as-final
 USAGE
 }
 
@@ -55,6 +57,7 @@ PAUSE_GAP_SEC_VAL="2.0"
 N_CORES_VAL="1"
 WRITE_ENA_TXT_VAL="false"
 RECLEAN_VAL="false"
+ENA_AS_FINAL_VAL="false"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -101,6 +104,10 @@ while [[ $# -gt 0 ]]; do
       RECLEAN_VAL="true"
       shift
       ;;
+    --ena-as-final)
+      ENA_AS_FINAL_VAL="true"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -128,6 +135,7 @@ export SUBTITLE_PAUSE_GAP_SEC="${PAUSE_GAP_SEC_VAL}"
 export SUBTITLE_N_CORES="${N_CORES_VAL}"
 export SUBTITLE_WRITE_ENA_TXT="${WRITE_ENA_TXT_VAL}"
 export SUBTITLE_RECLEAN="${RECLEAN_VAL}"
+export SUBTITLE_ENA_AS_FINAL="${ENA_AS_FINAL_VAL}"
 
 if [[ -n "${DATALAKE_ROOT_VAL}" ]]; then
   export TALENT_DATALAKE_ROOT="${DATALAKE_ROOT_VAL}"

@@ -48,6 +48,7 @@ pause_gap_sec <- as.numeric(Sys.getenv("SUBTITLE_PAUSE_GAP_SEC", unset = "2.0"))
 write_ena_txt <- tolower(Sys.getenv("SUBTITLE_WRITE_ENA_TXT", unset = "false")) %in% c("1", "true", "yes")
 reclean <- tolower(Sys.getenv("SUBTITLE_RECLEAN", unset = "false")) %in% c("1", "true", "yes")
 n_cores <- as.integer(Sys.getenv("SUBTITLE_N_CORES", unset = "1"))
+ena_as_final <- tolower(Sys.getenv("SUBTITLE_ENA_AS_FINAL", unset = "false")) %in% c("1", "true", "yes")
 
 if (is.na(n_quotes) || n_quotes < 1) n_quotes <- 3
 if (is.na(context_rows) || context_rows < 0) context_rows <- 10
@@ -67,6 +68,12 @@ run_apply <- function(x, fn, n_cores) {
   lapply(x, fn)
 }
 
+log_worker <- function(stage, idx, total, label, status, extra = NULL) {
+  pid <- Sys.getpid()
+  suffix <- if (is.null(extra) || !nzchar(extra)) "" else paste0(" (", extra, ")")
+  message(sprintf("[%s][pid=%d] (%d/%d) %s - %s%s", stage, pid, idx, total, label, status, suffix))
+}
+
 datalake_root <- get_datalake_root()
 if (!dir.exists(datalake_root)) {
   stop("Datalake root does not exist: ", datalake_root)
@@ -76,10 +83,12 @@ selected_talent_paths <- select_talent(talent_query, root = datalake_root)
 selected_talent_paths <- as.character(selected_talent_paths)
 selected_talent_names <- safe_basename(selected_talent_paths)
 selected_subtitle_roots <- file.path(selected_talent_paths, "Subtitles")
+subtitle_root_by_talent <- stats::setNames(selected_subtitle_roots, selected_talent_names)
 
 message("Using datalake root: ", datalake_root)
 message("Selected talents: ", paste(selected_talent_names, collapse = ", "))
 message("Using subtitle worker cores: ", n_cores)
+message("ENA as final per-video output: ", ena_as_final)
 
 TalentSubtitlePath <- function(talent_name) {
   candidates <- c(
@@ -96,35 +105,52 @@ TalentSubtitlePath <- function(talent_name) {
 }
 
 talent_indices <- seq_along(selected_talent_names)
+clean_talent_cores <- if (length(talent_indices) > 1) min(n_cores, length(talent_indices)) else 1L
+clean_file_cores <- if (length(talent_indices) == 1) n_cores else 1L
 message("Starting subtitle cleaning stage...")
 subtitle_results <- run_apply(
   talent_indices,
   function(i) {
     nm <- selected_talent_names[[i]]
     root <- selected_subtitle_roots[[i]]
-    message(sprintf("[clean] (%d/%d) %s - start", i, length(talent_indices), nm))
+    log_worker("clean", i, length(talent_indices), nm, "start")
     dfs <- process_talent_subtitle(
       nm,
       save_rdata = TRUE,
       skip_existing = !reclean,
-      subtitle_root = root
+      subtitle_root = root,
+      n_cores = clean_file_cores
     )
     n_sheets <- if (is.null(dfs)) 0L else length(dfs)
-    message(sprintf("[clean] (%d/%d) %s - done (sheets=%d)", i, length(talent_indices), nm, n_sheets))
+    log_worker("clean", i, length(talent_indices), nm, "done", sprintf("sheets=%d", n_sheets))
     list(name = nm, dfs = dfs)
   },
-  n_cores = n_cores
+  n_cores = clean_talent_cores
 )
 
-subtitle_dfs_by_talent <- subtitle_results |>
-  purrr::keep(~ !is.null(.x$dfs)) |>
-  purrr::set_names(purrr::map_chr(., "name")) |>
-  purrr::map("dfs")
+subtitle_results_kept <- purrr::keep(subtitle_results, ~ !is.null(.x$dfs))
+subtitle_dfs_by_talent <- purrr::set_names(
+  purrr::map(subtitle_results_kept, "dfs"),
+  purrr::map_chr(subtitle_results_kept, "name")
+)
 
 if (length(subtitle_dfs_by_talent) == 0) {
   warning("No subtitle data processed for selected talents.")
 }
 message("Completed subtitle cleaning stage.")
+
+# Flatten all subtitle sheets across talents so ENA work can parallelize at file level.
+sheet_tasks <- subtitle_dfs_by_talent |>
+  purrr::imap(function(dfs, talent_name) {
+    purrr::imap(dfs, function(df, sheet_name) {
+      list(
+        talent = talent_name,
+        sheet = sheet_name,
+        df = df
+      )
+    })
+  }) |>
+  unlist(recursive = FALSE)
 
 subtitle_summary <- imap_dfr(subtitle_dfs_by_talent, function(dfs, talent_name) {
   sheet_stats <- imap_dfr(dfs, function(df, sheet_name) {
@@ -168,25 +194,68 @@ subtitle_quotes <- imap_dfr(
   )
 )
 
-ena_names <- names(subtitle_dfs_by_talent)
-message("Starting ENA unitization stage...")
-ena_chunks <- run_apply(
-  seq_along(ena_names),
+message("Starting ENA unitization stage... (files=", length(sheet_tasks), ")")
+ena_results <- run_apply(
+  seq_along(sheet_tasks),
   function(i) {
-    nm <- ena_names[[i]]
-    message(sprintf("[ena] (%d/%d) %s - start", i, length(ena_names), nm))
-    out <- build_ena_units_for_talent(
-      talent_name = nm,
-      dfs = subtitle_dfs_by_talent[[nm]],
+    task <- sheet_tasks[[i]]
+    label <- paste0(task$talent, " / ", task$sheet)
+    log_worker("ena", i, length(sheet_tasks), label, "start")
+    out <- build_ena_units_from_clean_df(
+      df = task$df,
       pause_gap_sec = pause_gap_sec
     )
-    message(sprintf("[ena] (%d/%d) %s - done (units=%d)", i, length(ena_names), nm, nrow(out)))
-    out
+    log_worker("ena", i, length(sheet_tasks), label, "done", sprintf("units=%d", nrow(out)))
+    list(
+      talent = task$talent,
+      sheet = task$sheet,
+      units = out
+    )
   },
   n_cores = n_cores
 )
-subtitle_ena_units <- dplyr::bind_rows(ena_chunks)
+subtitle_ena_units <- dplyr::bind_rows(purrr::map(ena_results, "units"))
+if (nrow(subtitle_ena_units) > 0) {
+  subtitle_ena_units <- subtitle_ena_units |>
+    dplyr::mutate(
+      unit_id = dplyr::row_number(),
+      start_sec = round(.data$start_sec, 3),
+      end_sec = round(.data$end_sec, 3)
+    ) |>
+    dplyr::select("unit_id", "unit_type", "start_sec", "end_sec", "start", "end", "text")
+}
 message("Completed ENA unitization stage.")
+
+if (ena_as_final && length(ena_results) > 0) {
+  message("Writing ENA units as final per-video outputs...")
+  final_results <- run_apply(
+    seq_along(ena_results),
+    function(i) {
+      res <- ena_results[[i]]
+      nm <- res$talent
+      sheet_name <- res$sheet
+      label <- paste0(nm, " / ", sheet_name)
+      target_dir <- file.path(subtitle_root_by_talent[[nm]], "Processed")
+      dir.create(target_dir, recursive = TRUE, showWarnings = FALSE)
+      log_worker("ena-final", i, length(ena_results), label, "start")
+      units <- res$units
+      if (nrow(units) > 0) {
+        units <- units |>
+          dplyr::mutate(
+            unit_id = dplyr::row_number(),
+            start_sec = round(.data$start_sec, 3),
+            end_sec = round(.data$end_sec, 3)
+          ) |>
+          dplyr::select("unit_id", "unit_type", "start_sec", "end_sec", "start", "end", "text")
+      }
+      readr::write_csv(units, file.path(target_dir, sheet_name))
+      log_worker("ena-final", i, length(ena_results), label, "done", sprintf("units=%d", nrow(units)))
+      1L
+    },
+    n_cores = n_cores
+  )
+  message("Completed ENA final per-video write stage. Total files written: ", sum(unlist(final_results)))
+}
 
 processed_talent_root <- resolve_processed_talent_root(datalake_root)
 analysis_dir <- file.path(processed_talent_root, "subtitle_analysis")

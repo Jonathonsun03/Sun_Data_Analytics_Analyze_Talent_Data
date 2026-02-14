@@ -167,16 +167,20 @@ build_ena_units_from_clean_df <- function(df, pause_gap_sec = 2.0) {
   units
 }
 
-build_ena_units_for_talent <- function(talent_name, dfs, pause_gap_sec = 2.0) {
+build_ena_units_for_talent <- function(talent_name, dfs, pause_gap_sec = 2.0, add_context = FALSE) {
   if (length(dfs) == 0) return(tibble::tibble())
 
   purrr::imap_dfr(dfs, function(df, sheet_name) {
-    build_ena_units_from_clean_df(df, pause_gap_sec = pause_gap_sec) |>
-      dplyr::mutate(
-        talent = talent_name,
-        sheet = sheet_name,
-        .before = 1
-      )
+    out <- build_ena_units_from_clean_df(df, pause_gap_sec = pause_gap_sec)
+    if (isTRUE(add_context)) {
+      out <- out |>
+        dplyr::mutate(
+          talent = talent_name,
+          sheet = sheet_name,
+          .before = 1
+        )
+    }
+    out
   })
 }
 
