@@ -58,10 +58,12 @@ prompt_version <- prompt_bundle$prompt_version
 system_prompt <- prompt_bundle$system_prompt
 user_prompt_template <- prompt_bundle$user_prompt_template
 talent_profile <- prompt_bundle$profile_name
-talent_rules_text <- prompt_bundle$talent_rules_text
 schema_text <- prompt_bundle$schema_text
 schema <- prompt_bundle$schema
 message("Using talent prompt profile: ", talent_profile)
+if (isTRUE(prompt_bundle$used_compiler)) {
+  message("Using compiled modular prompt bundle.")
+}
 
 strip_code_fences <- function(x) {
   if (!is.character(x) || length(x) == 0 || is.na(x[[1]])) {
@@ -165,8 +167,7 @@ classify_batch <- function(
     model,
     max_retries,
     talent_name,
-    talent_profile,
-    talent_rules_text
+    talent_profile
 ) {
   records <- lapply(seq_len(nrow(batch_df)), function(i) {
     list(
@@ -184,8 +185,7 @@ classify_batch <- function(
       records_json = records_json,
       schema_json = schema_text,
       talent_name = talent_name,
-      talent_profile = talent_profile,
-      talent_rules_text = talent_rules_text
+      talent_profile = talent_profile
     )
   )
   messages <- chatgpt_make_messages(
@@ -293,8 +293,7 @@ if (nrow(pending) == 0) {
       model = model,
       max_retries = max_retries,
       talent_name = talent_name,
-      talent_profile = talent_profile,
-      talent_rules_text = talent_rules_text
+      talent_profile = talent_profile
     )
 
     to_insert <- batch_df %>%

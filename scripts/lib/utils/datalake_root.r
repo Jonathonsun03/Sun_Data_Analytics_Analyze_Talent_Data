@@ -6,8 +6,12 @@ get_datalake_root <- function() {
     return("X:/datalake/DataLake/Sun_Data_Analytics/Talent_data")
   }
 
-  linux_default <- "/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data"
-  if (dir.exists(linux_default)) return(linux_default)
+  linux_candidates <- c(
+    "/mnt/datalake/Datalake/Sun_Data_Analytics/Talent_data",
+    "/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data"
+  )
+  linux_existing <- linux_candidates[dir.exists(linux_candidates)]
+  if (length(linux_existing) > 0) return(linux_existing[[1]])
 
   stop("Datalake root not configured. Set TALENT_DATALAKE_ROOT.")
 }

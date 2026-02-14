@@ -1,27 +1,28 @@
 library(dplyr)
 library(stringr)
 
-EXCLUDED_TALENT_FOLDERS <- c("VarianceProject")
+EXCLUDED_TALENT_FOLDERS <- c("VarianceProject", "subtitle_analysis")
 
 normalize_talent_path <- function(x) {
+  decode_placeholders <- function(val) {
+    val <- str_replace_all(val, "<U\\+([0-9a-fA-F]+)>", function(m) {
+      hex <- str_remove_all(m, "<U\\+|>")
+      unname(sapply(hex, function(h) intToUtf8(strtoi(h, 16L))))
+    })
+
+    str_replace_all(val, "(?:<[0-9a-fA-F]{2}>)+", function(m) {
+      unname(sapply(m, function(seq) {
+        hex_bytes <- str_extract_all(seq, "[0-9a-fA-F]{2}")[[1]]
+        raw_bytes <- as.raw(strtoi(hex_bytes, 16L))
+        res <- suppressWarnings(tryCatch(rawToChar(raw_bytes), error = function(e) seq))
+        Encoding(res) <- "UTF-8"
+        res
+      }))
+    })
+  }
+
   # 1. Universally decode <U+XXXX> Unicode placeholders
-  x <- str_replace_all(x, "<U\\+([0-9a-fA-F]+)>", function(m) {
-    hex <- str_remove_all(m, "<U\\+|>")
-    unname(sapply(hex, function(h) intToUtf8(strtoi(h, 16L))))
-  })
-  
-  # 2. Universally decode <xx><yy> raw byte sequences (e.g., <e3><80><90>)
-  x <- str_replace_all(x, "(?:<[0-9a-fA-F]{2}>)+", function(m) {
-    unname(sapply(m, function(seq) {
-      # Extract the hex values, convert to raw bytes, then to a UTF-8 string
-      hex_bytes <- str_extract_all(seq, "[0-9a-fA-F]{2}")[[1]]
-      raw_bytes <- as.raw(strtoi(hex_bytes, 16L))
-      res <- rawToChar(raw_bytes)
-      Encoding(res) <- "UTF-8"
-      res
-    }))
-  })
-  
+  x <- decode_placeholders(x)
   x <- enc2utf8(x)
   
   # Avoid hard failures on non-native encodings; normalize when safe.
@@ -31,6 +32,7 @@ normalize_talent_path <- function(x) {
       error = function(e) x
     )
   )
+  normalized <- decode_placeholders(enc2utf8(normalized))
   normalized
 }
 

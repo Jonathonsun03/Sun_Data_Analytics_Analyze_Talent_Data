@@ -23,7 +23,8 @@ Shared helpers:
 - `scripts/lib/ChatGPT/*`
 
 Prompt architecture:
-- Base prompt/schema: `classification/prompts/base/system.txt`, `classification/prompts/base/user_template.txt`, `classification/prompts/base/schema_v2.json`
+- Base prompt assets: `classification/prompts/base/system.txt`, `classification/prompts/base/instructions.txt`, `classification/prompts/base/output_schema.json`
+- Modular definitions: `classification/prompts/definitions/*.txt`
 - Talent overlays: `classification/prompts/talents/<profile>/overlay.txt`
 - Profile config and matching: `classification/config/talent_profiles.json`
 
@@ -34,7 +35,12 @@ Prompt architecture:
 3. Run `scripts/run/Title_classification/01_ingest_titles.R` to upsert rows into DuckDB.
 4. Run `scripts/run/Title_classification/02_classify_pending_titles.R` to classify pending titles:
    - select talent profile from `talent_profiles.json`
-   - combine base prompt + talent overlay
+   - compile prompt deterministically from:
+     - base `system.txt`
+     - base `instructions.txt`
+     - sorted `definitions/*.txt`
+     - talent `overlay.txt`
+     - output schema
    - validate model JSON against schema
    - upsert results into `classifications`
 
@@ -42,8 +48,9 @@ DuckDB file:
 - `get_datalake_root()` + `classifications.duckdb`
 
 ## Profile Logic
-- One schema and one base prompt are shared across talents.
+- One schema and one base system/instructions set are shared across talents.
 - Each talent gets a small overlay with structural hints.
+- Primary taxonomy definitions are modular files and compiled into one runtime user prompt.
 - Matching is done by normalized talent name pattern.
 - If no matcher hits, the `default` profile is used.
 
