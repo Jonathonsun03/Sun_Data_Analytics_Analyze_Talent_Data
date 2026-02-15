@@ -33,6 +33,12 @@ if (length(files) == 0) {
 }
 
 lst <- lapply(files, function(f) {
+  fread(f)
+})
+
+glimpse(lst[[1]])
+
+lst <- lapply(files, function(f) {
   fread(f) %>% select(video_id, source, timecode, message_type, speaker, text)
 })
 

@@ -43,7 +43,16 @@ load_chat_clean <- function(path) {
   df <- data.table::fread(path)
   df %>%
     prep_chat_time() %>%
-    select(username, user_id, message, timestamp, message_type, video_id, starts_with("t_"), timecode)
+    mutate(
+      paid_amount_text = if ("paid_amount_text" %in% names(.)) paid_amount_text else NA_character_,
+      paid_amount_value = if ("paid_amount_value" %in% names(.)) paid_amount_value else NA_real_,
+      paid_currency = if ("paid_currency" %in% names(.)) paid_currency else NA_character_
+    ) %>%
+    select(
+      username, user_id, message, timestamp, message_type, video_id,
+      paid_amount_text, paid_amount_value, paid_currency,
+      starts_with("t_"), timecode
+    )
 }
 
 run_apply <- function(x, fn, n_cores) {

@@ -76,9 +76,12 @@ build_stream_replay <- function(chat_clean, subs) {
       source = "chat",
       speaker = username,
       text = message,
-      message_type = as.character(message_type)
+      message_type = as.character(message_type),
+      paid_amount_text = paid_amount_text,
+      paid_amount_value = paid_amount_value,
+      paid_currency = paid_currency
     ) %>%
-    select(video_id, sec, source, speaker, text, message_type)
+    select(video_id, sec, source, speaker, text, message_type, paid_amount_text, paid_amount_value, paid_currency)
 
   # Subtitles: already have start_sec
   sub_events <- subs %>%
@@ -88,7 +91,10 @@ build_stream_replay <- function(chat_clean, subs) {
       source = "subtitle",
       speaker = "STREAM",
       text = Text,
-      message_type = NA_character_
+      message_type = NA_character_,
+      paid_amount_text = NA_character_,
+      paid_amount_value = NA_real_,
+      paid_currency = NA_character_
     )
 
   # Merge + clean + order
