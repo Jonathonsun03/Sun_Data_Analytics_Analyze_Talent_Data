@@ -37,7 +37,7 @@ upsert_videos <- function(con, to_ingest) {
        video_id, talent_id, talent_name, title_raw, title_norm, title_hash,
        content_type, published_at, last_seen
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, now())
      ON CONFLICT (video_id, talent_id) DO UPDATE SET
        title_raw = excluded.title_raw,
        title_norm = excluded.title_norm,
@@ -45,7 +45,7 @@ upsert_videos <- function(con, to_ingest) {
        content_type = excluded.content_type,
        published_at = excluded.published_at,
        talent_name = excluded.talent_name,
-       last_seen = CURRENT_TIMESTAMP",
+       last_seen = now()",
     params = list(
       to_ingest$video_id,
       to_ingest$talent_id,

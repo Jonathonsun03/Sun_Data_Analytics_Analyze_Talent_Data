@@ -36,16 +36,39 @@ lst <- lapply(files, function(f) {
   fread(f)
 })
 
-glimpse(lst[[1]])
-
 lst <- lapply(files, function(f) {
-  fread(f) %>% select(video_id, source, timecode, message_type, speaker, text)
+  fread(f) %>% select(video_id, source, timecode, message_type, speaker, text, paid_amount_text, paid_amount_value, paid_currency)
 })
-
-lst[[1]] %>%
-filter(message_type == "paid_message") %>%
-View()
 
 titles <- basename(files) %>%
   str_remove("\\.csv$") %>%
   str_replace_all("_", " ")
+
+stream_paid <- map2_dfr(files, titles, \(f, t) {
+  fread(f) %>%
+    transmute(
+      stream = t,
+      paid_amount_value = suppressWarnings(as.numeric(as.character(paid_amount_value))),
+      paid_amount_text = as.character(paid_amount_text),
+      paid_currency = as.character(paid_currency)
+    ) %>%
+    # fallback: parse from text if value is missing
+    mutate(
+      paid_amount_value = coalesce(
+        paid_amount_value,
+        parse_number(paid_amount_text)
+      )
+    )
+})
+
+paid_totals <- stream_paid %>%
+  filter(!is.na(paid_amount_value)) %>%
+  group_by(stream, paid_currency) %>%
+  summarise(
+    total_paid = sum(paid_amount_value, na.rm = TRUE),
+    n_paid_messages = n(),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(total_paid))
+
+paid_totals

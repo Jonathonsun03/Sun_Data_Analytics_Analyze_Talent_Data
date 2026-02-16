@@ -41,7 +41,9 @@ Prompt architecture:
      - sorted `definitions/*.txt`
      - talent `overlay.txt`
      - output schema
-   - validate model JSON against schema
+   - extend schema at runtime with one boolean field per definition file
+   - validate model JSON against the extended schema
+   - ensure DuckDB `classifications` has matching boolean columns
    - upsert results into `classifications`
 
 DuckDB file:
@@ -55,6 +57,12 @@ DuckDB file:
 - If no matcher hits, the `default` profile is used.
 
 This avoids duplicating full prompts while still honoring talent-specific title conventions.
+
+## Schema and Versioning
+- `classification/config/talent_profiles.json` tracks current versions (`taxonomy_version` and `prompt_version`).
+- In `v3`, each `classification/prompts/definitions/*.txt` file is converted into a required boolean output field in `classification`.
+- The same fields are persisted in DuckDB as boolean columns on `classifications`.
+- `talent_profile` is also persisted per classified row.
 
 ## Notes
 `run_classification.r` now only points you to the two entry scripts.
@@ -87,6 +95,9 @@ GPT discovery prompt assets:
 
 Sync `talent_profiles.json` from current prompt folders:
 `Rscript scripts/run/Title_classification/sync_talent_profiles.R`
+
+Run non-recursive local self-test:
+`Rscript scripts/run/Title_classification/title_classification/03_self_test_classification.R`
 
 Example:
 `from classification.python.prompt_bundle import load_prompt_bundle`

@@ -4,7 +4,8 @@ get_pending_titles <- function(
     taxonomy_version,
     prompt_version,
     model,
-    key = c("video_id", "title_hash")
+    key = c("video_id", "title_hash"),
+    force_reclassify = FALSE
 ) {
   if (!requireNamespace("DBI", quietly = TRUE)) {
     stop("Package `DBI` is required.")
@@ -18,6 +19,15 @@ get_pending_titles <- function(
     temporary = TRUE,
     overwrite = TRUE
   )
+
+  if (isTRUE(force_reclassify)) {
+    pending <- DBI::dbGetQuery(
+      con,
+      "SELECT s.*
+       FROM staging_videos s"
+    )
+    return(pending)
+  }
 
   if (key == "title_hash") {
     pending <- DBI::dbGetQuery(
