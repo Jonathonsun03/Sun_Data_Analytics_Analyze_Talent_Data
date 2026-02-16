@@ -91,3 +91,91 @@ prepare_analytics <- function(files,
   # 3) Return cleaned analytics (stream titles not available yet)
   analytics_clean
 }
+
+.safe_zscore <- function(x) {
+  mu <- mean(x, na.rm = TRUE)
+  sdv <- stats::sd(x, na.rm = TRUE)
+
+  if (!is.finite(sdv) || sdv <= 0) {
+    return(rep(0, length(x)))
+  }
+
+  (x - mu) / sdv
+}
+
+# Add log-view z scores and performance bins with group-aware fallback.
+add_view_performance_bins <- function(df,
+                                      views_col = "views",
+                                      group_cols = c("talent_name", "content_type"),
+                                      min_n = 10,
+                                      fallback = c("global", "talent", "none"),
+                                      talent_col = "talent_name") {
+  fallback <- match.arg(fallback)
+
+  if (!all(group_cols %in% names(df))) {
+    stop("Missing required group columns: ", paste(setdiff(group_cols, names(df)), collapse = ", "))
+  }
+  if (!views_col %in% names(df)) {
+    stop("Missing views column: ", views_col)
+  }
+
+  out <- df %>%
+    dplyr::mutate(log_views = log1p(.data[[views_col]])) %>%
+    dplyr::group_by(dplyr::across(dplyr::all_of(group_cols))) %>%
+    dplyr::mutate(
+      n_group = dplyr::n(),
+      mu = mean(log_views, na.rm = TRUE),
+      sdv = stats::sd(log_views, na.rm = TRUE),
+      .z_group = ifelse(sdv > 0, (log_views - mu) / sdv, 0)
+    ) %>%
+    dplyr::ungroup()
+
+  if (fallback == "global") {
+    out <- out %>%
+      dplyr::mutate(.z_fallback = .safe_zscore(log_views))
+  } else if (fallback == "talent") {
+    if (!talent_col %in% names(out)) {
+      stop("fallback = 'talent' requires column: ", talent_col)
+    }
+    out <- out %>%
+      dplyr::group_by(.data[[talent_col]]) %>%
+      dplyr::mutate(.z_fallback = .safe_zscore(log_views)) %>%
+      dplyr::ungroup()
+  } else {
+    out <- out %>%
+      dplyr::mutate(.z_fallback = .z_group)
+  }
+
+  out %>%
+    dplyr::mutate(
+      z_views = dplyr::if_else(n_group < min_n, .z_fallback, .z_group),
+      view_perf_bin = dplyr::case_when(
+        z_views <= -1.5 ~ "very_low",
+        z_views <= -0.5 ~ "low",
+        z_views < 0.5 ~ "typical",
+        z_views < 1.5 ~ "high",
+        TRUE ~ "very_high"
+      )
+    ) %>%
+    dplyr::select(-dplyr::any_of(c(".z_group", ".z_fallback")))
+}
+
+# Add a z-score column to a numeric weight-like column.
+add_weight_z_score <- function(tbl, weight_col = "weight", z_col = "z_score") {
+  if (!weight_col %in% names(tbl)) {
+    stop("Column not found: ", weight_col)
+  }
+
+  w <- tbl[[weight_col]]
+  sd_w <- stats::sd(w, na.rm = TRUE)
+  mu_w <- mean(w, na.rm = TRUE)
+
+  z_vals <- if (is.finite(sd_w) && sd_w > 0) {
+    (w - mu_w) / sd_w
+  } else {
+    rep(0, length(w))
+  }
+
+  tbl[[z_col]] <- z_vals
+  tbl
+}
