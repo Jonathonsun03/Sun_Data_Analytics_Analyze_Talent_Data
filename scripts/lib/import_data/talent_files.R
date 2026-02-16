@@ -88,7 +88,14 @@ TalentFiles <- function(Paths) {
     dfs <- map(folder_files, function(f) {
       with_utf8_locale({
         df <- tryCatch(
-          read_csv(f, show_col_types = FALSE, locale = locale(encoding = "UTF-8")),
+          # Some columns (e.g., paid chat amounts) can be sparse and appear after
+          # the default readr guess window; scan full file to avoid logical NA coercion.
+          read_csv(
+            f,
+            show_col_types = FALSE,
+            locale = locale(encoding = "UTF-8"),
+            guess_max = Inf
+          ),
           error = function(e) {
             warning("Could not read file: ", f, "\nError: ", e$message)
             NULL

@@ -1,6 +1,7 @@
 library(here)
 library(dplyr)
 library(purrr)
+library(readr)
 library(stringr)
 library(data.table)
 
@@ -27,48 +28,34 @@ if (!file.exists(text_playback_path)) {
   stop("text_playback path not found: ", text_playback_path)
 }
 
-files <- list.files(text_playback_path, full.names = TRUE, recursive = TRUE)
+files <- list.files(text_playback_path, full.names = TRUE, recursive = TRUE, pattern = "\\.csv$")
 if (length(files) == 0) {
   stop("No files found under: ", text_playback_path)
 }
-
-lst <- lapply(files, function(f) {
-  fread(f)
-})
-
-lst <- lapply(files, function(f) {
-  fread(f) %>% select(video_id, source, timecode, message_type, speaker, text, paid_amount_text, paid_amount_value, paid_currency)
-})
 
 titles <- basename(files) %>%
   str_remove("\\.csv$") %>%
   str_replace_all("_", " ")
 
-stream_paid <- map2_dfr(files, titles, \(f, t) {
-  fread(f) %>%
-    transmute(
-      stream = t,
-      paid_amount_value = suppressWarnings(as.numeric(as.character(paid_amount_value))),
-      paid_amount_text = as.character(paid_amount_text),
-      paid_currency = as.character(paid_currency)
-    ) %>%
-    # fallback: parse from text if value is missing
-    mutate(
-      paid_amount_value = coalesce(
-        paid_amount_value,
-        parse_number(paid_amount_text)
-      )
-    )
-})
+streams <- lapply(files, fread)
 
-paid_totals <- stream_paid %>%
-  filter(!is.na(paid_amount_value)) %>%
-  group_by(stream, paid_currency) %>%
-  summarise(
-    total_paid = sum(paid_amount_value, na.rm = TRUE),
-    n_paid_messages = n(),
-    .groups = "drop"
-  ) %>%
-  arrange(desc(total_paid))
+streams[[104]] %>% 
+glimpse()
 
-paid_totals
+
+View(streams[[104]])
+
+# confirm the exact file path you're reading
+files[str_detect(basename(files), "gk5fu8l5PDI")]
+
+i <- which(str_detect(basename(files), "gk5fu8l5PDI"))[1]
+df <- fread(files[i])
+
+# verify paid rows exist
+# data.table-native
+# dplyr + tibble print
+df %>%
+  filter(source == "chat", message_type == "paid_message") %>%
+  select(timecode, speaker, text, paid_amount_text, paid_amount_value, paid_currency) %>%
+  as_tibble() %>%
+  print(n = 50)

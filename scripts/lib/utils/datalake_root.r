@@ -2,11 +2,15 @@ get_datalake_root <- function() {
   env_root <- Sys.getenv("TALENT_DATALAKE_ROOT", unset = "")
   if (nzchar(env_root)) return(env_root)
 
+  chat_output_root <- Sys.getenv("CHAT_OUTPUT_ROOT", unset = "")
+  if (nzchar(chat_output_root)) return(chat_output_root)
+
   if (.Platform$OS.type == "windows") {
     return("X:/datalake/DataLake/Sun_Data_Analytics/Talent_data")
   }
 
   linux_candidates <- c(
+    "/mnt/router_data/DataLake/Sun_Data_Analytics/Talent_data",
     "/mnt/datalake/Datalake/Sun_Data_Analytics/Talent_data",
     "/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data"
   )
