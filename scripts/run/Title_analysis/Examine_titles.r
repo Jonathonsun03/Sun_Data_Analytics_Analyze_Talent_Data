@@ -8,6 +8,8 @@ library(data.table)
 library(moments)
 library(corrplot)
 library(car)
+library(rlang)
+library(stringr)
 
 source("scripts/lib/utils/staging_root.R")
 
@@ -34,19 +36,19 @@ df <- fread(here("classification","output","title_classifications","classificati
 
 df_clean <- df %>%
   rename_with(
-    ~ paste0("code_", .x),
-    collaborative_energy:personality_conversation
+    .fn   = ~ paste0("code_", .x),
+    .cols = collaborative_energy:personality_conversation
   ) %>%
-  # 2) Standardize tags into a canonical form
   mutate(
-    tags_list = str_split(tags %||% "", ",") %>%
-      map(~ .x %>%
-            str_trim() %>%
-            str_to_lower() %>%
-            discard(~ .x == "") %>%
-            unique() %>%
-            sort()),
-    tags_clean = map_chr(tags_list, ~ paste(.x, collapse = ", "))
+    tags_list = stringr::str_split(dplyr::coalesce(tags, ""), ",") %>%
+      purrr::map(~ .x %>%
+        stringr::str_trim() %>%
+        stringr::str_to_lower() %>%
+        purrr::discard(~ .x == "") %>%
+        unique() %>%
+        sort()
+      ),
+    tags_clean = purrr::map_chr(tags_list, ~ paste(.x, collapse = ", "))
   )
 
 # Analytics Data ---------------------

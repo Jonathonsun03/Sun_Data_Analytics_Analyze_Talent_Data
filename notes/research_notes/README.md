@@ -1,6 +1,18 @@
 # Research Notes
 
-Last updated: 2026-02-16
+Last updated: 2026-02-17
+
+## Session Reconstruction (2026-02-17 UTC)
+
+Today-focused evidence from repository state:
+
+- No new commits on 2026-02-17 (UTC).
+- Latest commit is still `74abc30` from `2026-02-16 21:38:48 +0000`, noting progress on title analysis until blocked by R upgrade.
+- Current tracked changes are environment-related (`renv.lock`, `renv/activate.R`), with substantial lockfile refresh.
+
+Research planning implication:
+
+- Before running new ENA or chat-money analyses, first re-validate the runtime environment and confirm reproducible execution for title-analysis scripts under the upgraded R/renv state.
 
 ## Current Project Options
 
@@ -57,8 +69,9 @@ Risks:
 
 ## Suggested Execution Order
 
-1. Start with `Titles and View Correlation` for faster validation and quicker feedback.
-2. Run `Money Event Context` as the deeper follow-up once coding and summarization pipeline design is stable.
+1. Complete `R/renv environment validation` and a clean title-analysis script smoke test.
+2. Start with `Titles and View Correlation` for faster validation and quicker feedback.
+3. Run `Money Event Context` as the deeper follow-up once coding and summarization pipeline design is stable.
 
 Rationale:
 - Titles project is closer to analysis-ready.
