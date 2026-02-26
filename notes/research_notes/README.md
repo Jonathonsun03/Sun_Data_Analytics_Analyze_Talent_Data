@@ -2,6 +2,14 @@
 
 Last updated: 2026-02-17
 
+## Talent Research Notes
+
+Talent-level qualitative outputs now live under:
+- `/home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/notes/research_notes/<talent_slug>/`
+
+Process instructions:
+- `/home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/notes/research_notes/TALENT_RESEARCH_INSTRUCTIONS.md`
+
 ## Session Reconstruction (2026-02-17 UTC)
 
 Today-focused evidence from repository state:

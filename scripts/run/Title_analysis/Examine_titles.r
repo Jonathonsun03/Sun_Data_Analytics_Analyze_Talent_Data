@@ -10,6 +10,7 @@ library(corrplot)
 library(car)
 library(rlang)
 library(stringr)
+library(effectsize)
 
 source("scripts/lib/utils/staging_root.R")
 
@@ -144,6 +145,7 @@ plot_view_distribution_histogram(
 )
 
 glimpse(df_full)
+
 # ENA prep ----------------------
 ena_cols <- ENA_setup(
   df = df_full,
@@ -296,6 +298,23 @@ df_model <- df_full %>%
   select(-all_of(starts_with("z_score"))) %>%
   mutate(log_views = log1p(views))
 
+# Make model column names syntactically safe for downstream tooling (effectsize, broom, etc.)
+clean_model_names <- function(x) {
+  x <- gsub(" & ", "__", x, fixed = TRUE)
+  x <- gsub("\\s+", "_", x)
+  x <- gsub("[^[:alnum:]_]", "", x)
+  make.unique(x, sep = "_")
+}
+
+name_key <- tibble(
+  original_name = names(df_model),
+  clean_name = clean_model_names(original_name)
+)
+names(df_model) <- name_key$clean_name
+
+ena_name_key <- name_key %>%
+  filter(str_detect(original_name, "^weight_"))
+
 colnames(df_model)
 
 ## Checking all variables to each other
@@ -337,7 +356,7 @@ base_vars <- c(
 )
 
 all_predictors <- c(base_vars, ena_vars)
-rhs <- paste0("`", all_predictors, "`", collapse = " + ")
+rhs <- paste(all_predictors, collapse = " + ")
 
 model_base <- lm(
   log_views ~ 
@@ -354,3 +373,18 @@ form_ena <- as.formula(paste("log_views ~", rhs))
 model_ena <- lm(form_ena, data = df_model)
 
 anova(model_base, model_ena)
+
+# Model evaluation helpers
+if (requireNamespace("effectsize", quietly = TRUE)) {
+  std_params <- effectsize::standardize_parameters(model_ena)
+  std_params
+} else {
+  warning("Package 'effectsize' not installed; skipping standardized coefficients.")
+}
+
+if (requireNamespace("rsq", quietly = TRUE)) {
+  partial_r2 <- rsq::rsq.partial(model_ena)
+  partial_r2
+} else {
+  warning("Package 'rsq' not installed; skipping partial R-squared output.")
+}

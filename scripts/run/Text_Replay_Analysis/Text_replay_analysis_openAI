@@ -1,0 +1,19 @@
+library(here)
+library(tidyverse)
+library(DBI)
+
+source(here("scripts", "lib", "utils", "datalake_root.r"))
+source(here("scripts", "lib", "ChatGPT", "chatgpt_load_all.R"))
+source(here("scripts", "lib", "duckdb", "db_connect.R"))
+source(here("scripts", "lib", "stream_summaries", "load_all.R"))
+
+chatgpt_load_all()
+ss_load_all()
+
+opts <- ss_parse_args(commandArgs(trailingOnly = TRUE))
+if (isTRUE(opts$help)) {
+  ss_print_help()
+  quit(save = "no", status = 0)
+}
+
+ss_run(opts)
