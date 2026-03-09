@@ -301,7 +301,7 @@ How to read it:
 - Each point is a content descriptor (content type, tag, or title label).
 - X-axis is median engagement, Y-axis is average revenue per video, and bubble size is video count.
 - Point shape indicates performance band.
-- Y-axis is pseudo-log scaled for readability, while labels stay in raw dollar values.
+- Y-axis is linear and shows raw dollar values.
 
 Interactive version:
 - Removes labels to reduce clutter and relies on tooltips for details.

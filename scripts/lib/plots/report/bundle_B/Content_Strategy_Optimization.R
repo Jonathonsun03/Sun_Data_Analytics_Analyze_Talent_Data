@@ -568,13 +568,12 @@ bundle_b_attribute_opportunity_matrix_plot <- function(
     ) +
     ggplot2::scale_x_continuous(labels = scales::label_percent(accuracy = 1)) +
     ggplot2::scale_y_continuous(
-      trans = scales::pseudo_log_trans(base = 10),
       labels = scales::label_dollar(scale = 1)
     ) +
     theme_nyt() +
     ggplot2::labs(
       title = paste0(talent, " - Combined Opportunity Matrix"),
-      subtitle = "Content types, tags, and title labels in one map. Y-axis uses avg revenue per video (pseudo-log, raw labels).",
+      subtitle = "Content types, tags, and title labels in one map. Y-axis uses avg revenue per video (linear scale).",
       x = "Median engagement",
       y = "Average revenue per video",
       size = "Video count",
@@ -657,16 +656,6 @@ bundle_b_attribute_opportunity_matrix_plotly <- function(attr_df, talent) {
     return(plotly::plotly_empty(type = "scatter", mode = "markers"))
   }
 
-  y_min <- min(plot_df$AvgRevenuePerVideo, na.rm = TRUE)
-  y_max <- max(plot_df$AvgRevenuePerVideo, na.rm = TRUE)
-  pow_min <- floor(log10(y_min))
-  pow_max <- ceiling(log10(y_max))
-  tick_vals <- 10^(pow_min:pow_max)
-  tick_vals <- tick_vals[tick_vals >= y_min & tick_vals <= y_max]
-  if (length(tick_vals) == 0) {
-    tick_vals <- c(y_min, y_max)
-  }
-
   plotly::plot_ly(
     data = plot_df,
     x = ~MedianEngagement,
@@ -693,9 +682,9 @@ bundle_b_attribute_opportunity_matrix_plotly <- function(attr_df, talent) {
       ),
       yaxis = list(
         title = "Average revenue per video",
-        type = "log",
-        tickvals = tick_vals,
-        ticktext = scales::dollar(tick_vals)
+        tickprefix = "$",
+        separatethousands = TRUE,
+        tickformat = ",.0f"
       ),
       legend = list(title = list(text = "Performance band"))
     )

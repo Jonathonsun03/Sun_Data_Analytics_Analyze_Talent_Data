@@ -113,25 +113,13 @@ df <- analytics
 ```
 # Overall Performance Snapshot
 
-## Overall views by Content Type
-**What this chart shows:** Total views summed across all videos in each content type (for example: short, video, live).  
-**How to read it:** Taller bars mean more total views from that format overall.
+## Views by Content Type (Total vs Average)
+**What this chart shows:** Total views and average views per video for each content type in one side-by-side view.  
+**How to read it:** Use the Total panel to see overall volume and the Average panel to see per-upload performance, then compare formats across both.
 
-```{r views by content, fig.width=plot_w_std, fig.height=plot_h_std}
+```{r views by content comparison, fig.width=plot_w_facet, fig.height=plot_h_facet}
 ggplotly(
-  total_views_content_type(analytics, Talent) +
-  theme_nyt()
-)
-
-```
-
-## Average views by Content Type
-**What this chart shows:** Average views per video for each content type.  
-**How to read it:** Taller bars mean that format tends to get more views per upload, independent of how many videos were posted.
-
-```{r average views by content, fig.width=plot_w_std, fig.height=plot_h_std}
-ggplotly(
-  average_views_content_type(analytics, Talent) +
+  views_content_type_comparison(analytics, Talent) +
   theme_nyt()
 )
 
