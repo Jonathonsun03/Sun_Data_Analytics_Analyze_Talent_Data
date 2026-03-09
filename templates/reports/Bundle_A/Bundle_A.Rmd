@@ -14,18 +14,25 @@ knitr::opts_chunk$set(
   fig.align = "center"
 )
 
+plot_w_std <- 10
+plot_h_std <- 6
+plot_w_facet <- 11
+plot_h_facet <- 8
+plot_w_dense <- 12
+plot_h_dense <- 8
+
 knitr::opts_knit$set(root.dir = here::here())
 
 if (knitr::is_latex_output()) {
   knitr::opts_chunk$set(
     fig.width  = 14,
-    fig.height = 7,
+    fig.height = 8,
     out.width  = "0.8\\linewidth"
   )
 } else {
   knitr::opts_chunk$set(
-    fig.width  = 10,
-    fig.height = 5
+    fig.width  = plot_w_std,
+    fig.height = plot_h_std
   )
 }
 
@@ -110,7 +117,7 @@ df <- analytics
 **What this chart shows:** Total views summed across all videos in each content type (for example: short, video, live).  
 **How to read it:** Taller bars mean more total views from that format overall.
 
-```{r views by content, fig.width=10}
+```{r views by content, fig.width=plot_w_std, fig.height=plot_h_std}
 ggplotly(
   total_views_content_type(analytics, Talent) +
   theme_nyt()
@@ -122,7 +129,7 @@ ggplotly(
 **What this chart shows:** Average views per video for each content type.  
 **How to read it:** Taller bars mean that format tends to get more views per upload, independent of how many videos were posted.
 
-```{r average views by content, fig.width=10}
+```{r average views by content, fig.width=plot_w_std, fig.height=plot_h_std}
 ggplotly(
   average_views_content_type(analytics, Talent) +
   theme_nyt()
@@ -134,7 +141,7 @@ ggplotly(
 **What this chart shows:** How views and revenue move over time across the reporting period.  
 **How to read it:** Look for rises, drops, and turning points to see when performance accelerated or slowed.
 
-```{r combined performance trends, fig.width=10, fig.height=8}
+```{r combined performance trends, fig.width=plot_w_std, fig.height=plot_h_std}
 ggplotly(
   performance_trends_over_time(
     analytics_df = analytics,
@@ -150,7 +157,7 @@ ggplotly(
 **What this chart shows:** Total estimated revenue grouped by content type across time windows.  
 **How to read it:** Larger segments indicate where more revenue was generated overall.
 
-```{r views by content over time, fig.width=10, fig.height=10}
+```{r views by content over time, fig.width=plot_w_std, fig.height=plot_h_std}
 ggplotly(
   total_metric_content_type(
     monetary,
@@ -168,7 +175,7 @@ ggplotly(
 **What this chart shows:** Distribution of per-video engagement for each content type.  
 **How to read it:** Each dot is a video; the box shows the middle range, the center line is the median, and the spread shows consistency vs volatility.
 
-```{r engagement distribution, fig.width=10, fig.height=8}
+```{r engagement distribution, fig.width=plot_w_std, fig.height=plot_h_std}
 analytics_eng <- analytics %>%
   mutate(avg_view_prop = averageViewPercentage / 100)
 
@@ -188,7 +195,7 @@ ggplotly(
 **What this chart shows:** Median engagement level by content type, with variability shown around that median.  
 **How to read it:** Higher bars mean stronger typical engagement; wider error bars mean outcomes vary more between videos.
 
-```{r engagement summary by content, fig.width=10, fig.height=8}
+```{r engagement summary by content, fig.width=plot_w_std, fig.height=plot_h_std}
 eng_summary <- engagement_summary_content_type_prep(
   analytics_eng,
   metric_col = "avg_view_prop"
@@ -228,7 +235,7 @@ DTSettings(UIdf) %>%
 **What this chart shows:** How views change over time for each content type.  
 **How to read it:** Compare trend lines to see which formats are growing, stable, or declining over time.
 
-```{r import monetary data}
+```{r import monetary data, fig.width=plot_w_facet, fig.height=plot_h_facet}
 ggplotly(
   Content_duration_views(df, Talent) +
   theme_nyt()
@@ -240,7 +247,7 @@ ggplotly(
 **What this chart shows:** How estimated revenue changes over time for each content type.  
 **How to read it:** Compare trajectories to identify which formats are contributing more monetization over time.
 
-```{r monetary data by content}
+```{r monetary data by content, fig.width=plot_w_facet, fig.height=plot_h_facet}
 
 ggplotly(
   content_duration_metric(monetary, Talent, "Estimated Revenue") +
@@ -257,7 +264,7 @@ ggplotly(
 **What this chart shows:** Audience share trends over time by age and gender segments.  
 **How to read it:** Track which segments are growing, shrinking, or staying stable month to month.
 
-```{r audience age and gender trends, fig.width=10, fig.height=9}
+```{r audience age and gender trends, fig.width=plot_w_facet, fig.height=plot_h_facet}
 ggplotly(
   audience_age_gender_trends(
     demo_df = demo,
@@ -286,7 +293,7 @@ It is the best fit for stability because it uses all audience segments at once (
 **What this chart shows:** Audience concentration and top-segment share over time.  
 **How to read it:** A higher concentration line means the audience is centered in fewer segments; a lower line means audience mix is broader.
 
-```{r audience stability, fig.width=10, fig.height=9}
+```{r audience stability, fig.width=plot_w_facet, fig.height=plot_h_facet}
 core_stability <- audience_core_segment_stability_prep(
   demo_df = demo,
   freq = "month"
@@ -322,7 +329,7 @@ DTSettings(
 **What this chart shows:** Per-video distributions of views and revenue for weekend vs weekday uploads.  
 **How to read it:** Each dot is a video; compare medians, mean points, and spread to see whether one day type is typically stronger or more consistent.
 
-```{r weekend-vs-weekday, fig.width=10, fig.height=8}
+```{r weekend-vs-weekday, fig.width=plot_w_facet, fig.height=plot_h_facet}
 wk_summary <- weekend_vs_weekday_prep(analytics, monetary)
 wk_dist <- weekend_vs_weekday_distribution_prep(analytics, monetary)
 
@@ -345,7 +352,7 @@ DTSettings(wk_summary, class = "display stripe hover", scroll_x = TRUE) %>%
 **What this chart shows:** Share of total views and revenue attributed to each weekday.  
 **How to read it:** Larger bars mean that weekday contributes a bigger portion of overall performance.
 
-```{r day-of-week-share, fig.width=10, fig.height=8}
+```{r day-of-week-share, fig.width=plot_w_facet, fig.height=plot_h_facet}
 dow_summary <- day_of_week_performance_prep(analytics, monetary)
 
 ggplotly(
@@ -367,7 +374,7 @@ DTSettings(dow_summary, class = "display stripe hover", scroll_x = TRUE) %>%
 **What this chart shows:** Average views per video and average revenue per video for collaborative vs non-collaborative uploads.  
 **How to read it:** Compare bar heights to see which approach performs better per upload, not just by total volume.
 
-```{r collaboration-effectiveness, fig.width=10, fig.height=8}
+```{r collaboration-effectiveness, fig.width=plot_w_facet, fig.height=plot_h_facet}
 collab_summary <- collaboration_effectiveness_prep(analytics, monetary)
 
 ggplotly(
@@ -402,7 +409,7 @@ DTSettings(collab_table, class = "display stripe hover", scroll_x = TRUE) %>%
 **What this chart shows:** Performance comparison by topic using both views and revenue.  
 **How to read it:** Higher values indicate topics that contribute more overall performance.
 
-```{r topic-breakdown, fig.width=10, fig.height=8}
+```{r topic-breakdown, fig.width=plot_w_facet, fig.height=plot_h_facet}
 topic_summary <- topic_performance_prep(analytics, monetary, top_n = 8)
 
 ggplotly(
@@ -424,7 +431,7 @@ DTSettings(topic_summary, class = "display stripe hover", scroll_x = TRUE) %>%
 **What this chart shows:** Performance by top tags using views and revenue signals.  
 **How to read it:** Bigger values indicate higher-performing tags; tags can overlap across videos, so totals are directional rather than mutually exclusive.
 
-```{r tag-breakdown, fig.width=12, fig.height=9}
+```{r tag-breakdown, fig.width=plot_w_dense, fig.height=plot_h_dense}
 tag_summary <- tag_performance_prep(
   analytics,
   monetary,
@@ -445,7 +452,7 @@ ggplotly(
 **What this chart shows:** Average views per video for each top tag (how many views a tagged video gets on average).  
 **How to read it:** Taller bars indicate tags that tend to perform better per tagged upload, independent of total posting volume.
 
-```{r tag-average-views, fig.width=12, fig.height=9}
+```{r tag-average-views, fig.width=plot_w_dense, fig.height=plot_h_dense}
 ggplotly(
   tag_average_views_plot(
     tag_summary,

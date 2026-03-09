@@ -303,10 +303,10 @@ How to read it:
 - Point shape indicates performance band.
 - Y-axis is pseudo-log scaled for readability, while labels stay in raw dollar values.
 
-Static version:
-- Uses labels (with repel) for slide/report readability.
+Interactive version:
+- Removes labels to reduce clutter and relies on tooltips for details.
 
-```{r b2-opportunity-matrix-static, fig.width=12, fig.height=9}
+```{r b2-opportunity-matrix-interactive, fig.width=12, fig.height=9}
 attribute_opportunity <- bundle_b_attribute_opportunity_prep(
   analytics_df = analytics,
   monetary_df = monetary,
@@ -316,19 +316,6 @@ attribute_opportunity <- bundle_b_attribute_opportunity_prep(
   min_videos = 2
 )
 
-bundle_b_attribute_opportunity_matrix_plot(
-  attribute_opportunity,
-  Talent,
-  add_labels = TRUE,
-  use_repel = TRUE
-)
-
-```
-
-Interactive version:
-- Removes labels to reduce clutter and relies on tooltips for details.
-
-```{r b2-opportunity-matrix-interactive, fig.width=12, fig.height=9}
 bundle_b_attribute_opportunity_matrix_plotly(
   attribute_opportunity,
   Talent
