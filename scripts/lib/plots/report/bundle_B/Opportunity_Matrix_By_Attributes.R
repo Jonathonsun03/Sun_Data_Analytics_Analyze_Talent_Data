@@ -435,13 +435,18 @@ bundle_b_attribute_opportunity_matrix_plotly <- function(attr_df, talent) {
     y = ~AvgRevenuePerVideo,
     type = "scatter",
     mode = "markers",
+    color = ~Performance_Band,
+    colors = c(
+      "Strength" = sun_data_brand_colors()[["blue"]],
+      "Middle" = sun_data_brand_colors()[["steel"]],
+      "Weakness / Improve" = sun_data_brand_colors()[["orange"]]
+    ),
     symbol = ~Performance_Band,
     symbols = c("triangle-up", "circle", "square"),
     size = ~SizeProxy,
     sizes = c(18, 72),
     marker = list(
-      color = "rgba(90,90,90,0.75)",
-      line = list(color = "rgba(50,50,50,1)", width = 1.2),
+      line = list(color = sun_data_brand_colors()[["midnight"]], width = 1.2),
       sizemode = "diameter"
     ),
     text = ~HoverText,
