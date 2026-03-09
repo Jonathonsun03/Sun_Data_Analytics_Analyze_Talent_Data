@@ -1,0 +1,416 @@
+---
+title: "BundleB"
+author: "Jonathon Sun"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center"
+)
+
+knitr::opts_knit$set(root.dir = here::here())
+
+if (knitr::is_latex_output()) {
+  knitr::opts_chunk$set(
+    fig.width = 14,
+    fig.height = 7,
+    out.width = "0.8\\linewidth"
+  )
+} else {
+  knitr::opts_chunk$set(
+    fig.width = 10,
+    fig.height = 5
+  )
+}
+```
+
+```{r libraries, include=FALSE}
+library(tidyverse)
+library(purrr)
+library(here)
+library(ggplot2)
+library(DT)
+library(plotly)
+```
+
+```{r modules, include=FALSE}
+source("scripts/lib/utils/staging_root.R")
+
+bundle_b_plot_dir <- here("scripts", "lib", "plots", "report", "bundle_B")
+if (dir.exists(bundle_b_plot_dir)) {
+  list.files(bundle_b_plot_dir, full.names = TRUE) %>%
+    walk(source)
+}
+
+list.files(here("scripts", "lib", "plots", "report", "bundle_A"), full.names = TRUE) %>%
+  walk(source)
+list.files(here("scripts", "lib", "utils"), full.names = TRUE) %>%
+  walk(source)
+list.files(here("scripts", "lib", "import_data"), pattern = "[rR]$", full.names = TRUE) %>%
+  walk(source)
+list.files(here("scripts", "lib", "report_tables"), pattern = "[rR]$", full.names = TRUE) %>%
+  walk(source)
+source(here("scripts", "lib", "plots", "PlottingThemes.R"))
+
+clean_data_dir <- here::here("scripts", "lib", "clean_data")
+source(file.path(clean_data_dir, "analytics_core.R"))
+source(file.path(clean_data_dir, "analytics_join.R"))
+source(file.path(clean_data_dir, "clean_columns.R"))
+source(file.path(clean_data_dir, "video_prep.R"))
+source(file.path(clean_data_dir, "title_classification_join.R"))
+
+if (!exists("DTSettings")) {
+  DTSettings <- function(df, class = NULL, scroll_x = FALSE, ...) {
+    DT::datatable(
+      df,
+      class = class,
+      options = list(scrollX = isTRUE(scroll_x)),
+      ...
+    )
+  }
+}
+
+root <- get_staging_root()
+```
+
+```{r load_data, include=FALSE}
+talent_root <- list.files(root, full.names = TRUE)
+
+Talent <- c("Ava")
+
+talent_root <- select_talent(Talent)
+files <- TalentFiles(talent_root)
+
+titles <- load_title_classifications(talent = Talent)
+preps <- video_preps_with_titles(
+  files = files,
+  titles = titles,
+  talent = Talent,
+  dedupe = TRUE,
+  key_cols = "Video ID",
+  sort_cols = c("confidence", "published_at", "Published At"),
+  dedupe_sets = c("analytics", "monetary", "demo")
+)
+
+analytics <- preps$analytics
+monetary <- preps$monetary
+demo <- preps$demo
+
+# Backward-compatible alias used by legacy chunks.
+df <- analytics
+```
+
+```{r bundle-b-prep, include=FALSE}
+analytics_eng <- analytics %>%
+  mutate(avg_view_prop = averageViewPercentage / 100)
+
+views_by_content <- total_views_content_type_prep(analytics)
+
+revenue_by_content <- total_metric_content_type_prep(
+  monetary,
+  metric_col = "Estimated Revenue",
+  window_months = 1
+) %>%
+  group_by(`Content Type`) %>%
+  summarize(
+    Total_Revenue = sum(Total, na.rm = TRUE),
+    Revenue_Video_Count = sum(VideoCount, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+eng_summary <- engagement_summary_content_type_prep(
+  analytics_eng,
+  metric_col = "avg_view_prop"
+)
+
+safe_zscore <- function(x) {
+  x_num <- suppressWarnings(as.numeric(x))
+  if (length(stats::na.omit(x_num)) <= 1 || isTRUE(all.equal(stats::sd(x_num, na.rm = TRUE), 0))) {
+    return(rep(0, length(x_num)))
+  }
+  as.numeric(scale(x_num))
+}
+
+strength_matrix <- views_by_content %>%
+  rename(Content_Type = `Content Type`) %>%
+  left_join(
+    revenue_by_content %>% rename(Content_Type = `Content Type`),
+    by = "Content_Type"
+  ) %>%
+  left_join(
+    eng_summary %>%
+      transmute(
+        Content_Type = as.character(.content),
+        Engagement_Video_Count = VideoCount,
+        Median_Engagement = Median,
+        Mean_Engagement = Mean
+      ),
+    by = "Content_Type"
+  ) %>%
+  mutate(
+    across(
+      c(Total_Views, Total_Revenue, Revenue_Video_Count, Engagement_Video_Count, Median_Engagement, Mean_Engagement),
+      ~ tidyr::replace_na(.x, 0)
+    ),
+    Views_Z = safe_zscore(Total_Views),
+    Revenue_Z = safe_zscore(Total_Revenue),
+    Engagement_Z = safe_zscore(Median_Engagement),
+    Composite_Score = rowMeans(across(c(Views_Z, Revenue_Z, Engagement_Z)), na.rm = TRUE)
+  )
+
+high_cut <- stats::quantile(strength_matrix$Composite_Score, probs = 0.67, na.rm = TRUE, names = FALSE)
+low_cut <- stats::quantile(strength_matrix$Composite_Score, probs = 0.33, na.rm = TRUE, names = FALSE)
+
+strength_matrix <- strength_matrix %>%
+  mutate(
+    Performance_Band = case_when(
+      Composite_Score >= high_cut ~ "Strength",
+      Composite_Score <= low_cut ~ "Weakness / Improve",
+      TRUE ~ "Middle"
+    )
+  ) %>%
+  arrange(desc(Composite_Score))
+```
+
+# Bundle B: Content Strategy & Optimization
+
+This report is structured to answer the Bundle B questions directly:
+
+- Which formats consistently retain viewer attention?
+- Where are performance strengths and weaknesses by category?
+- How do specific content attributes affect engagement?
+
+## 1) Format Retention Consistency
+
+### Engagement Distribution by Content Type
+```{r b2-engagement-distribution, fig.width=10, fig.height=8}
+ggplotly(
+  engagement_distribution_content_type(
+    analytics_eng,
+    Talent,
+    metric_col = "avg_view_prop",
+    metric_label = "Average View %",
+    y_as_percent = TRUE
+  )
+)
+```
+
+### Median Engagement by Content Type
+```{r b2-engagement-summary-plot, fig.width=10, fig.height=8}
+ggplotly(
+  engagement_summary_content_type_plot(
+    eng_summary,
+    Talent,
+    metric_label = "Average View %",
+    y_as_percent = TRUE
+  )
+)
+```
+
+```{r b2-engagement-summary-table}
+eng_summary_table <- eng_summary %>%
+  transmute(
+    Content_Type = as.character(.content),
+    Video_Count = VideoCount,
+    Median_Engagement = Median,
+    Mean_Engagement = Mean,
+    Q25_Engagement = Q25,
+    Q75_Engagement = Q75
+  )
+
+DTSettings(eng_summary_table, class = "display stripe hover", scroll_x = TRUE) %>%
+  DT::formatPercentage(
+    columns = c("Median_Engagement", "Mean_Engagement", "Q25_Engagement", "Q75_Engagement"),
+    digits = 1
+  )
+```
+
+## 2) Category Strengths and Weaknesses
+
+### Total Views by Content Type
+```{r b2-total-views, fig.width=10, fig.height=8}
+ggplotly(
+  total_views_content_type(analytics, Talent) +
+    theme_nyt()
+)
+```
+
+### Total Revenue by Content Type
+```{r b2-total-revenue, fig.width=10, fig.height=8}
+ggplotly(
+  total_metric_content_type(
+    monetary,
+    Talent,
+    metric_col = "Estimated Revenue",
+    metric_label = "Revenue",
+    window_months = 1,
+    bar_position = "stack",
+    show_counts = TRUE
+  )
+)
+```
+
+### Strength/Weakness Matrix by Content Type
+```{r b2-strength-matrix-table}
+strength_matrix_table <- strength_matrix %>%
+  select(
+    Content_Type,
+    Total_Views,
+    Total_Revenue,
+    Median_Engagement,
+    Composite_Score,
+    Performance_Band
+  )
+
+DTSettings(strength_matrix_table, class = "display stripe hover", scroll_x = TRUE) %>%
+  DT::formatRound(columns = c("Total_Views", "Total_Revenue", "Composite_Score"), digits = 2) %>%
+  DT::formatPercentage(columns = c("Median_Engagement"), digits = 1)
+```
+
+## 3) Content Attributes and Engagement
+
+### Collaboration Effectiveness
+```{r b2-collaboration-plot, fig.width=10, fig.height=8}
+collab_summary <- collaboration_effectiveness_prep(analytics, monetary)
+
+ggplotly(
+  collaboration_effectiveness_plot(
+    collab_summary,
+    Talent,
+    as_share = FALSE
+  )
+)
+```
+
+```{r b2-collaboration-table}
+collab_table <- collab_summary %>%
+  select(
+    collab_group,
+    VideoCountViews,
+    VideoCountRevenue,
+    TotalViews,
+    TotalRevenue,
+    AverageViewsPerVideo,
+    AverageRevenuePerVideo,
+    AvgViewsLiftVsNonCollab,
+    AvgRevenueLiftVsNonCollab
+  )
+
+decimal_cols <- detect_decimals(collab_table)
+DTSettings(collab_table, class = "display stripe hover", scroll_x = TRUE) %>%
+  DT::formatRound(columns = decimal_cols, digits = 3)
+```
+
+### Topic Performance
+```{r b2-topic-plot, fig.width=10, fig.height=8}
+topic_summary <- topic_performance_prep(analytics, monetary, top_n = 8)
+
+ggplotly(
+  topic_performance_plot(
+    topic_summary,
+    Talent,
+    as_share = FALSE
+  )
+)
+```
+
+```{r b2-topic-table}
+decimal_cols <- detect_decimals(topic_summary)
+DTSettings(topic_summary, class = "display stripe hover", scroll_x = TRUE) %>%
+  DT::formatRound(columns = decimal_cols, digits = 3)
+```
+
+### Tag Performance
+```{r b2-tag-plot, fig.width=12, fig.height=9}
+tag_summary <- tag_performance_prep(
+  analytics,
+  monetary,
+  top_n = 15,
+  min_videos = 2
+)
+
+ggplotly(
+  tag_performance_plot(
+    tag_summary,
+    Talent,
+    as_share = FALSE
+  )
+)
+```
+
+```{r b2-tag-table}
+decimal_cols <- detect_decimals(tag_summary)
+DTSettings(tag_summary, class = "display stripe hover", scroll_x = TRUE) %>%
+  DT::formatRound(columns = decimal_cols, digits = 3)
+```
+
+### Tag View Distribution
+```{r b2-tag-view-distribution-plot, fig.width=12, fig.height=9}
+tag_view_dist <- tag_view_distribution_prep(
+  analytics,
+  top_n = 15,
+  min_videos = 2
+)
+
+ggplotly(
+  tag_view_distribution_plot(
+    tag_view_dist,
+    Talent
+  )
+)
+```
+
+```{r b2-tag-view-distribution-table}
+decimal_cols <- detect_decimals(tag_view_dist$summary)
+DTSettings(tag_view_dist$summary, class = "display stripe hover", scroll_x = TRUE) %>%
+  DT::formatRound(columns = decimal_cols, digits = 3)
+```
+
+## 4) Scheduling Effects
+
+### Weekend vs Weekday
+```{r b2-weekend-plot, fig.width=10, fig.height=8}
+wk_summary <- weekend_vs_weekday_prep(analytics, monetary)
+
+ggplotly(
+  weekend_vs_weekday_plot(
+    wk_summary,
+    Talent,
+    as_share = FALSE
+  )
+)
+```
+
+```{r b2-weekend-table}
+decimal_cols <- detect_decimals(wk_summary)
+DTSettings(wk_summary, class = "display stripe hover", scroll_x = TRUE) %>%
+  DT::formatRound(columns = decimal_cols, digits = 3)
+```
+
+### Day-of-Week Distribution
+```{r b2-dow-plot, fig.width=10, fig.height=8}
+dow_summary <- day_of_week_performance_prep(analytics, monetary)
+
+ggplotly(
+  day_of_week_performance_plot(
+    dow_summary,
+    Talent,
+    as_share = TRUE
+  )
+)
+```
+
+```{r b2-dow-table}
+decimal_cols <- detect_decimals(dow_summary)
+DTSettings(dow_summary, class = "display stripe hover", scroll_x = TRUE) %>%
+  DT::formatRound(columns = decimal_cols, digits = 3)
+```
+
+# Wrap-up: What this means
+
+Use the retention and strength/weakness sections to prioritize content types to scale, then use topic/tag/collaboration/scheduling sections to tune execution for higher engagement and monetization efficiency.

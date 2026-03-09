@@ -31,6 +31,15 @@ content_duration_views_plot <- function(
   y_label = "Total views",
   title_suffix = "- Views Over Time by Content Type"
 ) {
+  start_date <- min(plot_df$publish_date, na.rm = TRUE)
+  end_date <- max(plot_df$publish_date, na.rm = TRUE)
+  subtitle_text <- paste0(
+    "Date range: ",
+    format(start_date, "%b %Y"),
+    " to ",
+    format(end_date, "%b %Y")
+  )
+
   plot_df %>%
     ggplot(aes(
       x = publish_date,
@@ -53,8 +62,13 @@ content_duration_views_plot <- function(
     theme_nyt() +
     labs(
       title = paste0(talent, " ", title_suffix),
+      subtitle = subtitle_text,
       x = "Publish date",
       y = y_label
+    ) +
+    scale_x_date(
+      date_breaks = "1 month",
+      date_labels = "%b %Y"
     )
 }
 

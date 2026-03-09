@@ -16,6 +16,15 @@ content_duration_metric <- function(df, talent, metric_col, metric_label = metri
 }
 
 content_duration_metric_plot <- function(plot_df, talent, metric_label, span = 0.35, show_ci = TRUE) {
+  start_date <- min(plot_df$publish_date, na.rm = TRUE)
+  end_date <- max(plot_df$publish_date, na.rm = TRUE)
+  subtitle_text <- paste0(
+    "Date range: ",
+    format(start_date, "%b %Y"),
+    " to ",
+    format(end_date, "%b %Y")
+  )
+
   plot_df %>%
     ggplot(aes(
       x = publish_date,
@@ -38,8 +47,13 @@ content_duration_metric_plot <- function(plot_df, talent, metric_label, span = 0
     theme_nyt() +
     labs(
       title = paste0(talent, " - ", metric_label, " Over Time by Content Type"),
+      subtitle = subtitle_text,
       x = "Publish date",
       y = paste0("Total ", metric_label)
+    ) +
+    scale_x_date(
+      date_breaks = "1 month",
+      date_labels = "%b %Y"
     )
 }
 

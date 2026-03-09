@@ -12,7 +12,12 @@ add_window_columns <- function(df, date_col = "publish_date", window_months = 2)
       .date = .data[[date_col]],
       .month_start = lubridate::floor_date(.date, unit = "month"),
       .window_start = .month_start - months((month(.month_start) - 1) %% window_months),
-      window_label = format(.window_start, "%b %Y")
+      .window_end = .window_start %m+% months(window_months) - lubridate::days(1),
+      window_label = if (window_months > 1) {
+        paste0(format(.window_start, "%b %Y"), " to ", format(.window_end, "%b %Y"))
+      } else {
+        format(.window_start, "%b %Y")
+      }
     )
 }
 
@@ -46,7 +51,7 @@ total_metric_content_type <- function(df,
   plot_df <- df %>%
     add_window_columns(date_col = date_col, window_months = window_months) %>%
     filter_recent_windows(max_months = max_months) %>%
-    group_by(window_label, `Content Type`, .window_start) %>%
+    group_by(window_label, `Content Type`, .window_start, .window_end) %>%
     summarize(
       Total = sum(.data[[metric_col]], na.rm = TRUE),
       VideoCount = dplyr::n(),
@@ -54,7 +59,7 @@ total_metric_content_type <- function(df,
     )
 
   window_levels <- plot_df %>%
-    dplyr::distinct(window_label, .window_start) %>%
+    dplyr::distinct(window_label, .window_start, .window_end) %>%
     arrange(.window_start) %>%
     pull(window_label)
 
@@ -84,7 +89,7 @@ total_metric_content_type <- function(df,
       labs(
         title = paste0(talent, " - Total ", metric_label, " by Content Type"),
         subtitle = subtitle_text,
-        x = "Window (start month)",
+        x = "Window (start to end month)",
         y = paste0("Total ", metric_label)
       ) +
       scale_y_continuous(

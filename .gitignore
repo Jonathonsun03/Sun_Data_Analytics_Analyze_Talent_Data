@@ -2,3 +2,27 @@
 .Rproj.user
 *.json
 *.txt
+
+# Local runtime and cache artifacts
+.Rhistory
+.RData
+.Ruserdata
+Rplots.pdf
+__pycache__/
+*.py[cod]
+
+# Script-generated report artifacts
+templates/reports/Bundle_*/plots/
+templates/reports/Bundle_*/tables/
+templates/reports/Bundle_*/Bundle_*_test.html
+
+# Script-generated classification exports/logs
+classification/output/
+
+# Local fallback output directory used by subtitle scripts
+Output/
+
+# Local database artifacts
+*.duckdb
+*.duckdb.wal
+*.duckdb.tmp

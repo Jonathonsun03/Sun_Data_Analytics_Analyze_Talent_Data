@@ -15,5 +15,6 @@ source(file.path(clean_data_dir, "analytics_core.R"))
 source(file.path(clean_data_dir, "analytics_join.R"))
 source(file.path(clean_data_dir, "clean_columns.R"))
 source(file.path(clean_data_dir, "video_prep.R"))
+source(file.path(clean_data_dir, "title_classification_join.R"))
 
 rm(.clean_data_dir, clean_data_dir)

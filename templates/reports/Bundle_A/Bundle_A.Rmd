@@ -56,7 +56,24 @@ list.files(here("scripts", "lib", "import_data"), pattern = "[rR]$", full.names 
 list.files(here("scripts", "lib", "report_tables"), pattern = "[rR]$", full.names = TRUE) %>%
   walk(source)
 source(here("scripts","lib","plots","PlottingThemes.R"))
-source(here::here("scripts","lib","clean_data","CleanData.R"))
+
+clean_data_dir <- here::here("scripts", "lib", "clean_data")
+source(file.path(clean_data_dir, "analytics_core.R"))
+source(file.path(clean_data_dir, "analytics_join.R"))
+source(file.path(clean_data_dir, "clean_columns.R"))
+source(file.path(clean_data_dir, "video_prep.R"))
+source(file.path(clean_data_dir, "title_classification_join.R"))
+
+if (!exists("DTSettings")) {
+  DTSettings <- function(df, class = NULL, scroll_x = FALSE, ...) {
+    DT::datatable(
+      df,
+      class = class,
+      options = list(scrollX = isTRUE(scroll_x)),
+      ...
+    )
+  }
+}
 
 root <- get_staging_root()
 ```
@@ -69,22 +86,47 @@ Talent <- c("Ava")
 talent_root <- select_talent(Talent)
 files <- TalentFiles(talent_root)
 
-df <- video_analytics_prep(files, talent = Talent)
+titles <- load_title_classifications(talent = Talent)
+preps <- video_preps_with_titles(
+  files = files,
+  titles = titles,
+  talent = Talent,
+  dedupe = TRUE,
+  key_cols = "Video ID",
+  sort_cols = c("confidence", "published_at", "Published At"),
+  dedupe_sets = c("analytics", "monetary", "demo")
+)
 
-monetary <- video_monetary_prep(files, talent = Talent) %>%
-            drop_na()
+analytics <- preps$analytics
+monetary  <- preps$monetary
+demo      <- preps$demo
+
+# Backward-compatible alias used by some legacy chunks.
+df <- analytics
 ```
 # Overall Performance Snapshot
 
 ## Overall views by Content Type
 ```{r views by content, fig.width=10}
 ggplotly(
-  total_views_content_type(df, Talent) +
+  total_views_content_type(analytics, Talent) +
   theme_nyt()
 )
 
 ```
 
+## Combined Performance Trends (Views + Revenue)
+```{r combined performance trends, fig.width=10, fig.height=8}
+ggplotly(
+  performance_trends_over_time(
+    analytics_df = analytics,
+    monetary_df = monetary,
+    talent = Talent,
+    freq = "month",
+    value_mode = "raw"
+  )
+)
+```
 
 ## Total Revenue by content type 
 ```{r views by content over time, fig.width=10, fig.height=10}
@@ -101,7 +143,42 @@ ggplotly(
 
 ```
 
+## Engagement Distribution by Content Type
+```{r engagement distribution, fig.width=10, fig.height=8}
+analytics_eng <- analytics %>%
+  mutate(avg_view_prop = averageViewPercentage / 100)
+
+ggplotly(
+  engagement_distribution_content_type(
+    analytics_eng,
+    Talent,
+    metric_col = "avg_view_prop",
+    metric_label = "Average View %",
+    y_as_percent = TRUE
+  )
+)
+```
+
+## Median Engagement by Content Type
+```{r engagement summary by content, fig.width=10, fig.height=8}
+eng_summary <- engagement_summary_content_type_prep(
+  analytics_eng,
+  metric_col = "avg_view_prop"
+)
+
+ggplotly(
+  engagement_summary_content_type_plot(
+    eng_summary,
+    Talent,
+    metric_label = "Average View %",
+    y_as_percent = TRUE
+  )
+)
+```
+
 ```{r}
+factorCols <- if (exists("factorCols")) factorCols else c("Content Type")
+
 UIdf<- df %>%
   select(
     Title,
@@ -140,6 +217,34 @@ ggplotly(
 
 ```
 
+# Audience Composition
+
+## Audience Age + Gender Trends
+```{r audience age and gender trends, fig.width=10, fig.height=9}
+ggplotly(
+  audience_age_gender_trends(
+    demo_df = demo,
+    talent = Talent,
+    freq = "month"
+  )
+)
+```
+
+## Core Audience Stability
+```{r audience stability, fig.width=10, fig.height=9}
+core_stability <- audience_core_segment_stability_prep(
+  demo_df = demo,
+  freq = "month"
+)
+
+ggplotly(
+  audience_core_segment_stability_plot(
+    stability_df = core_stability,
+    talent = Talent
+  )
+)
+```
+
 # Monetization Quality (Views to Dollars)
 ```{r monetary data table}
 
@@ -156,7 +261,119 @@ DTSettings(
 
 ```
 
+# Content-Type Deep Dive
+
+## Timing Effects: Weekend vs Weekday
+```{r weekend-vs-weekday, fig.width=10, fig.height=8}
+wk_summary <- weekend_vs_weekday_prep(analytics, monetary)
+
+ggplotly(
+  weekend_vs_weekday_plot(
+    wk_summary,
+    Talent,
+    as_share = FALSE
+  )
+)
+```
+
+```{r weekend-vs-weekday-table}
+decimal_cols <- detect_decimals(wk_summary)
+DTSettings(wk_summary, class = "display stripe hover", scroll_x = TRUE) %>%
+  formatRound(columns = decimal_cols, digits = 3)
+```
+
+## Timing Effects: Day-of-Week Distribution
+```{r day-of-week-share, fig.width=10, fig.height=8}
+dow_summary <- day_of_week_performance_prep(analytics, monetary)
+
+ggplotly(
+  day_of_week_performance_plot(
+    dow_summary,
+    Talent,
+    as_share = TRUE
+  )
+)
+```
+
+```{r day-of-week-table}
+decimal_cols <- detect_decimals(dow_summary)
+DTSettings(dow_summary, class = "display stripe hover", scroll_x = TRUE) %>%
+  formatRound(columns = decimal_cols, digits = 3)
+```
+
+## Collaboration Effectiveness
+```{r collaboration-effectiveness, fig.width=10, fig.height=8}
+collab_summary <- collaboration_effectiveness_prep(analytics, monetary)
+
+ggplotly(
+  collaboration_effectiveness_plot(
+    collab_summary,
+    Talent,
+    as_share = FALSE
+  )
+)
+```
+
+```{r collaboration-table}
+collab_table <- collab_summary %>%
+  select(
+    collab_group,
+    VideoCountViews,
+    VideoCountRevenue,
+    TotalViews,
+    TotalRevenue,
+    AverageViewsPerVideo,
+    AverageRevenuePerVideo,
+    AvgViewsLiftVsNonCollab,
+    AvgRevenueLiftVsNonCollab
+  )
+
+decimal_cols <- detect_decimals(collab_table)
+DTSettings(collab_table, class = "display stripe hover", scroll_x = TRUE) %>%
+  formatRound(columns = decimal_cols, digits = 3)
+```
+
+## Topic Performance (Views + Revenue)
+```{r topic-breakdown, fig.width=10, fig.height=8}
+topic_summary <- topic_performance_prep(analytics, monetary, top_n = 8)
+
+ggplotly(
+  topic_performance_plot(
+    topic_summary,
+    Talent,
+    as_share = FALSE
+  )
+)
+```
+
+```{r topic-table}
+decimal_cols <- detect_decimals(topic_summary)
+DTSettings(topic_summary, class = "display stripe hover", scroll_x = TRUE) %>%
+  formatRound(columns = decimal_cols, digits = 3)
+```
+
+## Tag Performance (Top Tags by Views + Revenue)
+```{r tag-breakdown, fig.width=12, fig.height=9}
+tag_summary <- tag_performance_prep(
+  analytics,
+  monetary,
+  top_n = 15,
+  min_videos = 2
+)
+
+ggplotly(
+  tag_performance_plot(
+    tag_summary,
+    Talent,
+    as_share = FALSE
+  )
+)
+```
+
+```{r tag-table}
+decimal_cols <- detect_decimals(tag_summary)
+DTSettings(tag_summary, class = "display stripe hover", scroll_x = TRUE) %>%
+  formatRound(columns = decimal_cols, digits = 3)
+```
+
 # Wrap-up: What this means
-
-
-
