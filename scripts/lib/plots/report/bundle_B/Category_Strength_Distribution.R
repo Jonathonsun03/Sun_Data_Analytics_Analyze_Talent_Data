@@ -190,7 +190,7 @@ bundle_b_content_position_distribution_plot <- function(position_data, talent) {
     theme_nyt() +
     ggplot2::labs(
       title = paste0(talent, " - Content Type Position in Full Distribution"),
-      subtitle = "Grey bars = count of videos in each value range. Vertical lines = content type medians.",
+      subtitle = "Bars = count of videos in each value range. Vertical lines = content type medians.",
       x = "Per-video value (raw units)",
       y = "Video count",
       linetype = "Content type"
@@ -256,8 +256,8 @@ bundle_b_content_position_distribution_plotly <- function(position_data, talent,
           legendgroup = "all_videos",
           showlegend = panel_idx == 1,
           marker = list(
-            color = "rgba(180,180,180,0.80)",
-            line = list(color = "rgba(120,120,120,1)", width = 1)
+            color = "rgba(233,237,242,0.80)",
+            line = list(color = "rgba(154,166,184,1)", width = 1)
           ),
           hovertemplate = paste0(
             "<b>", metric_name, "</b>",
@@ -312,7 +312,7 @@ bundle_b_content_position_distribution_plotly <- function(position_data, talent,
               legendgroup = paste0("content_", ct),
               showlegend = panel_idx == 1,
               line = list(
-                color = "rgba(55,55,55,1)",
+                color = "rgba(8,22,58,1)",
                 width = 1.6,
                 dash = unname(dash_map[ct])
               ),
