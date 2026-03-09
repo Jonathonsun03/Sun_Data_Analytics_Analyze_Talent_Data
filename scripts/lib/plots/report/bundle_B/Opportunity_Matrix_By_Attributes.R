@@ -318,10 +318,18 @@ bundle_b_attribute_opportunity_matrix_plot <- function(
         y = .data$AvgRevenuePerVideo,
         size = .data$VideoCount,
         shape = .data$Performance_Band,
+        color = .data$Performance_Band,
         text = .data$HoverText
       )
     ) +
-    ggplot2::geom_point(alpha = 0.8, color = "grey30") +
+    ggplot2::geom_point(alpha = 0.8) +
+    ggplot2::scale_color_manual(
+      values = c(
+        "Strength" = sun_data_brand_colors()[["blue"]],
+        "Middle" = sun_data_brand_colors()[["steel"]],
+        "Weakness / Improve" = sun_data_brand_colors()[["orange"]]
+      )
+    ) +
     ggplot2::scale_shape_manual(
       values = c(
         "Strength" = 17,
@@ -341,14 +349,15 @@ bundle_b_attribute_opportunity_matrix_plot <- function(
       y = "Average revenue per video",
       size = "Video count",
       shape = "Performance band"
-    )
+    ) +
+    ggplot2::guides(color = "none")
 
   if (isTRUE(add_labels)) {
     if (isTRUE(use_repel) && requireNamespace("ggrepel", quietly = TRUE)) {
       p <- p + ggrepel::geom_label_repel(
         ggplot2::aes(label = .data$Attribute),
         size = 2.3,
-        color = "grey20",
+        color = sun_data_brand_colors()[["midnight"]],
         fill = "white",
         label.size = 0.1,
         box.padding = 0.2,

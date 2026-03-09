@@ -18,7 +18,7 @@ total_views_content_type_plot <- function(plot_df, talent) {
       size = 3.5,
       color = "grey20"
     ) +
-    scale_fill_grey(start = 0.35, end = 0.65) +
+    scale_fill_sun_data(variant = "brand") +
     guides(fill = "none") +
     theme_nyt() +
     labs(
@@ -75,7 +75,7 @@ average_views_content_type_plot <- function(plot_df, talent) {
       size = 3.5,
       color = "grey20"
     ) +
-    scale_fill_grey(start = 0.35, end = 0.65) +
+    scale_fill_sun_data(variant = "brand") +
     guides(fill = "none") +
     theme_nyt() +
     labs(
@@ -149,7 +149,7 @@ views_content_type_comparison_plot <- function(plot_df, talent) {
       color = "grey20"
     ) +
     ggplot2::facet_wrap(~metric, ncol = 2, scales = "free_y") +
-    ggplot2::scale_fill_grey(start = 0.35, end = 0.65) +
+    scale_fill_sun_data(variant = "brand") +
     ggplot2::guides(fill = "none") +
     theme_nyt() +
     ggplot2::labs(

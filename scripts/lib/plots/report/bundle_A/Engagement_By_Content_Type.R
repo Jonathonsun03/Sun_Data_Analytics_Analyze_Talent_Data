@@ -94,7 +94,7 @@ engagement_distribution_content_type_plot <- function(
   p <- plot_df %>%
     ggplot2::ggplot(ggplot2::aes(x = .data$.content, y = .data$.metric, fill = .data$.content)) +
     ggplot2::geom_boxplot(alpha = 0.75, outlier.shape = NA, width = 0.65) +
-    scale_fill_grey(start = 0.35, end = 0.65) +
+    scale_fill_sun_data(variant = "brand") +
     guides(fill = "none") +
     theme_nyt() +
     ggplot2::labs(
@@ -110,7 +110,7 @@ engagement_distribution_content_type_plot <- function(
       width = 0.18,
       alpha = 0.25,
       size = 1.2,
-      color = "grey20"
+      color = sun_data_brand_colors()[["midnight"]]
     )
   }
 
@@ -218,16 +218,19 @@ engagement_summary_content_type_plot <- function(
     ggplot2::ggplot(
       ggplot2::aes(
         x = stats::reorder(.data$.content, .data$Median),
-        y = .data$Median
+        y = .data$Median,
+        fill = stats::reorder(.data$.content, .data$Median)
       )
     ) +
-    ggplot2::geom_col(fill = "grey55", width = 0.65) +
+    ggplot2::geom_col(width = 0.65) +
     ggplot2::geom_errorbar(
       ggplot2::aes(ymin = .data$Q25, ymax = .data$Q75),
       width = 0.2,
-      color = "grey20"
+      color = sun_data_brand_colors()[["midnight"]]
     ) +
     ggplot2::coord_flip() +
+    scale_fill_sun_data(variant = "brand") +
+    ggplot2::guides(fill = "none") +
     theme_nyt() +
     ggplot2::labs(
       title = paste0(talent, " - Median ", metric_label, " by Content Type"),

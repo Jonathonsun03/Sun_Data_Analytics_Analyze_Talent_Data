@@ -148,7 +148,7 @@ bundle_a_dual_metric_plot <- function(
     ggplot2::ggplot(ggplot2::aes(x = .data$.group, y = .data$value, fill = .data$.group)) +
     ggplot2::geom_col(width = 0.7) +
     ggplot2::facet_wrap(~metric, scales = "free_y", ncol = 1) +
-    ggplot2::scale_fill_grey(start = 0.35, end = 0.65) +
+    scale_fill_sun_data(variant = "brand") +
     ggplot2::guides(fill = "none") +
     ggplot2::scale_y_continuous(labels = y_scale) +
     theme_nyt() +
@@ -355,7 +355,7 @@ weekend_vs_weekday_distribution_plot <- function(wk_dist, talent) {
       width = 0.14,
       alpha = 0.25,
       size = 1.2,
-      color = "grey20"
+      color = sun_data_brand_colors()[["midnight"]]
     ) +
     ggplot2::stat_summary(
       fun = mean,
@@ -363,11 +363,11 @@ weekend_vs_weekday_distribution_plot <- function(wk_dist, talent) {
       shape = 21,
       size = 2.6,
       stroke = 0.2,
-      fill = "black",
+      fill = sun_data_brand_colors()[["midnight"]],
       color = "white"
     ) +
     ggplot2::facet_wrap(~metric, scales = "free_y", ncol = 1) +
-    ggplot2::scale_fill_grey(start = 0.35, end = 0.65) +
+    scale_fill_sun_data(variant = "brand") +
     ggplot2::guides(fill = "none") +
     ggplot2::scale_y_continuous(labels = scales::label_comma()) +
     theme_nyt() +
@@ -729,10 +729,9 @@ topic_view_distribution_plot <- function(topic_dist, talent) {
         "<br>Views: ", scales::label_comma(accuracy = 1)(.data$views)
       )
     ) %>%
-    ggplot2::ggplot(ggplot2::aes(x = .data$topic_group, y = .data$views)) +
+    ggplot2::ggplot(ggplot2::aes(x = .data$topic_group, y = .data$views, fill = .data$topic_group)) +
     ggplot2::geom_boxplot(
-      fill = "grey70",
-      color = "grey20",
+      color = sun_data_brand_colors()[["midnight"]],
       width = 0.65,
       outlier.shape = NA
     ) +
@@ -741,7 +740,7 @@ topic_view_distribution_plot <- function(topic_dist, talent) {
       width = 0.18,
       alpha = 0.25,
       size = 1.2,
-      color = "grey20"
+      color = sun_data_brand_colors()[["midnight"]]
     ) +
     ggplot2::stat_summary(
       fun = mean,
@@ -749,10 +748,12 @@ topic_view_distribution_plot <- function(topic_dist, talent) {
       shape = 21,
       size = 2.5,
       stroke = 0.2,
-      fill = "black",
+      fill = sun_data_brand_colors()[["midnight"]],
       color = "white"
     ) +
     ggplot2::coord_flip() +
+    scale_fill_sun_data(variant = "brand") +
+    ggplot2::guides(fill = "none") +
     ggplot2::scale_y_continuous(labels = scales::label_comma()) +
     theme_nyt() +
     ggplot2::labs(
@@ -893,7 +894,7 @@ tag_average_views_plot <- function(summary_df, talent) {
     ) +
     ggplot2::geom_col(width = 0.72) +
     ggplot2::coord_flip() +
-    ggplot2::scale_fill_grey(start = 0.35, end = 0.65) +
+    scale_fill_sun_data(variant = "brand") +
     ggplot2::guides(fill = "none") +
     ggplot2::scale_y_continuous(labels = scales::label_comma()) +
     theme_nyt() +
@@ -1056,10 +1057,9 @@ tag_view_distribution_plot <- function(tag_dist, talent) {
         "<br>Views: ", scales::label_comma(accuracy = 1)(.data$views)
       )
     ) %>%
-    ggplot2::ggplot(ggplot2::aes(x = .data$tag_group, y = .data$views)) +
+    ggplot2::ggplot(ggplot2::aes(x = .data$tag_group, y = .data$views, fill = .data$tag_group)) +
     ggplot2::geom_boxplot(
-      fill = "grey70",
-      color = "grey20",
+      color = sun_data_brand_colors()[["midnight"]],
       width = 0.65,
       outlier.shape = NA
     ) +
@@ -1068,7 +1068,7 @@ tag_view_distribution_plot <- function(tag_dist, talent) {
       width = 0.18,
       alpha = 0.25,
       size = 1.2,
-      color = "grey20"
+      color = sun_data_brand_colors()[["midnight"]]
     ) +
     ggplot2::stat_summary(
       fun = mean,
@@ -1076,10 +1076,12 @@ tag_view_distribution_plot <- function(tag_dist, talent) {
       shape = 21,
       size = 2.5,
       stroke = 0.2,
-      fill = "black",
+      fill = sun_data_brand_colors()[["midnight"]],
       color = "white"
     ) +
     ggplot2::coord_flip() +
+    scale_fill_sun_data(variant = "brand") +
+    ggplot2::guides(fill = "none") +
     ggplot2::scale_y_continuous(labels = scales::label_comma()) +
     theme_nyt() +
     ggplot2::labs(

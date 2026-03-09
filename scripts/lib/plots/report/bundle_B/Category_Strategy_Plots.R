@@ -19,9 +19,9 @@ bundle_b_priority_rank_plot <- function(strength_df, talent) {
     ggplot2::coord_flip() +
     ggplot2::scale_fill_manual(
       values = c(
-        "Strength" = "grey35",
-        "Middle" = "grey60",
-        "Weakness / Improve" = "grey80"
+        "Strength" = sun_data_brand_colors()[["blue"]],
+        "Middle" = sun_data_brand_colors()[["steel"]],
+        "Weakness / Improve" = sun_data_brand_colors()[["orange"]]
       )
     ) +
     theme_nyt() +
@@ -70,9 +70,9 @@ bundle_b_strength_matrix_plot <- function(strength_df, talent) {
     ) +
     ggplot2::scale_color_manual(
       values = c(
-        "Strength" = "grey20",
-        "Middle" = "grey50",
-        "Weakness / Improve" = "grey75"
+        "Strength" = sun_data_brand_colors()[["blue"]],
+        "Middle" = sun_data_brand_colors()[["steel"]],
+        "Weakness / Improve" = sun_data_brand_colors()[["orange"]]
       )
     ) +
     ggplot2::scale_x_continuous(labels = scales::label_percent(accuracy = 1)) +
@@ -110,7 +110,7 @@ bundle_b_revenue_efficiency_plot <- function(strength_df, talent) {
         y = .data$Revenue_Per_1K_Views
       )
     ) +
-    ggplot2::geom_col(fill = "grey45", width = 0.7) +
+    ggplot2::geom_col(fill = sun_data_brand_colors()[["blue"]], width = 0.7) +
     ggplot2::coord_flip() +
     ggplot2::scale_y_continuous(labels = scales::label_dollar(scale = 1)) +
     theme_nyt() +
@@ -163,8 +163,8 @@ bundle_b_collaboration_lift_plot <- function(collab_summary, talent) {
         y = .data$Lift
       )
     ) +
-    ggplot2::geom_hline(yintercept = 0, color = "grey35", linewidth = 0.3) +
-    ggplot2::geom_col(fill = "grey45", width = 0.6) +
+    ggplot2::geom_hline(yintercept = 0, color = sun_data_brand_colors()[["steel"]], linewidth = 0.3) +
+    ggplot2::geom_col(fill = sun_data_brand_colors()[["orange"]], width = 0.6) +
     ggplot2::scale_y_continuous(labels = scales::label_percent(accuracy = 1)) +
     theme_nyt() +
     ggplot2::labs(
@@ -228,9 +228,9 @@ bundle_b_day_of_week_lift_plot <- function(day_summary, talent) {
 
   lift_df %>%
     ggplot2::ggplot(ggplot2::aes(x = .data$day_of_week, y = .data$Lift, fill = .data$Metric)) +
-    ggplot2::geom_hline(yintercept = 0, color = "grey35", linewidth = 0.3) +
+    ggplot2::geom_hline(yintercept = 0, color = sun_data_brand_colors()[["steel"]], linewidth = 0.3) +
     ggplot2::geom_col(position = ggplot2::position_dodge(width = 0.7), width = 0.6) +
-    ggplot2::scale_fill_grey(start = 0.35, end = 0.65) +
+    scale_fill_sun_data(variant = "brand") +
     ggplot2::scale_y_continuous(labels = scales::label_percent(accuracy = 1)) +
     theme_nyt() +
     ggplot2::labs(

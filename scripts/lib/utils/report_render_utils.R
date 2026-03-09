@@ -1,9 +1,26 @@
 rr_get_script_dir <- function() {
+  get_source_ofile <- function() {
+    frames <- sys.frames()
+    for (i in rev(seq_along(frames))) {
+      of <- frames[[i]]$ofile
+      if (!is.null(of) && nzchar(of)) {
+        return(of)
+      }
+    }
+    ""
+  }
+
   args <- commandArgs(trailingOnly = FALSE)
   file_arg <- grep("^--file=", args, value = TRUE)
   if (length(file_arg) > 0) {
     return(dirname(normalizePath(sub("^--file=", "", file_arg[[1]]), winslash = "/", mustWork = FALSE)))
   }
+
+  ofile <- get_source_ofile()
+  if (nzchar(ofile)) {
+    return(dirname(normalizePath(ofile, winslash = "/", mustWork = FALSE)))
+  }
+
   normalizePath(getwd(), winslash = "/", mustWork = FALSE)
 }
 

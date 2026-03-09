@@ -169,8 +169,8 @@ bundle_b_content_position_distribution_plot <- function(position_data, talent) {
     ggplot2::geom_histogram(
       ggplot2::aes(y = after_stat(count)),
       bins = 35,
-      fill = "grey82",
-      color = "grey45",
+      fill = sun_data_brand_colors()[["cloud"]],
+      color = sun_data_brand_colors()[["steel"]],
       linewidth = 0.4,
       alpha = 0.9
     ) +
@@ -178,7 +178,7 @@ bundle_b_content_position_distribution_plot <- function(position_data, talent) {
       data = summary_df,
       ggplot2::aes(xintercept = .data$MedianValue, linetype = .data$Content_Type),
       linewidth = 0.6,
-      color = "grey20",
+      color = sun_data_brand_colors()[["midnight"]],
       alpha = 0.9,
       show.legend = TRUE
     ) +

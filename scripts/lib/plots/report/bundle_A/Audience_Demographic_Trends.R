@@ -92,6 +92,7 @@ audience_age_gender_trends_plot <- function(
     ) +
     ggplot2::geom_line(linewidth = 0.8, alpha = 0.8) +
     ggplot2::facet_wrap(~.gender, ncol = 1, scales = "free_y") +
+    scale_color_sun_data(variant = "brand") +
     ggplot2::scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +
     ggplot2::scale_y_continuous(labels = scales::label_percent(accuracy = 1)) +
     theme_nyt() +
@@ -262,10 +263,11 @@ audience_core_segment_stability_plot <- function(stability_df, talent, show_hhi 
       )
   }
 
+  brand <- sun_data_brand_colors()
   color_map <- c(
-    setNames("#1f77b4", paste0("Core audience share (", top_seg, ")")),
-    "Potential audience share (all other segments)" = "#e15759",
-    "Audience concentration index (HHI, scaled)" = "#2f2f2f"
+    setNames(brand[["blue"]], paste0("Core audience share (", top_seg, ")")),
+    "Potential audience share (all other segments)" = brand[["orange"]],
+    "Audience concentration index (HHI, scaled)" = brand[["midnight"]]
   )
 
   plot_df <- plot_df %>%

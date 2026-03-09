@@ -54,10 +54,11 @@ content_duration_views_plot <- function(
       method = "loess",
       span = span,
       se = show_ci,
-      color = "black",
+      color = sun_data_brand_colors()[["midnight"]],
       linewidth = 1.4
     ) +
     facet_wrap(~`Content Type`, ncol = 1, scales = "free_y") +
+    scale_color_sun_data(variant = "brand") +
     guides(color = "none") +
     theme_nyt() +
     labs(

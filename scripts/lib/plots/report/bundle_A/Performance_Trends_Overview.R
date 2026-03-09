@@ -89,9 +89,11 @@ performance_trends_over_time_plot <- function(
   }
 
   p <- use_df %>%
-    ggplot2::ggplot(ggplot2::aes(x = .data$.period, y = .data$value)) +
-    ggplot2::geom_line(linewidth = 0.9, color = "grey20") +
+    ggplot2::ggplot(ggplot2::aes(x = .data$.period, y = .data$value, color = .data$metric, group = .data$metric)) +
+    ggplot2::geom_line(linewidth = 0.9) +
     ggplot2::facet_wrap(~metric, ncol = 1, scales = facet_scales) +
+    scale_color_sun_data(variant = "brand") +
+    ggplot2::guides(color = "none") +
     ggplot2::scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +
     ggplot2::scale_y_continuous(labels = y_scale) +
     theme_nyt() +
@@ -103,7 +105,7 @@ performance_trends_over_time_plot <- function(
     )
 
   if (isTRUE(show_points)) {
-    p <- p + ggplot2::geom_point(size = 1.6, color = "grey30")
+    p <- p + ggplot2::geom_point(size = 1.6)
   }
 
   p

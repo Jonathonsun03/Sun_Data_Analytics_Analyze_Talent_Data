@@ -73,7 +73,7 @@ total_metric_content_type_plot <- function(plot_df,
         size = 3.5,
         color = "grey20"
       ) +
-      scale_fill_grey(start = 0.35, end = 0.65) +
+      scale_fill_sun_data(variant = "brand") +
       theme_nyt() +
       labs(
         title = paste0(talent, " - Total ", metric_label, " by Content Type"),
@@ -104,7 +104,7 @@ total_metric_content_type_plot <- function(plot_df,
         color = "grey20"
       ) +
       facet_wrap(~window_label, scales = "free_y") +
-      scale_fill_grey(start = 0.35, end = 0.65) +
+      scale_fill_sun_data(variant = "brand") +
       guides(fill = "none") +
       theme_nyt() +
       labs(

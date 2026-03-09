@@ -1,17 +1,58 @@
 bootstrap_get_script_dir <- function() {
+  get_source_ofile <- function() {
+    frames <- sys.frames()
+    for (i in rev(seq_along(frames))) {
+      of <- frames[[i]]$ofile
+      if (!is.null(of) && nzchar(of)) {
+        return(of)
+      }
+    }
+    ""
+  }
+
   args <- commandArgs(trailingOnly = FALSE)
   file_arg <- grep("^--file=", args, value = TRUE)
   if (length(file_arg) > 0) {
     return(dirname(normalizePath(sub("^--file=", "", file_arg[[1]]), winslash = "/", mustWork = FALSE)))
   }
+
+  ofile <- get_source_ofile()
+  if (nzchar(ofile)) {
+    return(dirname(normalizePath(ofile, winslash = "/", mustWork = FALSE)))
+  }
+
   normalizePath(getwd(), winslash = "/", mustWork = FALSE)
 }
 
-repo_root <- normalizePath(
-  file.path(bootstrap_get_script_dir(), "..", "..", ".."),
-  winslash = "/",
-  mustWork = FALSE
-)
+bootstrap_find_repo_root <- function(
+  start_dirs = c(bootstrap_get_script_dir(), getwd()),
+  marker_rel = file.path("scripts", "lib", "utils", "staging_root.R")
+) {
+  starts <- unique(normalizePath(start_dirs, winslash = "/", mustWork = FALSE))
+
+  for (start in starts) {
+    current <- start
+    repeat {
+      marker_path <- file.path(current, marker_rel)
+      if (file.exists(marker_path)) {
+        return(current)
+      }
+      parent <- dirname(current)
+      if (identical(parent, current)) {
+        break
+      }
+      current <- parent
+    }
+  }
+
+  stop(
+    "Could not locate repository root from: ",
+    paste(starts, collapse = ", "),
+    ". Ensure working directory is inside the project or run via Rscript path."
+  )
+}
+
+repo_root <- bootstrap_find_repo_root()
 
 source(file.path(repo_root, "scripts", "lib", "utils", "report_render_utils.R"))
 source(file.path(repo_root, "scripts", "lib", "utils", "staging_root.R"))
