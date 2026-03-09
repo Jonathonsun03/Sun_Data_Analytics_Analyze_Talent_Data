@@ -255,25 +255,14 @@ content_position <- bundle_b_content_position_distribution_prep(
   monetary_df = monetary
 )
 
-bundle_b_content_position_distribution_plot(
+bundle_b_content_position_distribution_plotly(
   content_position,
   Talent
 )
 ```
 
 ```{r b2-priority-components-table}
-priority_components <- content_position$summary %>%
-  arrange(Metric, desc(MedianPercentile), Content_Type) %>%
-  select(
-    Metric,
-    Content_Type,
-    VideoCount,
-    MedianValue,
-    Q25,
-    Q75,
-    MedianPercentile,
-    Performance_Band
-  )
+priority_components <- bundle_b_content_position_metric_table(content_position)
 
 DTSettings(
   priority_components,
@@ -294,8 +283,11 @@ How to read it:
 - Point shape indicates performance band.
 - Y-axis is linear and shows raw dollar values.
 
-Interactive version:
-- Removes labels to reduce clutter and relies on tooltips for details.
+How Strength / Middle / Weakness is calculated:
+- Compute three per-attribute metrics: `AvgViewsPerVideo`, `AvgRevenuePerVideo`, and `MedianEngagement`.
+- Standardize each metric across all plotted attributes using z-scores.
+- `Composite_Score = mean(Views_Z, Revenue_Z, Engagement_Z)`.
+- `Strength` = top third (`Composite_Score >= 67th percentile`), `Weakness / Improve` = bottom third (`<= 33rd percentile`), otherwise `Middle`.
 
 ```{r b2-opportunity-matrix-interactive, fig.width=12, fig.height=9}
 attribute_opportunity <- bundle_b_attribute_opportunity_prep(
@@ -314,20 +306,7 @@ bundle_b_attribute_opportunity_matrix_plotly(
 ```
 
 ```{r b2-attribute-opportunity-table}
-attribute_opportunity_table <- attribute_opportunity %>%
-  arrange(desc(Composite_Score)) %>%
-  select(
-    Attribute,
-    LabelType,
-    VideoCount,
-    AvgViewsPerVideo,
-    AvgRevenuePerVideo,
-    MedianEngagement,
-    TotalViews,
-    TotalRevenue,
-    Composite_Score,
-    Performance_Band
-  )
+attribute_opportunity_table <- bundle_b_attribute_opportunity_table(attribute_opportunity)
 
 DTSettings(
   attribute_opportunity_table,
@@ -358,19 +337,18 @@ What this table does:
 - Summarizes where each content type lands in the full-video distribution by metric percentile.
 
 How to read it:
-- Higher percentiles mean the content type median is stronger relative to the full distribution.
+- `ViewsMedianPercentile`: percentile position of that content type's median views per video.
+- `RevenueMedianPercentile`: percentile position of median revenue per video.
+- `EngagementMedianPercentile`: percentile position of median engagement rate.
+- `AvgMedianPercentile`: average of the available median percentiles for that content type.
+- `Performance_Band` is assigned from `AvgMedianPercentile` across content types:
+  - `Strength`: top third (>= 67th percentile)
+  - `Weakness / Improve`: bottom third (<= 33rd percentile)
+  - `Middle`: all others
+- `MetricsCovered` shows how many metrics were available for that content type; if this is below 3, interpret banding with caution.
 
 ```{r b2-strength-matrix-table}
-strength_matrix_table <- bundle_b_content_position_overall_summary(content_position) %>%
-  select(
-    Content_Type,
-    MetricsCovered,
-    ViewsMedianPercentile,
-    RevenueMedianPercentile,
-    EngagementMedianPercentile,
-    AvgMedianPercentile,
-    Performance_Band
-  )
+strength_matrix_table <- bundle_b_content_position_overall_table(content_position)
 
 DTSettings(
   strength_matrix_table,

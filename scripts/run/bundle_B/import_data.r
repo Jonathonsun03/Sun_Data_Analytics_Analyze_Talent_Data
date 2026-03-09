@@ -260,7 +260,10 @@ build_bundle_b_tables <- function(
     analytics_df = analytics,
     monetary_df = monetary
   )
-  content_position_overall <- bundle_b_content_position_overall_summary(content_position)
+  attribute_opportunity <- bundle_b_attribute_opportunity_prep(
+    analytics_df = analytics,
+    monetary_df = monetary
+  )
 
   list(
     dataset_sizes = tibble::tibble(
@@ -280,12 +283,9 @@ build_bundle_b_tables <- function(
       monetary = monetary,
       analytics_eng = analytics_eng
     ),
-    content_position = content_position$summary,
-    content_position_overall = content_position_overall,
-    attribute_opportunity = bundle_b_attribute_opportunity_prep(
-      analytics_df = analytics,
-      monetary_df = monetary
-    ),
+    content_position = bundle_b_content_position_metric_table(content_position),
+    content_position_overall = bundle_b_content_position_overall_table(content_position),
+    attribute_opportunity = bundle_b_attribute_opportunity_table(attribute_opportunity),
     weekend_vs_weekday = deep_dive$weekend_summary,
     day_of_week = deep_dive$day_of_week_summary,
     collaboration = deep_dive$collab_summary,

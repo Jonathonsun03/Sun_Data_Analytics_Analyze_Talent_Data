@@ -67,6 +67,8 @@ Weekend vs weekday distribution, day-of-week contribution, collaboration effecti
 ### 8) Rendering Bundle A
 - Single talent:
   `Rscript scripts/run/bundle_A/render_bundle_A.R --talent Ava`
+- Single talent + days-back window:
+  `Rscript scripts/run/bundle_A/render_bundle_A.R --talent Ava --window-days 90`
 - Batch (comma-separated):
   `Rscript scripts/run/bundle_A/render_bundle_A.R --talents "Ava,Avaritia"`
 - Batch from file (one talent per line):
@@ -81,3 +83,13 @@ Weekend vs weekday distribution, day-of-week contribution, collaboration effecti
   `Rscript scripts/run/bundle_A/render_bundle_A.R --input templates/reports/Bundle_A/Bundle_A.Rmd --talent Ava`
 - Quiet render:
   `Rscript scripts/run/bundle_A/render_bundle_A.R --talent Ava --quiet`
+
+Common window presets:
+- 90 days: `--window-days 90`
+- 60 days: `--window-days 60`
+- 30 days: `--window-days 30`
+- 14 days: `--window-days 14`
+- 7 days: `--window-days 7`
+- Omit `--window-days` to use all available staged data.
+- If a selected window is too narrow to include analytics + monetary rows, rendering will stop with a message to use a larger window.
+- If a section has sparse data inside a valid window (for example demographics or tags), the report will show a note for that section instead of failing the whole render.

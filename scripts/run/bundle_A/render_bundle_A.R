@@ -1,4 +1,4 @@
-get_script_dir <- function() {
+bootstrap_get_script_dir <- function() {
   args <- commandArgs(trailingOnly = FALSE)
   file_arg <- grep("^--file=", args, value = TRUE)
   if (length(file_arg) > 0) {
@@ -8,80 +8,49 @@ get_script_dir <- function() {
 }
 
 repo_root <- normalizePath(
-  file.path(get_script_dir(), "..", "..", ".."),
+  file.path(bootstrap_get_script_dir(), "..", "..", ".."),
   winslash = "/",
   mustWork = FALSE
 )
-repo_path <- function(...) normalizePath(file.path(repo_root, ...), winslash = "/", mustWork = FALSE)
+
+source(file.path(repo_root, "scripts", "lib", "utils", "report_render_utils.R"))
+source(file.path(repo_root, "scripts", "lib", "utils", "staging_root.R"))
+source(file.path(repo_root, "scripts", "lib", "utils", "talent_select.R"))
+
+repo_path <- function(...) rr_repo_path(repo_root, ...)
+resolve_repo_or_abs <- function(path) {
+  if (grepl("^/", path)) {
+    return(normalizePath(path, winslash = "/", mustWork = FALSE))
+  }
+  repo_path(path)
+}
 
 args <- commandArgs(trailingOnly = TRUE)
 
-arg_value <- function(flag, default = NULL) {
-  idx <- which(args == flag)
-  if (length(idx) == 0) {
-    return(default)
-  }
-  pos <- idx[[1]] + 1L
-  if (pos > length(args)) {
-    return(default)
-  }
-  args[[pos]]
-}
-
-has_flag <- function(flag) {
-  any(args == flag)
-}
-
-split_csv_values <- function(x) {
-  if (is.null(x) || !nzchar(x)) {
-    return(character())
-  }
-  vals <- trimws(unlist(strsplit(x, ",", fixed = TRUE)))
-  vals[nzchar(vals)]
-}
-
-read_talent_file <- function(path) {
-  if (is.null(path) || !nzchar(path)) {
-    return(character())
-  }
-  full <- if (grepl("^/", path)) path else repo_path(path)
-  if (!file.exists(full)) {
-    stop("Talents file not found: ", full)
-  }
-  vals <- readLines(full, warn = FALSE, encoding = "UTF-8")
-  vals <- trimws(vals)
-  vals <- vals[nzchar(vals) & !grepl("^#", vals)]
-  vals
-}
-
-if (!requireNamespace("rmarkdown", quietly = TRUE)) {
-  stop("Package `rmarkdown` is required.")
-}
-
-source(repo_path("scripts", "lib", "utils", "staging_root.R"))
-source(repo_path("scripts", "lib", "utils", "talent_select.R"))
-
-input_rmd <- arg_value("--input", repo_path("templates", "reports", "Bundle_A", "Bundle_A.Rmd"))
-if (!grepl("^/", input_rmd)) {
-  input_rmd <- repo_path(input_rmd)
-}
+input_rmd <- rr_arg_value(args, "--input", repo_path("templates", "reports", "Bundle_A", "Bundle_A.Rmd"))
+input_rmd <- resolve_repo_or_abs(input_rmd)
 if (!file.exists(input_rmd)) {
   stop("Input Rmd not found: ", input_rmd)
 }
 
-output_dir <- arg_value("--output-dir", repo_path("reports", "bundle_A"))
-if (!grepl("^/", output_dir)) {
-  output_dir <- repo_path(output_dir)
-}
+output_dir <- rr_arg_value(args, "--output-dir", repo_path("reports", "bundle_A"))
+output_dir <- resolve_repo_or_abs(output_dir)
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
-output_prefix <- arg_value("--output-prefix", "Bundle_A")
-quiet_render <- has_flag("--quiet")
+output_prefix <- rr_arg_value(args, "--output-prefix", "Bundle_A")
+quiet_render <- rr_has_flag(args, "--quiet")
+window_days <- rr_parse_optional_positive_int(
+  rr_arg_value(args, "--window-days", ""),
+  flag_name = "--window-days"
+)
 
-talent_single <- trimws(arg_value("--talent", ""))
-talent_list_csv <- split_csv_values(arg_value("--talents", ""))
-talent_list_file <- read_talent_file(arg_value("--talents-file", ""))
-talent_all <- has_flag("--all")
+talent_single <- trimws(rr_arg_value(args, "--talent", ""))
+talent_list_csv <- rr_split_csv_values(rr_arg_value(args, "--talents", ""))
+talent_list_file <- rr_read_values_file(
+  rr_arg_value(args, "--talents-file", ""),
+  path_resolver = resolve_repo_or_abs
+)
+talent_all <- rr_has_flag(args, "--all")
 
 talents <- character()
 
@@ -104,55 +73,28 @@ if (length(talents) == 0) {
 cat("Bundle A render targets:", paste(talents, collapse = ", "), "\n")
 cat("Input Rmd:", input_rmd, "\n")
 cat("Output dir:", output_dir, "\n")
-
-results <- vector("list", length(talents))
-
-for (i in seq_along(talents)) {
-  talent <- talents[[i]]
-  slug <- talent_slugify(talent)
-  output_file <- paste0(output_prefix, "_", slug, ".html")
-
-  cat("\n[", i, "/", length(talents), "] Rendering talent: ", talent, "\n", sep = "")
-  ok <- TRUE
-  err_msg <- ""
-
-  tryCatch(
-    {
-      rmarkdown::render(
-        input = input_rmd,
-        output_file = output_file,
-        output_dir = output_dir,
-        params = list(talent = talent),
-        envir = new.env(parent = globalenv()),
-        quiet = quiet_render
-      )
-    },
-    error = function(e) {
-      ok <<- FALSE
-      err_msg <<- conditionMessage(e)
-    }
-  )
-
-  if (ok) {
-    cat("Rendered:", file.path(output_dir, output_file), "\n")
-  } else {
-    cat("Failed:", talent, " -> ", err_msg, "\n", sep = "")
-  }
-
-  results[[i]] <- data.frame(
-    talent = talent,
-    output_file = output_file,
-    success = ok,
-    error = if (ok) NA_character_ else err_msg,
-    stringsAsFactors = FALSE
-  )
+if (is.na(window_days)) {
+  cat("Window: all available staged data\n")
+} else {
+  cat("Window: last ", window_days, " days\n", sep = "")
 }
 
-result_df <- do.call(rbind, results)
-cat("\nRender summary:\n")
-print(result_df, row.names = FALSE)
+result_df <- rr_render_for_talents(
+  talents = talents,
+  input_rmd = input_rmd,
+  output_dir = output_dir,
+  output_prefix = output_prefix,
+  params_builder = function(talent) {
+    list(
+      talent = talent,
+      window_days = if (is.na(window_days)) NULL else window_days
+    )
+  },
+  slugify_fn = talent_slugify,
+  quiet_render = quiet_render,
+  label = "Rendering talent"
+)
 
 if (any(!result_df$success)) {
   quit(status = 1)
 }
-

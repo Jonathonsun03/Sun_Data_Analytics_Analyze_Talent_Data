@@ -10,6 +10,7 @@ output:
     toc_depth: 3
 params:
   talent: "Ava"
+  window_days: null
 ---
 
 ```{r setup, include=FALSE}
@@ -90,6 +91,23 @@ if (length(Talent) != 1 || is.na(Talent) || !nzchar(trimws(Talent))) {
 }
 Talent <- trimws(Talent)
 
+window_days <- params$window_days
+if (is.null(window_days) || (length(window_days) == 1 && is.na(window_days))) {
+  window_days <- NA_integer_
+} else {
+  window_days <- suppressWarnings(as.integer(window_days))
+  if (length(window_days) != 1 || is.na(window_days) || window_days <= 0) {
+    stop("`params$window_days` must be NULL/NA or a single positive integer.")
+  }
+}
+
+window_end_date <- Sys.Date()
+window_start_date <- if (is.na(window_days)) {
+  as.Date(NA)
+} else {
+  window_end_date - as.integer(window_days) + 1
+}
+
 talent_root <- select_talent(Talent)
 files <- TalentFiles(talent_root)
 
@@ -107,6 +125,44 @@ preps <- video_preps_with_titles(
 analytics <- preps$analytics
 monetary  <- preps$monetary
 demo      <- preps$demo
+
+apply_days_back_window <- function(df, days_back) {
+  if (is.na(days_back) || nrow(df) == 0) {
+    return(df)
+  }
+
+  date_col <- bundle_a_optional_col(
+    df,
+    candidates = c("publish_date", "Published At", "date"),
+    label = "analysis window date column"
+  )
+  if (is.null(date_col)) {
+    return(df)
+  }
+
+  df %>%
+    mutate(.window_date = bundle_a_as_date(.data[[date_col]])) %>%
+    filter(
+      !is.na(.data$.window_date),
+      .data$.window_date >= window_start_date,
+      .data$.window_date <= window_end_date
+    ) %>%
+    select(-.window_date)
+}
+
+analytics <- apply_days_back_window(analytics, window_days)
+monetary  <- apply_days_back_window(monetary, window_days)
+demo      <- apply_days_back_window(demo, window_days)
+
+if (nrow(analytics) == 0 || nrow(monetary) == 0) {
+  stop(
+    "No data after applying the selected window. ",
+    "At least analytics and monetary data are required. ",
+    "Try a larger `window_days` value or set it to NULL for all available data."
+  )
+}
+
+demo_available <- nrow(demo) > 0
 
 # Backward-compatible alias used by some legacy chunks.
 df <- analytics
@@ -130,6 +186,29 @@ Use the floating table of contents to jump directly to the section tied to your 
 ## Standard vs Customized Content
 The structure and chart explanations are standardized for consistency across talents.  
 Use the **Wrap-up** section to add talent-specific narrative and recommendations.
+
+## Active Analysis Window
+```{r analysis-window-summary}
+if (is.na(window_days)) {
+  cat("**Window setting:** All available staged data (no days-back filter).")
+} else {
+  cat(
+    "**Window setting:** Last ", window_days, " days ",
+    "(", format(window_start_date, "%Y-%m-%d"), " to ", format(window_end_date, "%Y-%m-%d"), ").",
+    sep = ""
+  )
+}
+
+cat("\n\n")
+cat(
+  "**Rows in active window:** ",
+  "analytics=", nrow(analytics), ", ",
+  "monetary=", nrow(monetary), ", ",
+  "demographics=", nrow(demo),
+  ".",
+  sep = ""
+)
+```
 
 # Overall Performance Snapshot
 **Section goal:** Establish a shared baseline of total scale, per-video efficiency, and revenue mix.
@@ -274,13 +353,31 @@ ggplotly(
 **How to read it:** Track which segments are growing, shrinking, or staying stable month to month.
 
 ```{r audience age and gender trends, fig.width=plot_w_facet, fig.height=plot_h_facet}
-ggplotly(
-  audience_age_gender_trends(
-    demo_df = demo,
-    talent = Talent,
-    freq = "month"
+if (!isTRUE(demo_available)) {
+  cat("No audience demographics data available in the selected window.")
+} else {
+  tryCatch(
+    {
+      plot_df <- audience_age_gender_trends_prep(
+        demo_df = demo,
+        freq = "month"
+      )
+      if (nrow(plot_df) == 0) {
+        cat("No audience trend rows available in the selected window.")
+      } else {
+        ggplotly(
+          audience_age_gender_trends_plot(
+            plot_df = plot_df,
+            talent = Talent
+          )
+        )
+      }
+    },
+    error = function(e) {
+      cat("Audience trend section unavailable for the selected window:", conditionMessage(e))
+    }
   )
-)
+}
 ```
 
 ## Core Audience Stability
@@ -299,18 +396,32 @@ ggplotly(
 It turns a technical concentration metric into two plain-language shares that are easier to explain to non-technical readers.
 
 ```{r audience stability, fig.width=plot_w_facet, fig.height=plot_h_facet}
-core_stability <- audience_core_segment_stability_prep(
-  demo_df = demo,
-  freq = "month"
-)
-
-ggplotly(
-  audience_core_segment_stability_plot(
-    stability_df = core_stability,
-    talent = Talent
-  ),
-  tooltip = "text"
-)
+if (!isTRUE(demo_available)) {
+  cat("No audience demographics data available in the selected window.")
+} else {
+  tryCatch(
+    {
+      core_stability <- audience_core_segment_stability_prep(
+        demo_df = demo,
+        freq = "month"
+      )
+      if (nrow(core_stability) == 0) {
+        cat("No core audience rows available in the selected window.")
+      } else {
+        ggplotly(
+          audience_core_segment_stability_plot(
+            stability_df = core_stability,
+            talent = Talent
+          ),
+          tooltip = "text"
+        )
+      }
+    },
+    error = function(e) {
+      cat("Core audience section unavailable for the selected window:", conditionMessage(e))
+    }
+  )
+}
 ```
 
 # Monetization Quality (Views to Dollars)
@@ -358,13 +469,24 @@ DTSettings(wk_summary, class = "display stripe hover", scroll_x = TRUE)
 ```{r day-of-week-share, fig.width=plot_w_facet, fig.height=plot_h_facet}
 dow_summary <- day_of_week_performance_prep(analytics, monetary)
 
-ggplotly(
-  day_of_week_performance_plot(
-    dow_summary,
-    Talent,
-    as_share = TRUE
+if (nrow(dow_summary) == 0) {
+  cat("No day-of-week performance rows available in the selected window.")
+} else {
+  tryCatch(
+    {
+      ggplotly(
+        day_of_week_performance_plot(
+          dow_summary,
+          Talent,
+          as_share = TRUE
+        )
+      )
+    },
+    error = function(e) {
+      cat("Day-of-week section unavailable for the selected window:", conditionMessage(e))
+    }
   )
-)
+}
 ```
 
 ```{r day-of-week-table}
@@ -378,30 +500,45 @@ DTSettings(dow_summary, class = "display stripe hover", scroll_x = TRUE)
 ```{r collaboration-effectiveness, fig.width=plot_w_facet, fig.height=plot_h_facet}
 collab_summary <- collaboration_effectiveness_prep(analytics, monetary)
 
-ggplotly(
-  collaboration_effectiveness_plot(
-    collab_summary,
-    Talent,
-    as_share = FALSE
+if (nrow(collab_summary) == 0) {
+  cat("No collaboration rows available in the selected window.")
+} else {
+  tryCatch(
+    {
+      ggplotly(
+        collaboration_effectiveness_plot(
+          collab_summary,
+          Talent,
+          as_share = FALSE
+        )
+      )
+    },
+    error = function(e) {
+      cat("Collaboration section unavailable for the selected window:", conditionMessage(e))
+    }
   )
-)
+}
 ```
 
 ```{r collaboration-table}
-collab_table <- collab_summary %>%
-  select(
-    collab_group,
-    VideoCountViews,
-    VideoCountRevenue,
-    TotalViews,
-    TotalRevenue,
-    AverageViewsPerVideo,
-    AverageRevenuePerVideo,
-    AvgViewsLiftVsNonCollab,
-    AvgRevenueLiftVsNonCollab
-  )
+if (nrow(collab_summary) == 0) {
+  cat("No collaboration table rows available in the selected window.")
+} else {
+  collab_table <- collab_summary %>%
+    select(
+      collab_group,
+      VideoCountViews,
+      VideoCountRevenue,
+      TotalViews,
+      TotalRevenue,
+      AverageViewsPerVideo,
+      AverageRevenuePerVideo,
+      AvgViewsLiftVsNonCollab,
+      AvgRevenueLiftVsNonCollab
+    )
 
-DTSettings(collab_table, class = "display stripe hover", scroll_x = TRUE)
+  DTSettings(collab_table, class = "display stripe hover", scroll_x = TRUE)
+}
 ```
 
 ## Topic Performance (Views + Revenue)
@@ -411,17 +548,32 @@ DTSettings(collab_table, class = "display stripe hover", scroll_x = TRUE)
 ```{r topic-breakdown, fig.width=plot_w_facet, fig.height=plot_h_facet}
 topic_summary <- topic_performance_prep(analytics, monetary, top_n = 8)
 
-ggplotly(
-  topic_performance_plot(
-    topic_summary,
-    Talent,
-    as_share = FALSE
+if (nrow(topic_summary) == 0) {
+  cat("No topic rows available in the selected window.")
+} else {
+  tryCatch(
+    {
+      ggplotly(
+        topic_performance_plot(
+          topic_summary,
+          Talent,
+          as_share = FALSE
+        )
+      )
+    },
+    error = function(e) {
+      cat("Topic section unavailable for the selected window:", conditionMessage(e))
+    }
   )
-)
+}
 ```
 
 ```{r topic-table}
-DTSettings(topic_summary, class = "display stripe hover", scroll_x = TRUE)
+if (nrow(topic_summary) == 0) {
+  cat("No topic table rows available in the selected window.")
+} else {
+  DTSettings(topic_summary, class = "display stripe hover", scroll_x = TRUE)
+}
 ```
 
 ## Tag Performance (Top Tags by Views + Revenue)
@@ -436,13 +588,24 @@ tag_summary <- tag_performance_prep(
   min_videos = 2
 )
 
-ggplotly(
-  tag_performance_plot(
-    tag_summary,
-    Talent,
-    as_share = FALSE
+if (nrow(tag_summary) == 0) {
+  cat("No tag rows available in the selected window.")
+} else {
+  tryCatch(
+    {
+      ggplotly(
+        tag_performance_plot(
+          tag_summary,
+          Talent,
+          as_share = FALSE
+        )
+      )
+    },
+    error = function(e) {
+      cat("Tag section unavailable for the selected window:", conditionMessage(e))
+    }
   )
-)
+}
 ```
 
 ## Average Views per Tag
@@ -450,17 +613,32 @@ ggplotly(
 **How to read it:** Taller bars indicate tags that tend to perform better per tagged upload, independent of total posting volume.
 
 ```{r tag-average-views, fig.width=plot_w_dense, fig.height=plot_h_dense}
-ggplotly(
-  tag_average_views_plot(
-    tag_summary,
-    Talent
-  ),
-  tooltip = "text"
-)
+if (nrow(tag_summary) == 0) {
+  cat("No tag-average rows available in the selected window.")
+} else {
+  tryCatch(
+    {
+      ggplotly(
+        tag_average_views_plot(
+          tag_summary,
+          Talent
+        ),
+        tooltip = "text"
+      )
+    },
+    error = function(e) {
+      cat("Tag-average section unavailable for the selected window:", conditionMessage(e))
+    }
+  )
+}
 ```
 
 ```{r tag-table}
-DTSettings(tag_summary, class = "display stripe hover", scroll_x = TRUE)
+if (nrow(tag_summary) == 0) {
+  cat("No tag table rows available in the selected window.")
+} else {
+  DTSettings(tag_summary, class = "display stripe hover", scroll_x = TRUE)
+}
 ```
 
 # Wrap-up: What this means
