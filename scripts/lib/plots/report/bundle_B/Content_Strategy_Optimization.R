@@ -426,8 +426,18 @@ bundle_b_attribute_opportunity_prep <- function(
 
   out <- out %>%
     dplyr::mutate(
-      Views_Z = safe_zscore_local(.data$TotalViews),
-      Revenue_Z = safe_zscore_local(.data$TotalRevenue),
+      AvgViewsPerVideo = dplyr::if_else(
+        .data$VideoCount > 0,
+        .data$TotalViews / .data$VideoCount,
+        NA_real_
+      ),
+      AvgRevenuePerVideo = dplyr::if_else(
+        .data$VideoCount > 0,
+        .data$TotalRevenue / .data$VideoCount,
+        NA_real_
+      ),
+      Views_Z = safe_zscore_local(.data$AvgViewsPerVideo),
+      Revenue_Z = safe_zscore_local(.data$AvgRevenuePerVideo),
       Engagement_Z = safe_zscore_local(.data$MedianEngagement),
       Composite_Score = rowMeans(
         dplyr::across(c("Views_Z", "Revenue_Z", "Engagement_Z")),
@@ -457,12 +467,17 @@ bundle_b_attribute_opportunity_prep <- function(
     dplyr::arrange(dplyr::desc(.data$Composite_Score))
 }
 
-bundle_b_attribute_opportunity_matrix_plot <- function(attr_df, talent) {
+bundle_b_attribute_opportunity_matrix_plot <- function(
+  attr_df,
+  talent,
+  add_labels = TRUE,
+  use_repel = TRUE
+) {
   required_cols <- c(
     "Attribute",
     "VideoCount",
-    "TotalViews",
-    "TotalRevenue",
+    "AvgViewsPerVideo",
+    "AvgRevenuePerVideo",
     "MedianEngagement",
     "Performance_Band"
   )
@@ -486,10 +501,23 @@ bundle_b_attribute_opportunity_matrix_plot <- function(attr_df, talent) {
   plot_df <- attr_df %>%
     dplyr::filter(
       is.finite(.data$MedianEngagement),
-      is.finite(.data$TotalRevenue),
-      is.finite(.data$TotalViews),
-      .data$TotalViews > 0,
-      .data$TotalRevenue > 0
+      is.finite(.data$AvgRevenuePerVideo),
+      is.finite(.data$AvgViewsPerVideo),
+      .data$AvgViewsPerVideo > 0,
+      .data$AvgRevenuePerVideo > 0
+    ) %>%
+    dplyr::mutate(
+      HoverText = paste0(
+        "Attribute: ", .data$Attribute,
+        "<br>Type: ", .data$LabelType,
+        "<br>Band: ", .data$Performance_Band,
+        "<br>Videos: ", scales::comma(.data$VideoCount),
+        "<br>Median Engagement: ", scales::percent(.data$MedianEngagement, accuracy = 0.1),
+        "<br>Avg Views/Video: ", scales::comma(.data$AvgViewsPerVideo),
+        "<br>Avg Revenue/Video: ", scales::dollar(.data$AvgRevenuePerVideo),
+        "<br>Total Views: ", scales::comma(.data$TotalViews),
+        "<br>Total Revenue: ", scales::dollar(.data$TotalRevenue)
+      )
     )
 
   if (nrow(plot_df) == 0) {
@@ -505,23 +533,17 @@ bundle_b_attribute_opportunity_matrix_plot <- function(attr_df, talent) {
     )
   }
 
-  plot_df %>%
+  p <- plot_df %>%
     ggplot2::ggplot(
       ggplot2::aes(
         x = .data$MedianEngagement,
-        y = .data$TotalRevenue,
-        size = .data$TotalViews,
-        shape = .data$Performance_Band
+        y = .data$AvgRevenuePerVideo,
+        size = .data$VideoCount,
+        shape = .data$Performance_Band,
+        text = .data$HoverText
       )
     ) +
     ggplot2::geom_point(alpha = 0.8, color = "grey30") +
-    ggplot2::geom_text(
-      ggplot2::aes(label = .data$Attribute),
-      size = 2.8,
-      check_overlap = TRUE,
-      nudge_x = 0.002,
-      show.legend = FALSE
-    ) +
     ggplot2::scale_shape_manual(
       values = c(
         "Strength" = 17,
@@ -537,10 +559,129 @@ bundle_b_attribute_opportunity_matrix_plot <- function(attr_df, talent) {
     theme_nyt() +
     ggplot2::labs(
       title = paste0(talent, " - Combined Opportunity Matrix"),
-      subtitle = "Content types, tags, and title labels in one map. Y-axis uses pseudo-log scale with raw dollar labels.",
+      subtitle = "Content types, tags, and title labels in one map. Y-axis uses avg revenue per video (pseudo-log, raw labels).",
       x = "Median engagement",
-      y = "Total revenue",
-      size = "Total views",
+      y = "Average revenue per video",
+      size = "Video count",
       shape = "Performance band"
+    )
+
+  if (isTRUE(add_labels)) {
+    if (isTRUE(use_repel) && requireNamespace("ggrepel", quietly = TRUE)) {
+      p <- p + ggrepel::geom_label_repel(
+        ggplot2::aes(label = .data$Attribute),
+        size = 2.3,
+        color = "grey20",
+        fill = "white",
+        label.size = 0.1,
+        box.padding = 0.2,
+        point.padding = 0.2,
+        min.segment.length = 0,
+        max.overlaps = Inf,
+        seed = 123,
+        show.legend = FALSE
+      )
+    } else {
+      p <- p + ggplot2::geom_text(
+        ggplot2::aes(label = .data$Attribute),
+        size = 2.8,
+        check_overlap = TRUE,
+        nudge_x = 0.002,
+        show.legend = FALSE
+      )
+    }
+  }
+
+  p
+}
+
+bundle_b_attribute_opportunity_matrix_plotly <- function(attr_df, talent) {
+  required_cols <- c(
+    "Attribute",
+    "LabelType",
+    "VideoCount",
+    "AvgViewsPerVideo",
+    "AvgRevenuePerVideo",
+    "MedianEngagement",
+    "Performance_Band"
+  )
+  if (!all(required_cols %in% names(attr_df))) {
+    stop("attr_df must include: ", paste(required_cols, collapse = ", "))
+  }
+  if (!requireNamespace("plotly", quietly = TRUE)) {
+    stop("Package 'plotly' is required for interactive matrix.")
+  }
+
+  plot_df <- attr_df %>%
+    dplyr::filter(
+      is.finite(.data$MedianEngagement),
+      is.finite(.data$AvgRevenuePerVideo),
+      is.finite(.data$AvgViewsPerVideo),
+      .data$AvgViewsPerVideo > 0,
+      .data$AvgRevenuePerVideo > 0
+    ) %>%
+    dplyr::mutate(
+      Performance_Band = factor(
+        .data$Performance_Band,
+        levels = c("Strength", "Middle", "Weakness / Improve")
+      ),
+      HoverText = paste0(
+        "<b>", .data$Attribute, "</b>",
+        "<br>Type: ", .data$LabelType,
+        "<br>Band: ", .data$Performance_Band,
+        "<br>Videos: ", scales::comma(.data$VideoCount),
+        "<br>Median Engagement: ", scales::percent(.data$MedianEngagement, accuracy = 0.1),
+        "<br>Avg Views/Video: ", scales::comma(.data$AvgViewsPerVideo),
+        "<br>Avg Revenue/Video: ", scales::dollar(.data$AvgRevenuePerVideo),
+        "<br>Total Views: ", scales::comma(.data$TotalViews),
+        "<br>Total Revenue: ", scales::dollar(.data$TotalRevenue)
+      )
+    )
+
+  if (nrow(plot_df) == 0) {
+    return(plotly::plotly_empty(type = "scatter", mode = "markers"))
+  }
+
+  y_min <- min(plot_df$AvgRevenuePerVideo, na.rm = TRUE)
+  y_max <- max(plot_df$AvgRevenuePerVideo, na.rm = TRUE)
+  pow_min <- floor(log10(y_min))
+  pow_max <- ceiling(log10(y_max))
+  tick_vals <- 10^(pow_min:pow_max)
+  tick_vals <- tick_vals[tick_vals >= y_min & tick_vals <= y_max]
+  if (length(tick_vals) == 0) {
+    tick_vals <- c(y_min, y_max)
+  }
+
+  plotly::plot_ly(
+    data = plot_df,
+    x = ~MedianEngagement,
+    y = ~AvgRevenuePerVideo,
+    type = "scatter",
+    mode = "markers",
+    symbol = ~Performance_Band,
+    symbols = c("triangle-up", "circle", "square"),
+    size = ~VideoCount,
+    sizes = c(8, 36),
+    marker = list(
+      color = "rgba(90,90,90,0.75)",
+      line = list(color = "rgba(50,50,50,1)", width = 1),
+      sizemode = "area"
+    ),
+    text = ~HoverText,
+    hovertemplate = "%{text}<extra></extra>"
+  ) %>%
+    plotly::layout(
+      title = list(text = paste0(talent, " - Combined Opportunity Matrix (Interactive)")),
+      xaxis = list(
+        title = "Median engagement",
+        tickformat = ".0%"
+      ),
+      yaxis = list(
+        title = "Average revenue per video",
+        type = "log",
+        tickvals = tick_vals,
+        ticktext = scales::dollar(tick_vals)
+      ),
+      legend = list(title = list(text = "Performance band"))
     )
 }

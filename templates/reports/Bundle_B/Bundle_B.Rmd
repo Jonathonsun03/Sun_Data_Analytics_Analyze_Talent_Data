@@ -299,11 +299,14 @@ What this plot does:
 
 How to read it:
 - Each point is a content descriptor (content type, tag, or title label).
-- X-axis is median engagement, Y-axis is total revenue, and bubble size is total views.
+- X-axis is median engagement, Y-axis is average revenue per video, and bubble size is video count.
 - Point shape indicates performance band.
 - Y-axis is pseudo-log scaled for readability, while labels stay in raw dollar values.
 
-```{r b2-opportunity-matrix-plot, fig.width=12, fig.height=9}
+Static version:
+- Uses labels (with repel) for slide/report readability.
+
+```{r b2-opportunity-matrix-static, fig.width=12, fig.height=9}
 attribute_opportunity <- bundle_b_attribute_opportunity_prep(
   analytics_df = analytics,
   monetary_df = monetary,
@@ -313,11 +316,22 @@ attribute_opportunity <- bundle_b_attribute_opportunity_prep(
   min_videos = 2
 )
 
-ggplotly(
-  bundle_b_attribute_opportunity_matrix_plot(
-    attribute_opportunity,
-    Talent
-  )
+bundle_b_attribute_opportunity_matrix_plot(
+  attribute_opportunity,
+  Talent,
+  add_labels = TRUE,
+  use_repel = TRUE
+)
+
+```
+
+Interactive version:
+- Removes labels to reduce clutter and relies on tooltips for details.
+
+```{r b2-opportunity-matrix-interactive, fig.width=12, fig.height=9}
+bundle_b_attribute_opportunity_matrix_plotly(
+  attribute_opportunity,
+  Talent
 )
 ```
 
@@ -328,16 +342,18 @@ attribute_opportunity_table <- attribute_opportunity %>%
     Attribute,
     LabelType,
     VideoCount,
+    AvgViewsPerVideo,
+    AvgRevenuePerVideo,
+    MedianEngagement,
     TotalViews,
     TotalRevenue,
-    MedianEngagement,
     Composite_Score,
     Performance_Band
   )
 
 DTSettings(attribute_opportunity_table, class = "display stripe hover", scroll_x = TRUE) %>%
   DT::formatRound(
-    columns = c("VideoCount", "TotalViews", "TotalRevenue", "Composite_Score"),
+    columns = c("VideoCount", "AvgViewsPerVideo", "AvgRevenuePerVideo", "TotalViews", "TotalRevenue", "Composite_Score"),
     digits = 2
   ) %>%
   DT::formatPercentage(columns = c("MedianEngagement"), digits = 1)
