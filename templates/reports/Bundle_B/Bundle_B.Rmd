@@ -232,25 +232,32 @@ DTSettings(eng_summary_table, class = "display stripe hover", scroll_x = TRUE) %
 
 ## 2) Category Strengths and Weaknesses
 
-### Total Views by Content Type
-```{r b2-total-views, fig.width=10, fig.height=8}
+### Content Priority Ranking (Composite Score)
+```{r b2-priority-rank, fig.width=10, fig.height=8}
 ggplotly(
-  total_views_content_type(analytics, Talent) +
-    theme_nyt()
+  bundle_b_priority_rank_plot(
+    strength_matrix,
+    Talent
+  )
 )
 ```
 
-### Total Revenue by Content Type
-```{r b2-total-revenue, fig.width=10, fig.height=8}
+### Content Opportunity Matrix
+```{r b2-strength-matrix-plot, fig.width=11, fig.height=8}
 ggplotly(
-  total_metric_content_type(
-    monetary,
-    Talent,
-    metric_col = "Estimated Revenue",
-    metric_label = "Revenue",
-    window_months = 1,
-    bar_position = "stack",
-    show_counts = TRUE
+  bundle_b_strength_matrix_plot(
+    strength_matrix,
+    Talent
+  )
+)
+```
+
+### Revenue Efficiency by Content Type
+```{r b2-revenue-efficiency, fig.width=10, fig.height=8}
+ggplotly(
+  bundle_b_revenue_efficiency_plot(
+    strength_matrix,
+    Talent
   )
 )
 ```
@@ -274,15 +281,14 @@ DTSettings(strength_matrix_table, class = "display stripe hover", scroll_x = TRU
 
 ## 3) Content Attributes and Engagement
 
-### Collaboration Effectiveness
-```{r b2-collaboration-plot, fig.width=10, fig.height=8}
+### Collaboration Lift vs Non-Collaborative
+```{r b2-collaboration-lift-plot, fig.width=10, fig.height=8}
 collab_summary <- collaboration_effectiveness_prep(analytics, monetary)
 
 ggplotly(
-  collaboration_effectiveness_plot(
+  bundle_b_collaboration_lift_plot(
     collab_summary,
-    Talent,
-    as_share = FALSE
+    Talent
   )
 )
 ```
@@ -306,46 +312,25 @@ DTSettings(collab_table, class = "display stripe hover", scroll_x = TRUE) %>%
   DT::formatRound(columns = decimal_cols, digits = 3)
 ```
 
-### Topic Performance
-```{r b2-topic-plot, fig.width=10, fig.height=8}
-topic_summary <- topic_performance_prep(analytics, monetary, top_n = 8)
-
-ggplotly(
-  topic_performance_plot(
-    topic_summary,
-    Talent,
-    as_share = FALSE
-  )
-)
-```
-
-```{r b2-topic-table}
-decimal_cols <- detect_decimals(topic_summary)
-DTSettings(topic_summary, class = "display stripe hover", scroll_x = TRUE) %>%
-  DT::formatRound(columns = decimal_cols, digits = 3)
-```
-
-### Tag Performance
-```{r b2-tag-plot, fig.width=12, fig.height=9}
-tag_summary <- tag_performance_prep(
+### Topic View Distribution
+```{r b2-topic-view-distribution-plot, fig.width=12, fig.height=9}
+topic_view_dist <- topic_view_distribution_prep(
   analytics,
-  monetary,
-  top_n = 15,
+  top_n = 8,
   min_videos = 2
 )
 
 ggplotly(
-  tag_performance_plot(
-    tag_summary,
-    Talent,
-    as_share = FALSE
+  topic_view_distribution_plot(
+    topic_view_dist,
+    Talent
   )
 )
 ```
 
-```{r b2-tag-table}
-decimal_cols <- detect_decimals(tag_summary)
-DTSettings(tag_summary, class = "display stripe hover", scroll_x = TRUE) %>%
+```{r b2-topic-view-distribution-table}
+decimal_cols <- detect_decimals(topic_view_dist$summary)
+DTSettings(topic_view_dist$summary, class = "display stripe hover", scroll_x = TRUE) %>%
   DT::formatRound(columns = decimal_cols, digits = 3)
 ```
 
@@ -354,7 +339,8 @@ DTSettings(tag_summary, class = "display stripe hover", scroll_x = TRUE) %>%
 tag_view_dist <- tag_view_distribution_prep(
   analytics,
   top_n = 15,
-  min_videos = 2
+  min_videos = 2,
+  min_views_per_video = 10
 )
 
 ggplotly(
@@ -373,34 +359,14 @@ DTSettings(tag_view_dist$summary, class = "display stripe hover", scroll_x = TRU
 
 ## 4) Scheduling Effects
 
-### Weekend vs Weekday
-```{r b2-weekend-plot, fig.width=10, fig.height=8}
-wk_summary <- weekend_vs_weekday_prep(analytics, monetary)
-
-ggplotly(
-  weekend_vs_weekday_plot(
-    wk_summary,
-    Talent,
-    as_share = FALSE
-  )
-)
-```
-
-```{r b2-weekend-table}
-decimal_cols <- detect_decimals(wk_summary)
-DTSettings(wk_summary, class = "display stripe hover", scroll_x = TRUE) %>%
-  DT::formatRound(columns = decimal_cols, digits = 3)
-```
-
-### Day-of-Week Distribution
-```{r b2-dow-plot, fig.width=10, fig.height=8}
+### Day-of-Week Lift
+```{r b2-dow-lift-plot, fig.width=10, fig.height=8}
 dow_summary <- day_of_week_performance_prep(analytics, monetary)
 
 ggplotly(
-  day_of_week_performance_plot(
+  bundle_b_day_of_week_lift_plot(
     dow_summary,
-    Talent,
-    as_share = TRUE
+    Talent
   )
 )
 ```
@@ -408,6 +374,14 @@ ggplotly(
 ```{r b2-dow-table}
 decimal_cols <- detect_decimals(dow_summary)
 DTSettings(dow_summary, class = "display stripe hover", scroll_x = TRUE) %>%
+  DT::formatRound(columns = decimal_cols, digits = 3)
+```
+
+### Weekend vs Weekday Summary
+```{r b2-weekend-table}
+wk_summary <- weekend_vs_weekday_prep(analytics, monetary)
+decimal_cols <- detect_decimals(wk_summary)
+DTSettings(wk_summary, class = "display stripe hover", scroll_x = TRUE) %>%
   DT::formatRound(columns = decimal_cols, digits = 3)
 ```
 

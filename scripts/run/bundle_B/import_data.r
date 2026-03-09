@@ -192,6 +192,11 @@ build_bundle_b_plot_set <- function(
     analytics_eng,
     metric_col = "avg_view_prop"
   )
+  strength_matrix <- build_bundle_b_strength_matrix(
+    analytics = analytics,
+    monetary = monetary,
+    analytics_eng = analytics_eng
+  )
 
   list(
     p_engagement_dist = engagement_distribution_content_type(
@@ -201,28 +206,18 @@ build_bundle_b_plot_set <- function(
       metric_label = "Average View %",
       y_as_percent = TRUE
     ),
-    p_engagement_summary = engagement_summary_content_type_plot(
+    p_format_consistency = engagement_summary_content_type_plot(
       engagement_summary,
       talent,
       metric_label = "Average View %",
       y_as_percent = TRUE
     ),
-    p_views = total_views_content_type(analytics, talent),
-    p_rev = total_metric_content_type(
-      monetary,
-      talent,
-      metric_col = "Estimated Revenue",
-      metric_label = "Revenue",
-      window_months = 1,
-      bar_position = "stack",
-      show_counts = TRUE
-    ),
-    p_weekend = weekend_vs_weekday_plot(deep_dive$weekend_summary, talent),
-    p_day_of_week = day_of_week_performance_plot(deep_dive$day_of_week_summary, talent, as_share = TRUE),
-    p_collab = collaboration_effectiveness_plot(deep_dive$collab_summary, talent),
-    p_topic = topic_performance_plot(deep_dive$topic_summary, talent),
+    p_priority_rank = bundle_b_priority_rank_plot(strength_matrix, talent),
+    p_strength_matrix = bundle_b_strength_matrix_plot(strength_matrix, talent),
+    p_revenue_efficiency = bundle_b_revenue_efficiency_plot(strength_matrix, talent),
+    p_collab_lift = bundle_b_collaboration_lift_plot(deep_dive$collab_summary, talent),
+    p_schedule_lift = bundle_b_day_of_week_lift_plot(deep_dive$day_of_week_summary, talent),
     p_topic_view_dist = topic_view_distribution_plot(deep_dive$topic_view_distribution, talent),
-    p_tag = tag_performance_plot(deep_dive$tag_summary, talent),
     p_tag_view_dist = tag_view_distribution_plot(deep_dive$tag_view_distribution, talent)
   )
 }
@@ -317,6 +312,8 @@ export_bundle_b_artifacts <- function(
   tables_dir <- file.path(out_root, table_subdir)
   dir.create(plots_dir, recursive = TRUE, showWarnings = FALSE)
   dir.create(tables_dir, recursive = TRUE, showWarnings = FALSE)
+  unlink(file.path(plots_dir, "*.png"))
+  unlink(file.path(tables_dir, "*.csv"))
 
   safe_name <- function(x) {
     gsub("[^A-Za-z0-9._-]+", "_", as.character(x))
@@ -415,13 +412,17 @@ bundle_b_plots <- build_bundle_b_plot_set(
 )
 
 # Backward-compatible plot variables used in existing scripts.
-p_views <- bundle_b_plots$p_views
-p_rev <- bundle_b_plots$p_rev
-p_weekend <- bundle_b_plots$p_weekend
-p_day_of_week <- bundle_b_plots$p_day_of_week
-p_collab <- bundle_b_plots$p_collab
-p_topic <- bundle_b_plots$p_topic
-p_tag <- bundle_b_plots$p_tag
+plot_or_null <- function(name) {
+  if (name %in% names(bundle_b_plots)) bundle_b_plots[[name]] else NULL
+}
+
+p_views <- plot_or_null("p_views")
+p_rev <- plot_or_null("p_rev")
+p_weekend <- plot_or_null("p_weekend")
+p_day_of_week <- plot_or_null("p_day_of_week")
+p_collab <- plot_or_null("p_collab")
+p_topic <- plot_or_null("p_topic")
+p_tag <- plot_or_null("p_tag")
 
 for (nm in names(bundle_b_plots)) {
   cat("\nRendering plot:", nm, "\n")
