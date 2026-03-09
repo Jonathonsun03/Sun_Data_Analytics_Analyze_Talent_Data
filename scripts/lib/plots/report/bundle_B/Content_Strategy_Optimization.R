@@ -176,13 +176,22 @@ bundle_b_day_of_week_lift_plot <- function(day_summary, talent) {
   if (!all(required_cols %in% names(day_summary))) {
     stop("day_summary must include: ", paste(required_cols, collapse = ", "))
   }
+  day_levels <- c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+  day_levels_present <- day_levels[day_levels %in% as.character(day_summary$day_of_week)]
+  if (length(day_levels_present) == 0) {
+    day_levels_present <- unique(as.character(day_summary$day_of_week))
+  }
 
   base_views <- mean(day_summary$AverageViewsPerVideo, na.rm = TRUE)
   base_rev <- mean(day_summary$AverageRevenuePerVideo, na.rm = TRUE)
 
   lift_df <- day_summary %>%
     dplyr::transmute(
-      day_of_week = as.character(.data$day_of_week),
+      day_of_week = factor(
+        as.character(.data$day_of_week),
+        levels = day_levels_present,
+        ordered = TRUE
+      ),
       ViewsLift = if (is.finite(base_views) && base_views > 0) {
         .data$AverageViewsPerVideo / base_views - 1
       } else {
@@ -204,8 +213,14 @@ bundle_b_day_of_week_lift_plot <- function(day_summary, talent) {
         .data$Metric,
         ViewsLift = "Views lift",
         RevenueLift = "Revenue lift"
+      ),
+      day_of_week = factor(
+        as.character(.data$day_of_week),
+        levels = day_levels_present,
+        ordered = TRUE
       )
-    )
+    ) %>%
+    dplyr::arrange(.data$day_of_week, .data$Metric)
 
   lift_df %>%
     ggplot2::ggplot(ggplot2::aes(x = .data$day_of_week, y = .data$Lift, fill = .data$Metric)) +
