@@ -222,3 +222,199 @@ bundle_b_day_of_week_lift_plot <- function(day_summary, talent) {
       fill = "Metric"
     )
 }
+
+bundle_b_attribute_opportunity_prep <- function(
+  analytics_df,
+  monetary_df,
+  id_col = "Video ID",
+  views_col = "views",
+  revenue_col = "Estimated Revenue",
+  engagement_col = "averageViewPercentage",
+  topic_col = "topic",
+  primary_reference_col = "primary_reference",
+  tags_col = "tags",
+  top_n_labels = 8,
+  top_n_tags = 10,
+  min_videos = 2
+) {
+  required_analytics <- c(id_col, views_col, engagement_col)
+  if (!all(required_analytics %in% names(analytics_df))) {
+    stop(
+      "analytics_df must include: ",
+      paste(required_analytics, collapse = ", ")
+    )
+  }
+  if (!id_col %in% names(monetary_df) || !revenue_col %in% names(monetary_df)) {
+    stop("monetary_df must include: ", id_col, ", ", revenue_col)
+  }
+
+  clean_label <- function(topic_value, ref_value) {
+    t <- trimws(as.character(topic_value))
+    r <- trimws(as.character(ref_value))
+    t[is.na(t) | !nzchar(t)] <- ""
+    r[is.na(r) | !nzchar(r)] <- ""
+    out <- dplyr::if_else(nzchar(r), r, t)
+    out[!nzchar(out)] <- "(unclassified)"
+    tolower(out)
+  }
+
+  analytics_base <- analytics_df %>%
+    dplyr::mutate(
+      .video_id = as.character(.data[[id_col]]),
+      .views = suppressWarnings(as.numeric(.data[[views_col]])),
+      .eng = suppressWarnings(as.numeric(.data[[engagement_col]])) / 100,
+      .topic = if (topic_col %in% names(analytics_df)) .data[[topic_col]] else NA_character_,
+      .ref = if (primary_reference_col %in% names(analytics_df)) .data[[primary_reference_col]] else NA_character_,
+      .label = clean_label(.topic, .ref),
+      .tags = if (tags_col %in% names(analytics_df)) as.character(.data[[tags_col]]) else NA_character_
+    ) %>%
+    dplyr::filter(!is.na(.video_id), nzchar(.video_id), is.finite(.views), is.finite(.eng)) %>%
+    dplyr::select(dplyr::all_of(c(".video_id", ".views", ".eng", ".label", ".tags")))
+
+  revenue_by_video <- monetary_df %>%
+    dplyr::transmute(
+      .video_id = as.character(.data[[id_col]]),
+      .revenue = suppressWarnings(as.numeric(.data[[revenue_col]]))
+    ) %>%
+    dplyr::filter(!is.na(.video_id), nzchar(.video_id)) %>%
+    dplyr::group_by(.data$.video_id) %>%
+    dplyr::summarize(.revenue = sum(.data$.revenue, na.rm = TRUE), .groups = "drop")
+
+  label_video <- analytics_base %>%
+    dplyr::distinct(.data$.video_id, .data$.label, .keep_all = TRUE)
+
+  label_summary <- label_video %>%
+    dplyr::group_by(.data$.label) %>%
+    dplyr::summarize(
+      VideoCount = dplyr::n_distinct(.data$.video_id),
+      TotalViews = sum(.data$.views, na.rm = TRUE),
+      MedianEngagement = stats::median(.data$.eng, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    dplyr::left_join(
+      label_video %>%
+        dplyr::select(dplyr::all_of(c(".video_id", ".label"))) %>%
+        dplyr::left_join(revenue_by_video, by = ".video_id") %>%
+        dplyr::group_by(.data$.label) %>%
+        dplyr::summarize(TotalRevenue = sum(.data$.revenue, na.rm = TRUE), .groups = "drop"),
+      by = ".label"
+    ) %>%
+    dplyr::mutate(
+      TotalRevenue = tidyr::replace_na(.data$TotalRevenue, 0),
+      Attribute = .data$.label,
+      LabelType = "Title label"
+    ) %>%
+    dplyr::filter(.data$VideoCount >= min_videos) %>%
+    dplyr::arrange(dplyr::desc(.data$TotalViews + .data$TotalRevenue)) %>%
+    dplyr::slice_head(n = top_n_labels)
+
+  tag_video <- analytics_base %>%
+    dplyr::mutate(.tags = ifelse(is.na(.data$.tags), "", .data$.tags)) %>%
+    tidyr::separate_rows(".tags", sep = ",") %>%
+    dplyr::mutate(.tag = trimws(tolower(.data$.tags))) %>%
+    dplyr::filter(nzchar(.data$.tag)) %>%
+    dplyr::distinct(.data$.video_id, .data$.tag, .keep_all = TRUE)
+
+  tag_summary <- tag_video %>%
+    dplyr::group_by(.data$.tag) %>%
+    dplyr::summarize(
+      VideoCount = dplyr::n_distinct(.data$.video_id),
+      TotalViews = sum(.data$.views, na.rm = TRUE),
+      MedianEngagement = stats::median(.data$.eng, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    dplyr::left_join(
+      tag_video %>%
+        dplyr::select(dplyr::all_of(c(".video_id", ".tag"))) %>%
+        dplyr::left_join(revenue_by_video, by = ".video_id") %>%
+        dplyr::group_by(.data$.tag) %>%
+        dplyr::summarize(TotalRevenue = sum(.data$.revenue, na.rm = TRUE), .groups = "drop"),
+      by = ".tag"
+    ) %>%
+    dplyr::mutate(
+      TotalRevenue = tidyr::replace_na(.data$TotalRevenue, 0),
+      Attribute = .data$.tag,
+      LabelType = "Tag"
+    ) %>%
+    dplyr::filter(.data$VideoCount >= min_videos) %>%
+    dplyr::arrange(dplyr::desc(.data$TotalViews + .data$TotalRevenue)) %>%
+    dplyr::slice_head(n = top_n_tags)
+
+  dplyr::bind_rows(
+    label_summary %>%
+      dplyr::transmute(
+        Attribute = .data$Attribute,
+        LabelType = .data$LabelType,
+        VideoCount = .data$VideoCount,
+        TotalViews = .data$TotalViews,
+        TotalRevenue = .data$TotalRevenue,
+        MedianEngagement = .data$MedianEngagement
+      ),
+    tag_summary %>%
+      dplyr::transmute(
+        Attribute = .data$Attribute,
+        LabelType = .data$LabelType,
+        VideoCount = .data$VideoCount,
+        TotalViews = .data$TotalViews,
+        TotalRevenue = .data$TotalRevenue,
+        MedianEngagement = .data$MedianEngagement
+      )
+  )
+}
+
+bundle_b_attribute_opportunity_matrix_plot <- function(attr_df, talent) {
+  required_cols <- c(
+    "Attribute",
+    "LabelType",
+    "VideoCount",
+    "TotalViews",
+    "TotalRevenue",
+    "MedianEngagement"
+  )
+  if (!all(required_cols %in% names(attr_df))) {
+    stop("attr_df must include: ", paste(required_cols, collapse = ", "))
+  }
+
+  if (nrow(attr_df) == 0) {
+    return(
+      ggplot2::ggplot() +
+        ggplot2::annotate("text", x = 1, y = 1, label = "No attribute opportunity data available.") +
+        ggplot2::xlim(0.5, 1.5) +
+        ggplot2::ylim(0.5, 1.5) +
+        ggplot2::theme_void() +
+        ggplot2::labs(
+          title = paste0(talent, " - Opportunity Matrix by Tags and Title Labels")
+        )
+    )
+  }
+
+  attr_df %>%
+    ggplot2::ggplot(
+      ggplot2::aes(
+        x = .data$MedianEngagement,
+        y = .data$TotalRevenue,
+        size = .data$TotalViews,
+        color = .data$LabelType
+      )
+    ) +
+    ggplot2::geom_point(alpha = 0.8) +
+    ggplot2::geom_text(
+      ggplot2::aes(label = .data$Attribute),
+      size = 2.8,
+      check_overlap = TRUE,
+      nudge_x = 0.002,
+      show.legend = FALSE
+    ) +
+    ggplot2::facet_wrap(~LabelType, scales = "free") +
+    ggplot2::scale_x_continuous(labels = scales::label_percent(accuracy = 1)) +
+    ggplot2::scale_y_continuous(labels = scales::label_dollar(scale = 1)) +
+    theme_nyt() +
+    ggplot2::labs(
+      title = paste0(talent, " - Opportunity Matrix by Tags and Title Labels"),
+      subtitle = "X = median engagement, Y = total revenue, bubble size = total views.",
+      x = "Median engagement",
+      y = "Total revenue",
+      size = "Total views",
+      color = "Attribute type"
+    )
+}

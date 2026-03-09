@@ -251,6 +251,14 @@ What this plot does:
 How to read it:
 - Higher bars indicate higher strategic priority; band labels indicate strength tier.
 
+How the score is calculated:
+- `Views_Z = zscore(Total_Views)`
+- `Revenue_Z = zscore(Total_Revenue)`
+- `Engagement_Z = zscore(Median_Engagement)`
+- `Composite_Score = mean(Views_Z, Revenue_Z, Engagement_Z)`
+
+`zscore(x)` is computed across content types in this report as `(x - mean(x)) / sd(x)`.
+
 ```{r b2-priority-rank, fig.width=10, fig.height=8}
 ggplotly(
   bundle_b_priority_rank_plot(
@@ -258,6 +266,30 @@ ggplotly(
     Talent
   )
 )
+```
+
+```{r b2-priority-components-table}
+priority_components <- strength_matrix %>%
+  mutate(Priority_Rank = row_number(desc(Composite_Score))) %>%
+  select(
+    Priority_Rank,
+    Content_Type,
+    Total_Views,
+    Total_Revenue,
+    Median_Engagement,
+    Views_Z,
+    Revenue_Z,
+    Engagement_Z,
+    Composite_Score,
+    Performance_Band
+  )
+
+DTSettings(priority_components, class = "display stripe hover", scroll_x = TRUE) %>%
+  DT::formatRound(
+    columns = c("Total_Views", "Total_Revenue", "Views_Z", "Revenue_Z", "Engagement_Z", "Composite_Score"),
+    digits = 2
+  ) %>%
+  DT::formatPercentage(columns = c("Median_Engagement"), digits = 1)
 ```
 
 ### Content Opportunity Matrix
@@ -274,6 +306,41 @@ ggplotly(
     Talent
   )
 )
+```
+
+### Content Opportunity Matrix by Tags and Title Labels
+What this plot does:
+- Extends the opportunity matrix to title metadata so you can compare opportunity at the attribute level, not only content type.
+
+How to read it:
+- Each point is a tag or title label derived from video metadata.
+- X-axis is median engagement, Y-axis is total revenue, and bubble size is total views.
+- Facets separate `Tag` vs `Title label`.
+
+```{r b2-attribute-opportunity-plot, fig.width=12, fig.height=9}
+attribute_opportunity <- bundle_b_attribute_opportunity_prep(
+  analytics_df = analytics,
+  monetary_df = monetary,
+  top_n_labels = 8,
+  top_n_tags = 10,
+  min_videos = 2
+)
+
+ggplotly(
+  bundle_b_attribute_opportunity_matrix_plot(
+    attribute_opportunity,
+    Talent
+  )
+)
+```
+
+```{r b2-attribute-opportunity-table}
+DTSettings(attribute_opportunity, class = "display stripe hover", scroll_x = TRUE) %>%
+  DT::formatRound(
+    columns = c("VideoCount", "TotalViews", "TotalRevenue"),
+    digits = 2
+  ) %>%
+  DT::formatPercentage(columns = c("MedianEngagement"), digits = 1)
 ```
 
 ### Revenue Efficiency by Content Type

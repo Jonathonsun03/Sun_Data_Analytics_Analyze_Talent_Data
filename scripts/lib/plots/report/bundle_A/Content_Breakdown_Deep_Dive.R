@@ -99,9 +99,16 @@ bundle_a_dual_metric_plot <- function(
     stop("Summary data missing required view/revenue columns.")
   }
 
+  group_vals <- summary_df[[group_col]]
+  group_levels <- if (is.factor(group_vals)) {
+    levels(group_vals)
+  } else {
+    unique(as.character(group_vals))
+  }
+
   plot_df <- summary_df %>%
     dplyr::transmute(
-      .group = as.character(.data[[group_col]]),
+      .group = factor(as.character(.data[[group_col]]), levels = group_levels, ordered = TRUE),
       .views = .data[[views_col]],
       .revenue = .data[[rev_col]]
     ) %>%
