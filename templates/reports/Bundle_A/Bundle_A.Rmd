@@ -137,8 +137,8 @@ ggplotly(
 ```
 
 ## Total Revenue by content type 
-**What this chart shows:** Total estimated revenue grouped by content type across time windows.  
-**How to read it:** Larger segments indicate where more revenue was generated overall.
+**What this chart shows:** Total estimated revenue grouped by content type for each month.  
+**How to read it:** Larger segments indicate where more revenue was generated in that month.
 
 ```{r views by content over time, fig.width=plot_w_std, fig.height=plot_h_std}
 ggplotly(
@@ -147,6 +147,7 @@ ggplotly(
     Talent,
     metric_col = "Estimated Revenue",
     metric_label = "Revenue",
+    window_months = 1,
     bar_position = "stack",
     show_counts = TRUE
   )

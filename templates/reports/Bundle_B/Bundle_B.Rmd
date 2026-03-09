@@ -243,7 +243,7 @@ How to read it:
 - Grey bars show how many videos fall into each value range for that metric.
 - Each vertical line shows where a content type sits relative to the full population.
 - If a content type median sits further right, that format is typically stronger on that metric.
-- X-axis is pseudo-log scaled for readability, but values are shown in raw units.
+- X-axis stays on a linear scale with raw values.
 
 ```{r b2-priority-rank, fig.width=10, fig.height=10}
 content_position <- bundle_b_content_position_distribution_prep(

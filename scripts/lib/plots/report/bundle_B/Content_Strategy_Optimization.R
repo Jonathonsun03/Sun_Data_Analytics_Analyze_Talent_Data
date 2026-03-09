@@ -214,7 +214,6 @@ bundle_b_content_position_distribution_plot <- function(position_data, talent) {
     ) +
     ggplot2::facet_wrap(~Metric, scales = "free_x", ncol = 1) +
     ggplot2::scale_x_continuous(
-      trans = scales::pseudo_log_trans(base = 10),
       labels = scales::label_number(big.mark = ",", accuracy = 1)
     ) +
     ggplot2::scale_y_continuous(labels = scales::label_comma()) +
@@ -222,7 +221,7 @@ bundle_b_content_position_distribution_plot <- function(position_data, talent) {
     ggplot2::labs(
       title = paste0(talent, " - Content Type Position in Full Distribution"),
       subtitle = "Grey bars = count of videos in each value range. Vertical lines = content type medians.",
-      x = "Per-video value (pseudo-log x scale, raw units)",
+      x = "Per-video value (raw units)",
       y = "Video count",
       linetype = "Content type"
     )

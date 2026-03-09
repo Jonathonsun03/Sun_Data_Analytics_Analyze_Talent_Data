@@ -50,6 +50,7 @@ total_metric_content_type_plot <- function(plot_df,
                                            talent,
                                            metric_label,
                                            subtitle_text = NULL,
+                                           x_axis_label = "Window (start to end month)",
                                            bar_position = c("dodge", "stack"),
                                            show_counts = FALSE) {
   bar_position <- match.arg(bar_position)
@@ -77,7 +78,7 @@ total_metric_content_type_plot <- function(plot_df,
       labs(
         title = paste0(talent, " - Total ", metric_label, " by Content Type"),
         subtitle = subtitle_text,
-        x = "Window (start to end month)",
+        x = x_axis_label,
         y = paste0("Total ", metric_label)
       ) +
       scale_y_continuous(
@@ -140,11 +141,13 @@ total_metric_content_type <- function(df,
   } else {
     NULL
   }
+  x_axis_label <- if (window_months > 1) "Window (start to end month)" else "Month"
   total_metric_content_type_plot(
     plot_df,
     talent,
     metric_label = metric_label,
     subtitle_text = subtitle_text,
+    x_axis_label = x_axis_label,
     bar_position = bar_position,
     show_counts = show_counts
   )
@@ -171,6 +174,7 @@ total_metric_content_type_with_data <- function(df,
   } else {
     NULL
   }
+  x_axis_label <- if (window_months > 1) "Window (start to end month)" else "Month"
   list(
     data = plot_df,
     plot = total_metric_content_type_plot(
@@ -178,6 +182,7 @@ total_metric_content_type_with_data <- function(df,
       talent,
       metric_label = metric_label,
       subtitle_text = subtitle_text,
+      x_axis_label = x_axis_label,
       bar_position = bar_position,
       show_counts = show_counts
     )
