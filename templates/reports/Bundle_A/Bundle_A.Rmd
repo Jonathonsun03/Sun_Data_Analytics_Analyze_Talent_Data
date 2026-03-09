@@ -2,7 +2,12 @@
 title: "BundleA"
 author: "Jonathon Sun"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+  html_document:
+    self_contained: true
+    toc: true
+    toc_float: true
+    toc_depth: 3
 params:
   talent: "Ava"
 ---

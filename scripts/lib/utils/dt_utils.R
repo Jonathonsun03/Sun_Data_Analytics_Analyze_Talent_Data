@@ -40,7 +40,7 @@ dt_export_buttons <- function() {
   )
 }
 
-dt_default_options <- function(scroll_x = FALSE, page_length = 25, options = list()) {
+dt_default_options <- function(scroll_x = FALSE, page_length = 10, options = list()) {
   base <- list(
     scrollX = isTRUE(scroll_x),
     dom = "Bfrtip",
