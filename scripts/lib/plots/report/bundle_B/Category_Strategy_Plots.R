@@ -175,7 +175,7 @@ bundle_b_collaboration_lift_plot <- function(collab_summary, talent) {
     )
 }
 
-bundle_b_day_of_week_lift_plot <- function(day_summary, talent) {
+bundle_b_day_of_week_index_table <- function(day_summary) {
   required_cols <- c("day_of_week", "AverageViewsPerVideo", "AverageRevenuePerVideo")
   if (!all(required_cols %in% names(day_summary))) {
     stop("day_summary must include: ", paste(required_cols, collapse = ", "))
@@ -189,55 +189,58 @@ bundle_b_day_of_week_lift_plot <- function(day_summary, talent) {
   base_views <- mean(day_summary$AverageViewsPerVideo, na.rm = TRUE)
   base_rev <- mean(day_summary$AverageRevenuePerVideo, na.rm = TRUE)
 
-  lift_df <- day_summary %>%
+  day_summary %>%
     dplyr::transmute(
       day_of_week = factor(
         as.character(.data$day_of_week),
         levels = day_levels_present,
         ordered = TRUE
       ),
-      ViewsLift = if (is.finite(base_views) && base_views > 0) {
-        .data$AverageViewsPerVideo / base_views - 1
+      AverageViewsPerVideo = .data$AverageViewsPerVideo,
+      AverageRevenuePerVideo = .data$AverageRevenuePerVideo,
+      ViewsIndex = if (is.finite(base_views) && base_views > 0) {
+        .data$AverageViewsPerVideo / base_views * 100
       } else {
         rep(NA_real_, dplyr::n())
       },
-      RevenueLift = if (is.finite(base_rev) && base_rev > 0) {
-        .data$AverageRevenuePerVideo / base_rev - 1
+      RevenueIndex = if (is.finite(base_rev) && base_rev > 0) {
+        .data$AverageRevenuePerVideo / base_rev * 100
       } else {
         rep(NA_real_, dplyr::n())
       }
     ) %>%
+    dplyr::arrange(.data$day_of_week)
+}
+
+bundle_b_day_of_week_lift_plot <- function(day_summary, talent) {
+  idx_tbl <- bundle_b_day_of_week_index_table(day_summary)
+
+  plot_df <- idx_tbl %>%
     tidyr::pivot_longer(
-      cols = c("ViewsLift", "RevenueLift"),
+      cols = c("ViewsIndex", "RevenueIndex"),
       names_to = "Metric",
-      values_to = "Lift"
+      values_to = "IndexValue"
     ) %>%
     dplyr::mutate(
       Metric = dplyr::recode(
         .data$Metric,
-        ViewsLift = "Views lift",
-        RevenueLift = "Revenue lift"
-      ),
-      day_of_week = factor(
-        as.character(.data$day_of_week),
-        levels = day_levels_present,
-        ordered = TRUE
+        ViewsIndex = "Views index",
+        RevenueIndex = "Revenue index"
       )
-    ) %>%
-    dplyr::arrange(.data$day_of_week, .data$Metric)
+    )
 
-  lift_df %>%
-    ggplot2::ggplot(ggplot2::aes(x = .data$day_of_week, y = .data$Lift, fill = .data$Metric)) +
-    ggplot2::geom_hline(yintercept = 0, color = sun_data_brand_colors()[["steel"]], linewidth = 0.3) +
+  plot_df %>%
+    ggplot2::ggplot(ggplot2::aes(x = .data$day_of_week, y = .data$IndexValue, fill = .data$Metric)) +
+    ggplot2::geom_hline(yintercept = 100, color = sun_data_brand_colors()[["steel"]], linewidth = 0.3) +
     ggplot2::geom_col(position = ggplot2::position_dodge(width = 0.7), width = 0.6) +
     scale_fill_sun_data(variant = "brand") +
-    ggplot2::scale_y_continuous(labels = scales::label_percent(accuracy = 1)) +
+    ggplot2::scale_y_continuous(labels = scales::label_number(accuracy = 1)) +
     theme_nyt() +
     ggplot2::labs(
-      title = paste0(talent, " - Day-of-Week Lift"),
-      subtitle = "Lift in average per-video performance vs overall day-of-week mean.",
+      title = paste0(talent, " - Day-of-Week Baseline Index"),
+      subtitle = "Index where 100 = overall weekday average per-video value.",
       x = "",
-      y = "Lift vs baseline",
+      y = "Index (100 = baseline)",
       fill = "Metric"
     )
 }

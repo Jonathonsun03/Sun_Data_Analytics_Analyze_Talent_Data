@@ -481,12 +481,15 @@ DTSettings(tag_view_dist$summary, class = "display stripe hover", scroll_x = TRU
 
 ## 4) Scheduling Effects
 
-### Day-of-Week Lift
+### Day-of-Week Baseline Index
 What this plot does:
-- Estimates day-level upside/downside by comparing each weekday to the overall weekday baseline.
+- Compares each weekday against the overall weekday average using an index scale.
 
 How to read it:
-- Values above zero are above-baseline days; values below zero are below-baseline days for views and revenue lift.
+- `100` means exactly at baseline.
+- Above `100` means above baseline; below `100` means below baseline.
+- This is not a z-score.
+- Formula: `Index = (weekday average / overall weekday average) * 100`.
 
 ```{r b2-dow-lift-plot, fig.width=10, fig.height=8}
 dow_summary <- day_of_week_performance_prep(analytics, monetary)
@@ -500,7 +503,8 @@ ggplotly(
 ```
 
 ```{r b2-dow-table}
-DTSettings(dow_summary, class = "display stripe hover", scroll_x = TRUE)
+dow_index_table <- bundle_b_day_of_week_index_table(dow_summary)
+DTSettings(dow_index_table, class = "display stripe hover", scroll_x = TRUE)
 ```
 
 ### Weekend vs Weekday Summary
