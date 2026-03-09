@@ -111,7 +111,28 @@ demo      <- preps$demo
 # Backward-compatible alias used by some legacy chunks.
 df <- analytics
 ```
+
+# Start Here: How To Use This Report
+This report is designed for quick scanning by managers and talent teams.  
+Use the floating table of contents to jump directly to the section tied to your decision.
+
+## Quick Paths by Role
+1. **Manager fast scan (5-10 minutes):** Overall Performance Snapshot -> Trends Over Time -> Collaboration Effectiveness -> Wrap-up.
+2. **Talent optimization path:** Engagement Distribution -> Timing Effects -> Topic Performance -> Tag Performance.
+3. **Audience strategy path:** Audience Age + Gender Trends -> Core Audience Stability.
+
+## How to Interpret Responsibly
+- This report is **observational**, not causal. It shows patterns, not proof of cause-and-effect.
+- Tag and topic metrics can be influenced by timing, promotion, seasonality, and posting volume.
+- Core and Potential audience shares are complementary (`Potential = 100% - Core`), so inverse movement is expected.
+- Tag totals are directional because tags can overlap across videos.
+
+## Standard vs Customized Content
+The structure and chart explanations are standardized for consistency across talents.  
+Use the **Wrap-up** section to add talent-specific narrative and recommendations.
+
 # Overall Performance Snapshot
+**Section goal:** Establish a shared baseline of total scale, per-video efficiency, and revenue mix.
 
 ## Views by Content Type (Total vs Average)
 **What this chart shows:** Total views and average views per video for each content type in one side-by-side view.  
@@ -216,6 +237,7 @@ DTSettings(UIdf)
 ```
 
 # Trends Over Time
+**Section goal:** Show whether performance patterns are improving, stable, or declining over time.
 
 ## Views over time by content type
 **What this chart shows:** How views change over time for each content type.  
@@ -245,6 +267,7 @@ ggplotly(
 ```
 
 # Audience Composition
+**Section goal:** Clarify who the audience is and whether the audience mix is concentrating or broadening.
 
 ## Audience Age + Gender Trends
 **What this chart shows:** Audience share trends over time by age and gender segments.  
@@ -291,6 +314,7 @@ ggplotly(
 ```
 
 # Monetization Quality (Views to Dollars)
+**Section goal:** Connect consumption performance to monetization efficiency.
 ```{r monetary data table}
 
 Table <- revenue_stream_ratio_table(monetary)
@@ -303,7 +327,8 @@ DTSettings(
 
 ```
 
-# Content-Type Deep Dive
+# Content Strategy Deep Dive
+**Section goal:** Turn performance patterns into actionable choices across timing, collaboration, topics, and tags.
 
 ## Timing Effects: Weekend vs Weekday
 **What this chart shows:** Per-video distributions of views and revenue for weekend vs weekday uploads.  
@@ -439,3 +464,11 @@ DTSettings(tag_summary, class = "display stripe hover", scroll_x = TRUE)
 ```
 
 # Wrap-up: What this means
+Use this section to add tailored commentary after reviewing the standard charts above.
+
+**Default executive summary template (edit for each talent):**
+1. **Performance direction:** Views and revenue are [rising/stable/declining], led by [top formats].
+2. **Efficiency signal:** Per-video performance is strongest in [formats/topics/tags], while [areas] underperform.
+3. **Audience signal:** Core audience is [stable/concentrating/broadening]; potential audience is [rising/falling].
+4. **Operating signal:** [Weekday/weekend/day] and [collab/non-collab] content currently show higher average outcomes.
+5. **Recommended next 30 days:** Double down on [2-3 actions], test [1-2 experiments], and monitor [key risks].
