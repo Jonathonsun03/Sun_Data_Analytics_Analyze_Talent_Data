@@ -53,3 +53,18 @@ bundle_a_date_range_subtitle <- function(dates) {
     format(max(d), "%b %Y")
   )
 }
+
+bundle_a_optional_col <- function(df, col = NULL, candidates = character(), label = "column") {
+  if (!is.null(col)) {
+    if (!col %in% names(df)) {
+      stop("Specified ", label, " not found: ", col)
+    }
+    return(col)
+  }
+
+  hit <- candidates[candidates %in% names(df)]
+  if (length(hit) == 0) {
+    return(NULL)
+  }
+  hit[[1]]
+}

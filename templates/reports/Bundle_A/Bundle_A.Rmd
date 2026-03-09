@@ -164,7 +164,8 @@ ggplotly(
     metric_col = "avg_view_prop",
     metric_label = "Average View %",
     y_as_percent = TRUE
-  )
+  ),
+  tooltip = "text"
 )
 ```
 

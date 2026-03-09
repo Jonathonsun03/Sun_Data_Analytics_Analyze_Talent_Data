@@ -83,6 +83,7 @@ bundle_a_dual_metric_plot <- function(
   value_col_revenue = "TotalRevenue",
   y_label_views = "Views",
   y_label_revenue = "Revenue",
+  y_axis_label = NULL,
   as_share = FALSE,
   rotate_x = c("auto", "none", "45")
 ) {
@@ -101,13 +102,20 @@ bundle_a_dual_metric_plot <- function(
   plot_df <- summary_df %>%
     dplyr::transmute(
       .group = as.character(.data[[group_col]]),
-      Views = .data[[views_col]],
-      Revenue = .data[[rev_col]]
+      .views = .data[[views_col]],
+      .revenue = .data[[rev_col]]
     ) %>%
     tidyr::pivot_longer(
-      cols = c("Views", "Revenue"),
-      names_to = "metric",
+      cols = c(".views", ".revenue"),
+      names_to = "metric_key",
       values_to = "value"
+    ) %>%
+    dplyr::mutate(
+      metric = dplyr::case_when(
+        .data$metric_key == ".views" ~ y_label_views,
+        .data$metric_key == ".revenue" ~ y_label_revenue,
+        TRUE ~ .data$metric_key
+      )
     )
 
   group_labels <- unique(as.character(plot_df$.group))
@@ -121,7 +129,13 @@ bundle_a_dual_metric_plot <- function(
   }
 
   y_scale <- if (isTRUE(as_share)) scales::label_percent(accuracy = 1) else scales::label_comma()
-  y_lab <- if (isTRUE(as_share)) "Share of total" else "Total"
+  y_lab <- if (isTRUE(as_share)) {
+    "Share of total"
+  } else if (!is.null(y_axis_label)) {
+    y_axis_label
+  } else {
+    "Total"
+  }
 
   p <- plot_df %>%
     ggplot2::ggplot(ggplot2::aes(x = .data$.group, y = .data$value, fill = .data$.group)) +
@@ -313,12 +327,22 @@ collaboration_effectiveness_prep <- function(
 }
 
 collaboration_effectiveness_plot <- function(summary_df, talent, as_share = FALSE) {
+  use_average <- !isTRUE(as_share)
   bundle_a_dual_metric_plot(
     summary_df = summary_df,
     group_col = "collab_group",
     talent = talent,
     title = if (isTRUE(as_share)) "Collaboration Share" else "Collaboration Effectiveness",
-    subtitle = "Views and revenue compared for collaborative vs non-collaborative titles.",
+    subtitle = if (use_average) {
+      "Average views and average revenue per video for collaborative vs non-collaborative titles."
+    } else {
+      "Views and revenue compared for collaborative vs non-collaborative titles."
+    },
+    value_col_views = if (use_average) "AverageViewsPerVideo" else "TotalViews",
+    value_col_revenue = if (use_average) "AverageRevenuePerVideo" else "TotalRevenue",
+    y_label_views = if (use_average) "Average views per video" else "Views",
+    y_label_revenue = if (use_average) "Average revenue per video" else "Revenue",
+    y_axis_label = if (use_average) "Average per video" else "Total",
     as_share = as_share
   )
 }
@@ -397,6 +421,7 @@ topic_view_distribution_prep <- function(
   analytics_df,
   topic_col = "topic",
   id_col = "Video ID",
+  title_col = NULL,
   views_col = "views",
   top_n = 8,
   min_videos = 2
@@ -410,6 +435,12 @@ topic_view_distribution_prep <- function(
   if (!views_col %in% names(analytics_df)) {
     stop("Views column must exist in analytics data: ", views_col)
   }
+  title_col <- bundle_a_optional_col(
+    analytics_df,
+    col = title_col,
+    candidates = c("Title", "Video Title", "title", "video_title"),
+    label = "title column"
+  )
 
   clean_topic <- function(x) {
     x <- trimws(as.character(x))
@@ -420,16 +451,22 @@ topic_view_distribution_prep <- function(
   exploded <- analytics_df %>%
     dplyr::mutate(
       .video_id = as.character(.data[[id_col]]),
+      .video_title = if (!is.null(title_col)) as.character(.data[[title_col]]) else NA_character_,
       topic_group = clean_topic(.data[[topic_col]]),
       views = suppressWarnings(as.numeric(.data[[views_col]]))
     ) %>%
     dplyr::filter(nzchar(.data$topic_group), !is.na(.data$views), is.finite(.data$views)) %>%
     dplyr::distinct(.data$.video_id, .data$topic_group, .keep_all = TRUE) %>%
-    dplyr::select(dplyr::all_of(c(".video_id", "topic_group", "views")))
+    dplyr::select(dplyr::all_of(c(".video_id", ".video_title", "topic_group", "views")))
 
   if (nrow(exploded) == 0) {
     return(list(
-      plot_data = tibble::tibble(topic_group = character(), views = numeric()),
+      plot_data = tibble::tibble(
+        .video_id = character(),
+        .video_title = character(),
+        topic_group = character(),
+        views = numeric()
+      ),
       summary = tibble::tibble(
         topic_group = character(),
         VideoCount = integer(),
@@ -465,7 +502,12 @@ topic_view_distribution_prep <- function(
 
   if (nrow(summary) == 0) {
     return(list(
-      plot_data = tibble::tibble(topic_group = character(), views = numeric()),
+      plot_data = tibble::tibble(
+        .video_id = character(),
+        .video_title = character(),
+        topic_group = character(),
+        views = numeric()
+      ),
       summary = summary
     ))
   }
@@ -476,7 +518,7 @@ topic_view_distribution_prep <- function(
     dplyr::mutate(
       topic_group = factor(.data$topic_group, levels = rev(topic_levels), ordered = TRUE)
     ) %>%
-    dplyr::select(dplyr::all_of(c("topic_group", "views")))
+    dplyr::select(dplyr::all_of(c(".video_id", ".video_title", "topic_group", "views")))
 
   summary <- summary %>%
     dplyr::mutate(topic_group = factor(.data$topic_group, levels = rev(topic_levels), ordered = TRUE)) %>%
@@ -511,12 +553,31 @@ topic_view_distribution_plot <- function(topic_dist, talent) {
   }
 
   plot_df %>%
+    dplyr::mutate(
+      .video_label = dplyr::case_when(
+        !is.na(.data$.video_title) & nzchar(trimws(.data$.video_title)) ~ trimws(.data$.video_title),
+        !is.na(.data$.video_id) & nzchar(trimws(.data$.video_id)) ~ paste0("Video ID: ", trimws(.data$.video_id)),
+        TRUE ~ "Untitled video"
+      ),
+      .hover_text = paste0(
+        "Video: ", .data$.video_label,
+        "<br>Topic: ", .data$topic_group,
+        "<br>Views: ", scales::label_comma(accuracy = 1)(.data$views)
+      )
+    ) %>%
     ggplot2::ggplot(ggplot2::aes(x = .data$topic_group, y = .data$views)) +
     ggplot2::geom_boxplot(
       fill = "grey70",
       color = "grey20",
       width = 0.65,
-      outlier.alpha = 0.35
+      outlier.shape = NA
+    ) +
+    ggplot2::geom_jitter(
+      ggplot2::aes(text = .data$.hover_text),
+      width = 0.18,
+      alpha = 0.25,
+      size = 1.2,
+      color = "grey20"
     ) +
     ggplot2::stat_summary(
       fun = mean,
@@ -625,6 +686,7 @@ tag_view_distribution_prep <- function(
   analytics_df,
   tags_col = "tags",
   id_col = "Video ID",
+  title_col = NULL,
   views_col = "views",
   top_n = 15,
   min_videos = 2,
@@ -639,10 +701,17 @@ tag_view_distribution_prep <- function(
   if (!views_col %in% names(analytics_df)) {
     stop("Views column must exist in analytics data: ", views_col)
   }
+  title_col <- bundle_a_optional_col(
+    analytics_df,
+    col = title_col,
+    candidates = c("Title", "Video Title", "title", "video_title"),
+    label = "title column"
+  )
 
   exploded <- analytics_df %>%
     dplyr::mutate(
       .video_id = as.character(.data[[id_col]]),
+      .video_title = if (!is.null(title_col)) as.character(.data[[title_col]]) else NA_character_,
       views = suppressWarnings(as.numeric(.data[[views_col]])),
       .tag_raw = as.character(.data[[tags_col]])
     ) %>%
@@ -656,11 +725,16 @@ tag_view_distribution_prep <- function(
       .data$views >= min_views_per_video
     ) %>%
     dplyr::distinct(.data$.video_id, .data$tag_group, .keep_all = TRUE) %>%
-    dplyr::select(dplyr::all_of(c(".video_id", "tag_group", "views")))
+    dplyr::select(dplyr::all_of(c(".video_id", ".video_title", "tag_group", "views")))
 
   if (nrow(exploded) == 0) {
     return(list(
-      plot_data = tibble::tibble(tag_group = character(), views = numeric()),
+      plot_data = tibble::tibble(
+        .video_id = character(),
+        .video_title = character(),
+        tag_group = character(),
+        views = numeric()
+      ),
       summary = tibble::tibble(
         tag_group = character(),
         VideoCount = integer(),
@@ -696,7 +770,12 @@ tag_view_distribution_prep <- function(
 
   if (nrow(summary) == 0) {
     return(list(
-      plot_data = tibble::tibble(tag_group = character(), views = numeric()),
+      plot_data = tibble::tibble(
+        .video_id = character(),
+        .video_title = character(),
+        tag_group = character(),
+        views = numeric()
+      ),
       summary = summary
     ))
   }
@@ -707,7 +786,7 @@ tag_view_distribution_prep <- function(
     dplyr::mutate(
       tag_group = factor(.data$tag_group, levels = rev(tag_levels), ordered = TRUE)
     ) %>%
-    dplyr::select(dplyr::all_of(c("tag_group", "views")))
+    dplyr::select(dplyr::all_of(c(".video_id", ".video_title", "tag_group", "views")))
 
   summary <- summary %>%
     dplyr::mutate(tag_group = factor(.data$tag_group, levels = rev(tag_levels), ordered = TRUE)) %>%
@@ -742,12 +821,31 @@ tag_view_distribution_plot <- function(tag_dist, talent) {
   }
 
   plot_df %>%
+    dplyr::mutate(
+      .video_label = dplyr::case_when(
+        !is.na(.data$.video_title) & nzchar(trimws(.data$.video_title)) ~ trimws(.data$.video_title),
+        !is.na(.data$.video_id) & nzchar(trimws(.data$.video_id)) ~ paste0("Video ID: ", trimws(.data$.video_id)),
+        TRUE ~ "Untitled video"
+      ),
+      .hover_text = paste0(
+        "Video: ", .data$.video_label,
+        "<br>Tag: ", .data$tag_group,
+        "<br>Views: ", scales::label_comma(accuracy = 1)(.data$views)
+      )
+    ) %>%
     ggplot2::ggplot(ggplot2::aes(x = .data$tag_group, y = .data$views)) +
     ggplot2::geom_boxplot(
       fill = "grey70",
       color = "grey20",
       width = 0.65,
-      outlier.alpha = 0.35
+      outlier.shape = NA
+    ) +
+    ggplot2::geom_jitter(
+      ggplot2::aes(text = .data$.hover_text),
+      width = 0.18,
+      alpha = 0.25,
+      size = 1.2,
+      color = "grey20"
     ) +
     ggplot2::stat_summary(
       fun = mean,
