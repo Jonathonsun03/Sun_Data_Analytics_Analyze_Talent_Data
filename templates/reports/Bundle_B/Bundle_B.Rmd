@@ -292,35 +292,22 @@ DTSettings(priority_components, class = "display stripe hover", scroll_x = TRUE)
   DT::formatPercentage(columns = c("Median_Engagement"), digits = 1)
 ```
 
-### Content Opportunity Matrix
+### Combined Opportunity Matrix (Content Types, Tags, and Title Labels)
 What this plot does:
-- Places each content type on an engagement-to-revenue map with audience scale included.
+- Combines content types, tags, and title labels into one opportunity map.
+- Keeps `Strength`, `Middle`, and `Weakness / Improve` as shape categories.
 
 How to read it:
-- X-axis is median engagement, Y-axis is total revenue, and bubble size represents total views.
-
-```{r b2-strength-matrix-plot, fig.width=11, fig.height=8}
-ggplotly(
-  bundle_b_strength_matrix_plot(
-    strength_matrix,
-    Talent
-  )
-)
-```
-
-### Content Opportunity Matrix by Tags and Title Labels
-What this plot does:
-- Extends the opportunity matrix to title metadata so you can compare opportunity at the attribute level, not only content type.
-
-How to read it:
-- Each point is a tag or title label derived from video metadata.
+- Each point is a content descriptor (content type, tag, or title label).
 - X-axis is median engagement, Y-axis is total revenue, and bubble size is total views.
-- Facets separate `Tag` vs `Title label`.
+- Point shape indicates performance band.
+- Y-axis is pseudo-log scaled for readability, while labels stay in raw dollar values.
 
-```{r b2-attribute-opportunity-plot, fig.width=12, fig.height=9}
+```{r b2-opportunity-matrix-plot, fig.width=12, fig.height=9}
 attribute_opportunity <- bundle_b_attribute_opportunity_prep(
   analytics_df = analytics,
   monetary_df = monetary,
+  top_n_content = 8,
   top_n_labels = 8,
   top_n_tags = 10,
   min_videos = 2
@@ -335,9 +322,22 @@ ggplotly(
 ```
 
 ```{r b2-attribute-opportunity-table}
-DTSettings(attribute_opportunity, class = "display stripe hover", scroll_x = TRUE) %>%
+attribute_opportunity_table <- attribute_opportunity %>%
+  arrange(desc(Composite_Score)) %>%
+  select(
+    Attribute,
+    LabelType,
+    VideoCount,
+    TotalViews,
+    TotalRevenue,
+    MedianEngagement,
+    Composite_Score,
+    Performance_Band
+  )
+
+DTSettings(attribute_opportunity_table, class = "display stripe hover", scroll_x = TRUE) %>%
   DT::formatRound(
-    columns = c("VideoCount", "TotalViews", "TotalRevenue"),
+    columns = c("VideoCount", "TotalViews", "TotalRevenue", "Composite_Score"),
     digits = 2
   ) %>%
   DT::formatPercentage(columns = c("MedianEngagement"), digits = 1)

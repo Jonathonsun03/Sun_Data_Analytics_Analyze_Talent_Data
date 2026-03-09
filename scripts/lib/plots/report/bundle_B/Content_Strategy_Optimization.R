@@ -230,9 +230,11 @@ bundle_b_attribute_opportunity_prep <- function(
   views_col = "views",
   revenue_col = "Estimated Revenue",
   engagement_col = "averageViewPercentage",
+  content_col = "Content Type",
   topic_col = "topic",
   primary_reference_col = "primary_reference",
   tags_col = "tags",
+  top_n_content = 8,
   top_n_labels = 8,
   top_n_tags = 10,
   min_videos = 2
@@ -263,13 +265,14 @@ bundle_b_attribute_opportunity_prep <- function(
       .video_id = as.character(.data[[id_col]]),
       .views = suppressWarnings(as.numeric(.data[[views_col]])),
       .eng = suppressWarnings(as.numeric(.data[[engagement_col]])) / 100,
+      .content = if (content_col %in% names(analytics_df)) as.character(.data[[content_col]]) else NA_character_,
       .topic = if (topic_col %in% names(analytics_df)) .data[[topic_col]] else NA_character_,
       .ref = if (primary_reference_col %in% names(analytics_df)) .data[[primary_reference_col]] else NA_character_,
       .label = clean_label(.topic, .ref),
       .tags = if (tags_col %in% names(analytics_df)) as.character(.data[[tags_col]]) else NA_character_
     ) %>%
     dplyr::filter(!is.na(.video_id), nzchar(.video_id), is.finite(.views), is.finite(.eng)) %>%
-    dplyr::select(dplyr::all_of(c(".video_id", ".views", ".eng", ".label", ".tags")))
+    dplyr::select(dplyr::all_of(c(".video_id", ".views", ".eng", ".content", ".label", ".tags")))
 
   revenue_by_video <- monetary_df %>%
     dplyr::transmute(
@@ -282,6 +285,36 @@ bundle_b_attribute_opportunity_prep <- function(
 
   label_video <- analytics_base %>%
     dplyr::distinct(.data$.video_id, .data$.label, .keep_all = TRUE)
+
+  content_video <- analytics_base %>%
+    dplyr::mutate(.content = trimws(as.character(.data$.content))) %>%
+    dplyr::mutate(.content = dplyr::if_else(is.na(.data$.content) | !nzchar(.data$.content), "(unclassified)", .data$.content)) %>%
+    dplyr::distinct(.data$.video_id, .data$.content, .keep_all = TRUE)
+
+  content_summary <- content_video %>%
+    dplyr::group_by(.data$.content) %>%
+    dplyr::summarize(
+      VideoCount = dplyr::n_distinct(.data$.video_id),
+      TotalViews = sum(.data$.views, na.rm = TRUE),
+      MedianEngagement = stats::median(.data$.eng, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    dplyr::left_join(
+      content_video %>%
+        dplyr::select(dplyr::all_of(c(".video_id", ".content"))) %>%
+        dplyr::left_join(revenue_by_video, by = ".video_id") %>%
+        dplyr::group_by(.data$.content) %>%
+        dplyr::summarize(TotalRevenue = sum(.data$.revenue, na.rm = TRUE), .groups = "drop"),
+      by = ".content"
+    ) %>%
+    dplyr::mutate(
+      TotalRevenue = tidyr::replace_na(.data$TotalRevenue, 0),
+      Attribute = tolower(.data$.content),
+      LabelType = "Content type"
+    ) %>%
+    dplyr::filter(.data$VideoCount >= min_videos) %>%
+    dplyr::arrange(dplyr::desc(.data$TotalViews + .data$TotalRevenue)) %>%
+    dplyr::slice_head(n = top_n_content)
 
   label_summary <- label_video %>%
     dplyr::group_by(.data$.label) %>%
@@ -340,7 +373,16 @@ bundle_b_attribute_opportunity_prep <- function(
     dplyr::arrange(dplyr::desc(.data$TotalViews + .data$TotalRevenue)) %>%
     dplyr::slice_head(n = top_n_tags)
 
-  dplyr::bind_rows(
+  out <- dplyr::bind_rows(
+    content_summary %>%
+      dplyr::transmute(
+        Attribute = .data$Attribute,
+        LabelType = .data$LabelType,
+        VideoCount = .data$VideoCount,
+        TotalViews = .data$TotalViews,
+        TotalRevenue = .data$TotalRevenue,
+        MedianEngagement = .data$MedianEngagement
+      ),
     label_summary %>%
       dplyr::transmute(
         Attribute = .data$Attribute,
@@ -360,16 +402,69 @@ bundle_b_attribute_opportunity_prep <- function(
         MedianEngagement = .data$MedianEngagement
       )
   )
+
+  if (nrow(out) == 0) {
+    return(
+      out %>%
+        dplyr::mutate(
+          Views_Z = numeric(),
+          Revenue_Z = numeric(),
+          Engagement_Z = numeric(),
+          Composite_Score = numeric(),
+          Performance_Band = character()
+        )
+    )
+  }
+
+  safe_zscore_local <- function(x) {
+    x_num <- suppressWarnings(as.numeric(x))
+    if (length(stats::na.omit(x_num)) <= 1 || isTRUE(all.equal(stats::sd(x_num, na.rm = TRUE), 0))) {
+      return(rep(0, length(x_num)))
+    }
+    as.numeric(scale(x_num))
+  }
+
+  out <- out %>%
+    dplyr::mutate(
+      Views_Z = safe_zscore_local(.data$TotalViews),
+      Revenue_Z = safe_zscore_local(.data$TotalRevenue),
+      Engagement_Z = safe_zscore_local(.data$MedianEngagement),
+      Composite_Score = rowMeans(
+        dplyr::across(c("Views_Z", "Revenue_Z", "Engagement_Z")),
+        na.rm = TRUE
+      )
+    )
+
+  if (nrow(out) < 3) {
+    return(
+      out %>%
+        dplyr::mutate(Performance_Band = "Middle") %>%
+        dplyr::arrange(dplyr::desc(.data$Composite_Score))
+    )
+  }
+
+  high_cut <- stats::quantile(out$Composite_Score, probs = 0.67, na.rm = TRUE, names = FALSE)
+  low_cut <- stats::quantile(out$Composite_Score, probs = 0.33, na.rm = TRUE, names = FALSE)
+
+  out %>%
+    dplyr::mutate(
+      Performance_Band = dplyr::case_when(
+        .data$Composite_Score >= high_cut ~ "Strength",
+        .data$Composite_Score <= low_cut ~ "Weakness / Improve",
+        TRUE ~ "Middle"
+      )
+    ) %>%
+    dplyr::arrange(dplyr::desc(.data$Composite_Score))
 }
 
 bundle_b_attribute_opportunity_matrix_plot <- function(attr_df, talent) {
   required_cols <- c(
     "Attribute",
-    "LabelType",
     "VideoCount",
     "TotalViews",
     "TotalRevenue",
-    "MedianEngagement"
+    "MedianEngagement",
+    "Performance_Band"
   )
   if (!all(required_cols %in% names(attr_df))) {
     stop("attr_df must include: ", paste(required_cols, collapse = ", "))
@@ -388,16 +483,38 @@ bundle_b_attribute_opportunity_matrix_plot <- function(attr_df, talent) {
     )
   }
 
-  attr_df %>%
+  plot_df <- attr_df %>%
+    dplyr::filter(
+      is.finite(.data$MedianEngagement),
+      is.finite(.data$TotalRevenue),
+      is.finite(.data$TotalViews),
+      .data$TotalViews > 0,
+      .data$TotalRevenue > 0
+    )
+
+  if (nrow(plot_df) == 0) {
+    return(
+      ggplot2::ggplot() +
+        ggplot2::annotate("text", x = 1, y = 1, label = "No non-zero revenue points available for matrix.") +
+        ggplot2::xlim(0.5, 1.5) +
+        ggplot2::ylim(0.5, 1.5) +
+        ggplot2::theme_void() +
+        ggplot2::labs(
+          title = paste0(talent, " - Combined Opportunity Matrix")
+        )
+    )
+  }
+
+  plot_df %>%
     ggplot2::ggplot(
       ggplot2::aes(
         x = .data$MedianEngagement,
         y = .data$TotalRevenue,
         size = .data$TotalViews,
-        color = .data$LabelType
+        shape = .data$Performance_Band
       )
     ) +
-    ggplot2::geom_point(alpha = 0.8) +
+    ggplot2::geom_point(alpha = 0.8, color = "grey30") +
     ggplot2::geom_text(
       ggplot2::aes(label = .data$Attribute),
       size = 2.8,
@@ -405,16 +522,25 @@ bundle_b_attribute_opportunity_matrix_plot <- function(attr_df, talent) {
       nudge_x = 0.002,
       show.legend = FALSE
     ) +
-    ggplot2::facet_wrap(~LabelType, scales = "free") +
+    ggplot2::scale_shape_manual(
+      values = c(
+        "Strength" = 17,
+        "Middle" = 16,
+        "Weakness / Improve" = 15
+      )
+    ) +
     ggplot2::scale_x_continuous(labels = scales::label_percent(accuracy = 1)) +
-    ggplot2::scale_y_continuous(labels = scales::label_dollar(scale = 1)) +
+    ggplot2::scale_y_continuous(
+      trans = scales::pseudo_log_trans(base = 10),
+      labels = scales::label_dollar(scale = 1)
+    ) +
     theme_nyt() +
     ggplot2::labs(
-      title = paste0(talent, " - Opportunity Matrix by Tags and Title Labels"),
-      subtitle = "X = median engagement, Y = total revenue, bubble size = total views.",
+      title = paste0(talent, " - Combined Opportunity Matrix"),
+      subtitle = "Content types, tags, and title labels in one map. Y-axis uses pseudo-log scale with raw dollar labels.",
       x = "Median engagement",
       y = "Total revenue",
       size = "Total views",
-      color = "Attribute type"
+      shape = "Performance band"
     )
 }

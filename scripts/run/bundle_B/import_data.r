@@ -217,8 +217,7 @@ build_bundle_b_plot_set <- function(
       y_as_percent = TRUE
     ),
     p_priority_rank = bundle_b_priority_rank_plot(strength_matrix, talent),
-    p_strength_matrix = bundle_b_strength_matrix_plot(strength_matrix, talent),
-    p_attribute_opportunity = bundle_b_attribute_opportunity_matrix_plot(attribute_opportunity, talent),
+    p_opportunity_matrix = bundle_b_attribute_opportunity_matrix_plot(attribute_opportunity, talent),
     p_revenue_efficiency = bundle_b_revenue_efficiency_plot(strength_matrix, talent),
     p_collab_lift = bundle_b_collaboration_lift_plot(deep_dive$collab_summary, talent),
     p_schedule_lift = bundle_b_day_of_week_lift_plot(deep_dive$day_of_week_summary, talent),
