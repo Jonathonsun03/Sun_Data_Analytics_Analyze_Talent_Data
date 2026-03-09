@@ -291,13 +291,14 @@ DTSettings(
 ## Timing Effects: Weekend vs Weekday
 ```{r weekend-vs-weekday, fig.width=10, fig.height=8}
 wk_summary <- weekend_vs_weekday_prep(analytics, monetary)
+wk_dist <- weekend_vs_weekday_distribution_prep(analytics, monetary)
 
 ggplotly(
-  weekend_vs_weekday_plot(
-    wk_summary,
-    Talent,
-    as_share = FALSE
-  )
+  weekend_vs_weekday_distribution_plot(
+    wk_dist,
+    Talent
+  ),
+  tooltip = "text"
 )
 ```
 
