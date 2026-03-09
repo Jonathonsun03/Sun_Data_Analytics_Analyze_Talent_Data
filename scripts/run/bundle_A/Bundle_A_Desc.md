@@ -65,6 +65,8 @@ Weekend vs weekday distribution, day-of-week contribution, collaboration effecti
 - Expected report template: `templates/reports/Bundle_A/Bundle_A.Rmd`.
 
 ### 8) Rendering Bundle A
+- Linux wrapper (routes outputs into datalake by talent + window):
+  `bin/linux/render_reports/run_bundle_A_report.sh --talent Ava --window-days 90`
 - Single talent:
   `Rscript scripts/run/bundle_A/render_bundle_A.R --talent Ava`
 - Single talent + days-back window:

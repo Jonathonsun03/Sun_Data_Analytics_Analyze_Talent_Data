@@ -66,6 +66,18 @@ resolve_repo_or_abs <- function(path) {
   repo_path(path)
 }
 
+parse_optional_date <- function(x, flag_name = "--date") {
+  if (is.null(x) || !nzchar(trimws(x))) {
+    return(NA_character_)
+  }
+  txt <- trimws(x)
+  d <- suppressWarnings(as.Date(txt))
+  if (is.na(d)) {
+    stop(flag_name, " must be YYYY-MM-DD.")
+  }
+  as.character(d)
+}
+
 args <- commandArgs(trailingOnly = TRUE)
 
 input_rmd <- rr_arg_value(args, "--input", repo_path("templates", "reports", "Bundle_A", "Bundle_A.Rmd"))
@@ -84,6 +96,12 @@ window_days <- rr_parse_optional_positive_int(
   rr_arg_value(args, "--window-days", ""),
   flag_name = "--window-days"
 )
+start_date <- parse_optional_date(rr_arg_value(args, "--start-date", ""), "--start-date")
+end_date <- parse_optional_date(rr_arg_value(args, "--end-date", ""), "--end-date")
+
+if (!is.na(start_date) && !is.na(end_date) && as.Date(start_date) > as.Date(end_date)) {
+  stop("`--start-date` cannot be after `--end-date`.")
+}
 
 talent_single <- trimws(rr_arg_value(args, "--talent", ""))
 talent_list_csv <- rr_split_csv_values(rr_arg_value(args, "--talents", ""))
@@ -115,7 +133,18 @@ cat("Bundle A render targets:", paste(talents, collapse = ", "), "\n")
 cat("Input Rmd:", input_rmd, "\n")
 cat("Output dir:", output_dir, "\n")
 if (is.na(window_days)) {
-  cat("Window: all available staged data\n")
+  if (!is.na(start_date) || !is.na(end_date)) {
+    cat(
+      "Window: explicit range ",
+      if (is.na(start_date)) "open_start" else start_date,
+      " to ",
+      if (is.na(end_date)) "open_end" else end_date,
+      "\n",
+      sep = ""
+    )
+  } else {
+    cat("Window: all available staged data\n")
+  }
 } else {
   cat("Window: last ", window_days, " days\n", sep = "")
 }
@@ -128,7 +157,9 @@ result_df <- rr_render_for_talents(
   params_builder = function(talent) {
     list(
       talent = talent,
-      window_days = if (is.na(window_days)) NULL else window_days
+      window_days = if (is.na(window_days)) NULL else window_days,
+      start_date = if (is.na(start_date)) NULL else start_date,
+      end_date = if (is.na(end_date)) NULL else end_date
     )
   },
   slugify_fn = talent_slugify,

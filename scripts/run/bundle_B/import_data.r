@@ -287,7 +287,7 @@ build_bundle_b_tables <- function(
     content_position_overall = bundle_b_content_position_overall_table(content_position),
     attribute_opportunity = bundle_b_attribute_opportunity_table(attribute_opportunity),
     weekend_vs_weekday = deep_dive$weekend_summary,
-    day_of_week = bundle_b_day_of_week_index_table(deep_dive$day_of_week_summary),
+    day_of_week = bundle_b_day_of_week_deviation_table(deep_dive$day_of_week_summary),
     collaboration = deep_dive$collab_summary,
     topic = deep_dive$topic_summary,
     topic_view_distribution = deep_dive$topic_view_distribution$summary,

@@ -11,6 +11,8 @@ output:
 params:
   talent: "Ava"
   window_days: null
+  start_date: null
+  end_date: null
 ---
 
 ```{r setup, include=FALSE}
@@ -101,11 +103,41 @@ if (is.null(window_days) || (length(window_days) == 1 && is.na(window_days))) {
   }
 }
 
-window_end_date <- Sys.Date()
-window_start_date <- if (is.na(window_days)) {
-  as.Date(NA)
+parse_optional_date <- function(x, label) {
+  if (is.null(x) || (length(x) == 1 && is.na(x)) || !nzchar(trimws(as.character(x)))) {
+    return(as.Date(NA))
+  }
+  d <- suppressWarnings(as.Date(as.character(x)))
+  if (is.na(d)) {
+    stop("`params$", label, "` must be in YYYY-MM-DD format when provided.")
+  }
+  d
+}
+
+start_date_param <- parse_optional_date(params$start_date, "start_date")
+end_date_param <- parse_optional_date(params$end_date, "end_date")
+
+if (!is.na(start_date_param) || !is.na(end_date_param)) {
+  if (is.na(start_date_param)) {
+    start_date_param <- as.Date("1900-01-01")
+  }
+  if (is.na(end_date_param)) {
+    end_date_param <- Sys.Date()
+  }
+  if (start_date_param > end_date_param) {
+    stop("`params$start_date` cannot be after `params$end_date`.")
+  }
+  window_start_date <- start_date_param
+  window_end_date <- end_date_param
+  window_mode <- "explicit_range"
+} else if (!is.na(window_days)) {
+  window_end_date <- Sys.Date()
+  window_start_date <- window_end_date - as.integer(window_days) + 1
+  window_mode <- "days_back"
 } else {
-  window_end_date - as.integer(window_days) + 1
+  window_start_date <- as.Date(NA)
+  window_end_date <- as.Date(NA)
+  window_mode <- "all_data"
 }
 
 talent_root <- select_talent(Talent)
@@ -127,7 +159,7 @@ monetary  <- preps$monetary
 demo      <- preps$demo
 
 apply_days_back_window <- function(df, days_back) {
-  if (is.na(days_back) || nrow(df) == 0) {
+  if (window_mode == "all_data" || nrow(df) == 0) {
     return(df)
   }
 
@@ -190,7 +222,15 @@ Use the **Wrap-up** section to add talent-specific narrative and recommendations
 ## Active Analysis Window
 ```{r analysis-window-summary}
 if (is.na(window_days)) {
-  cat("**Window setting:** All available staged data (no days-back filter).")
+  if (window_mode == "explicit_range") {
+    cat(
+      "**Window setting:** Explicit range (",
+      format(window_start_date, "%Y-%m-%d"), " to ", format(window_end_date, "%Y-%m-%d"), ").",
+      sep = ""
+    )
+  } else {
+    cat("**Window setting:** All available staged data (no days-back filter).")
+  }
 } else {
   cat(
     "**Window setting:** Last ", window_days, " days ",

@@ -175,7 +175,7 @@ bundle_b_collaboration_lift_plot <- function(collab_summary, talent) {
     )
 }
 
-bundle_b_day_of_week_index_table <- function(day_summary) {
+bundle_b_day_of_week_deviation_table <- function(day_summary) {
   required_cols <- c("day_of_week", "AverageViewsPerVideo", "AverageRevenuePerVideo")
   if (!all(required_cols %in% names(day_summary))) {
     stop("day_summary must include: ", paste(required_cols, collapse = ", "))
@@ -196,15 +196,17 @@ bundle_b_day_of_week_index_table <- function(day_summary) {
         levels = day_levels_present,
         ordered = TRUE
       ),
+      OverallAverageViewsPerVideo = base_views,
+      OverallAverageRevenuePerVideo = base_rev,
       AverageViewsPerVideo = .data$AverageViewsPerVideo,
       AverageRevenuePerVideo = .data$AverageRevenuePerVideo,
-      ViewsIndex = if (is.finite(base_views) && base_views > 0) {
-        .data$AverageViewsPerVideo / base_views * 100
+      ViewsDeviation = if (is.finite(base_views)) {
+        .data$AverageViewsPerVideo - base_views
       } else {
         rep(NA_real_, dplyr::n())
       },
-      RevenueIndex = if (is.finite(base_rev) && base_rev > 0) {
-        .data$AverageRevenuePerVideo / base_rev * 100
+      RevenueDeviation = if (is.finite(base_rev)) {
+        .data$AverageRevenuePerVideo - base_rev
       } else {
         rep(NA_real_, dplyr::n())
       }
@@ -213,34 +215,54 @@ bundle_b_day_of_week_index_table <- function(day_summary) {
 }
 
 bundle_b_day_of_week_lift_plot <- function(day_summary, talent) {
-  idx_tbl <- bundle_b_day_of_week_index_table(day_summary)
+  dev_tbl <- bundle_b_day_of_week_deviation_table(day_summary)
 
-  plot_df <- idx_tbl %>%
+  plot_df <- dev_tbl %>%
     tidyr::pivot_longer(
-      cols = c("ViewsIndex", "RevenueIndex"),
+      cols = c("ViewsDeviation", "RevenueDeviation"),
       names_to = "Metric",
-      values_to = "IndexValue"
+      values_to = "Deviation"
     ) %>%
     dplyr::mutate(
       Metric = dplyr::recode(
         .data$Metric,
-        ViewsIndex = "Views index",
-        RevenueIndex = "Revenue index"
+        ViewsDeviation = "Views deviation",
+        RevenueDeviation = "Revenue deviation"
+      ),
+      HoverText = dplyr::case_when(
+        .data$Metric == "Views deviation" ~ paste0(
+          "Day: ", .data$day_of_week,
+          "<br>Average views/video: ", scales::comma(round(.data$AverageViewsPerVideo)),
+          "<br>Overall views baseline: ", scales::comma(round(.data$OverallAverageViewsPerVideo)),
+          "<br>Deviation: ", scales::comma(round(.data$Deviation))
+        ),
+        TRUE ~ paste0(
+          "Day: ", .data$day_of_week,
+          "<br>Average revenue/video: ", scales::dollar(.data$AverageRevenuePerVideo),
+          "<br>Overall revenue baseline: ", scales::dollar(.data$OverallAverageRevenuePerVideo),
+          "<br>Deviation: ", scales::dollar(.data$Deviation)
+        )
       )
     )
 
   plot_df %>%
-    ggplot2::ggplot(ggplot2::aes(x = .data$day_of_week, y = .data$IndexValue, fill = .data$Metric)) +
-    ggplot2::geom_hline(yintercept = 100, color = sun_data_brand_colors()[["steel"]], linewidth = 0.3) +
-    ggplot2::geom_col(position = ggplot2::position_dodge(width = 0.7), width = 0.6) +
+    ggplot2::ggplot(ggplot2::aes(x = .data$day_of_week, y = .data$Deviation, fill = .data$Metric, text = .data$HoverText)) +
+    ggplot2::geom_hline(yintercept = 0, color = sun_data_brand_colors()[["steel"]], linewidth = 0.3) +
+    ggplot2::geom_col(width = 0.62) +
+    ggplot2::facet_wrap(~Metric, scales = "free_y", ncol = 1) +
     scale_fill_sun_data(variant = "brand") +
-    ggplot2::scale_y_continuous(labels = scales::label_number(accuracy = 1)) +
+    ggplot2::guides(fill = "none") +
+    ggplot2::scale_y_continuous(labels = scales::label_number(big.mark = ",", accuracy = 1)) +
     theme_nyt() +
     ggplot2::labs(
-      title = paste0(talent, " - Day-of-Week Baseline Index"),
-      subtitle = "Index where 100 = overall weekday average per-video value.",
+      title = paste0(talent, " - Day-of-Week Deviation from Average"),
+      subtitle = "Positive = above average day, negative = below average day (raw units, not z-score).",
       x = "",
-      y = "Index (100 = baseline)",
-      fill = "Metric"
+      y = "Deviation from overall average per video"
     )
+}
+
+# Backward-compatible alias retained for code paths still calling the old helper name.
+bundle_b_day_of_week_index_table <- function(day_summary) {
+  bundle_b_day_of_week_deviation_table(day_summary)
 }

@@ -481,15 +481,16 @@ DTSettings(tag_view_dist$summary, class = "display stripe hover", scroll_x = TRU
 
 ## 4) Scheduling Effects
 
-### Day-of-Week Baseline Index
+### Day-of-Week Deviation from Average
 What this plot does:
-- Compares each weekday against the overall weekday average using an index scale.
+- Shows how far each weekday is above or below the overall weekday average.
 
 How to read it:
-- `100` means exactly at baseline.
-- Above `100` means above baseline; below `100` means below baseline.
+- Values above `0` are above-average days.
+- Values below `0` are below-average days.
 - This is not a z-score.
-- Formula: `Index = (weekday average / overall weekday average) * 100`.
+- Formula: `Deviation = weekday average - overall weekday average`.
+- Top panel is views deviation; bottom panel is revenue deviation.
 
 ```{r b2-dow-lift-plot, fig.width=10, fig.height=8}
 dow_summary <- day_of_week_performance_prep(analytics, monetary)
@@ -503,8 +504,8 @@ ggplotly(
 ```
 
 ```{r b2-dow-table}
-dow_index_table <- bundle_b_day_of_week_index_table(dow_summary)
-DTSettings(dow_index_table, class = "display stripe hover", scroll_x = TRUE)
+dow_deviation_table <- bundle_b_day_of_week_deviation_table(dow_summary)
+DTSettings(dow_deviation_table, class = "display stripe hover", scroll_x = TRUE)
 ```
 
 ### Weekend vs Weekday Summary
