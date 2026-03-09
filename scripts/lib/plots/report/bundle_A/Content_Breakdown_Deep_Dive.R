@@ -846,6 +846,65 @@ tag_performance_plot <- function(summary_df, talent, as_share = FALSE) {
   )
 }
 
+tag_average_views_plot <- function(summary_df, talent) {
+  required <- c("tag_group", "AverageViewsPerVideo")
+  if (!all(required %in% names(summary_df))) {
+    stop("summary_df must contain: ", paste(required, collapse = ", "))
+  }
+
+  count_col <- if ("VideoCountViews" %in% names(summary_df)) {
+    "VideoCountViews"
+  } else if ("VideoCount" %in% names(summary_df)) {
+    "VideoCount"
+  } else {
+    NULL
+  }
+
+  plot_df <- summary_df %>%
+    dplyr::mutate(
+      .tag_chr = as.character(.data$tag_group),
+      .video_count = if (!is.null(count_col)) as.numeric(.data[[count_col]]) else NA_real_,
+      .hover_text = if (!is.null(count_col)) {
+        paste0(
+          "Tag: ", .data$.tag_chr,
+          "<br>Average views per tagged video: ", scales::label_comma(accuracy = 1)(.data$AverageViewsPerVideo),
+          "<br>Tagged videos: ", scales::label_comma(accuracy = 1)(.data$.video_count)
+        )
+      } else {
+        paste0(
+          "Tag: ", .data$.tag_chr,
+          "<br>Average views per tagged video: ", scales::label_comma(accuracy = 1)(.data$AverageViewsPerVideo)
+        )
+      }
+    ) %>%
+    dplyr::arrange(.data$AverageViewsPerVideo) %>%
+    dplyr::mutate(
+      .tag_factor = factor(.data$.tag_chr, levels = .data$.tag_chr, ordered = TRUE)
+    )
+
+  plot_df %>%
+    ggplot2::ggplot(
+      ggplot2::aes(
+        x = .data$.tag_factor,
+        y = .data$AverageViewsPerVideo,
+        fill = .data$.tag_factor,
+        text = .data$.hover_text
+      )
+    ) +
+    ggplot2::geom_col(width = 0.72) +
+    ggplot2::coord_flip() +
+    ggplot2::scale_fill_grey(start = 0.35, end = 0.65) +
+    ggplot2::guides(fill = "none") +
+    ggplot2::scale_y_continuous(labels = scales::label_comma()) +
+    theme_nyt() +
+    ggplot2::labs(
+      title = paste0(talent, " - Average Views per Tag"),
+      subtitle = "Average views per video where each tag appears at least once.",
+      x = "",
+      y = "Average views per tagged video"
+    )
+}
+
 tag_view_distribution_prep <- function(
   analytics_df,
   tags_col = "tags",

@@ -441,6 +441,20 @@ ggplotly(
 )
 ```
 
+## Average Views per Tag
+**What this chart shows:** Average views per video for each top tag (how many views a tagged video gets on average).  
+**How to read it:** Taller bars indicate tags that tend to perform better per tagged upload, independent of total posting volume.
+
+```{r tag-average-views, fig.width=12, fig.height=9}
+ggplotly(
+  tag_average_views_plot(
+    tag_summary,
+    Talent
+  ),
+  tooltip = "text"
+)
+```
+
 ```{r tag-table}
 decimal_cols <- detect_decimals(tag_summary)
 DTSettings(tag_summary, class = "display stripe hover", scroll_x = TRUE) %>%

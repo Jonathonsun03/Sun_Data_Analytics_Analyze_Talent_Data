@@ -186,7 +186,11 @@ video_preps_with_titles <- function(
   dedupe = FALSE,
   key_cols = "Video ID",
   sort_cols = c("confidence", "published_at"),
-  dedupe_sets = c("analytics", "monetary", "demo", "geo")
+  dedupe_sets = c("analytics", "monetary", "demo", "geo"),
+  standardize_content_type = TRUE,
+  content_type_keep_diagnostics = TRUE,
+  content_type_live_min_seconds = 20 * 60,
+  content_type_short_max_seconds = 70
 ) {
   out <- list(
     analytics = video_analytics_prep_with_titles(
@@ -227,6 +231,25 @@ video_preps_with_titles <- function(
         key_cols = key_cols,
         sort_cols = sort_cols
       )
+    }
+  }
+
+  if (isTRUE(standardize_content_type)) {
+    if (!exists("apply_content_type_filter", mode = "function")) {
+      warning(
+        "Content-type utility `apply_content_type_filter()` is not loaded; ",
+        "skipping standardized content-type filtering."
+      )
+    } else {
+      for (nm in names(out)) {
+        out[[nm]] <- apply_content_type_filter(
+          out[[nm]],
+          output_col = "Content Type",
+          keep_diagnostics = content_type_keep_diagnostics,
+          live_min_seconds = content_type_live_min_seconds,
+          short_max_seconds = content_type_short_max_seconds
+        )
+      }
     }
   }
 
