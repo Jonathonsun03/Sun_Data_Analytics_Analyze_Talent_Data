@@ -8,7 +8,7 @@ output: html_document
 ```{r setup, include=FALSE}
 
 knitr::opts_chunk$set(
-  echo     = TRUE,
+  echo     = FALSE,
   message  = FALSE, 
   warning  = FALSE,
   fig.align = "center"
@@ -110,6 +110,15 @@ df <- analytics
 ```{r views by content, fig.width=10}
 ggplotly(
   total_views_content_type(analytics, Talent) +
+  theme_nyt()
+)
+
+```
+
+## Average views by Content Type
+```{r average views by content, fig.width=10}
+ggplotly(
+  average_views_content_type(analytics, Talent) +
   theme_nyt()
 )
 
@@ -231,6 +240,21 @@ ggplotly(
 ```
 
 ## Core Audience Stability
+
+**What is Audience Concentration (HHIx Scaled)?**  
+This number shows how concentrated your audience is across age + gender groups in each month.
+
+**How it is calculated in this report**  
+1. Take each audience segment's share for the month (for example, 20%, 15%, etc.).  
+2. Square each share and add them together to get an HHI concentration score.  
+3. Scale that score by dividing by the highest HHI month in this report, so the chart reads like a 0-100% index.
+
+**How to read it**  
+Higher values mean your audience is more concentrated in fewer segments. Lower values mean your audience mix is more spread out.
+
+**Why this is used here**  
+It is the best fit for stability because it uses all audience segments at once (not just one group), making month-to-month changes easier to compare and less noisy.
+
 ```{r audience stability, fig.width=10, fig.height=9}
 core_stability <- audience_core_segment_stability_prep(
   demo_df = demo,

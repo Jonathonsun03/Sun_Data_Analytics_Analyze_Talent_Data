@@ -188,6 +188,12 @@ This report is structured to answer the Bundle B questions directly:
 ## 1) Format Retention Consistency
 
 ### Engagement Distribution by Content Type
+What this plot does:
+- Shows the full spread of engagement outcomes for each content type so you can evaluate reliability, not just averages.
+
+How to read it:
+- Compare each category's center and spread to see which formats are consistently strong versus volatile.
+
 ```{r b2-engagement-distribution, fig.width=10, fig.height=8}
 ggplotly(
   engagement_distribution_content_type(
@@ -201,6 +207,12 @@ ggplotly(
 ```
 
 ### Median Engagement by Content Type
+What this plot does:
+- Summarizes typical engagement per format and how tight or wide the middle performance range is.
+
+How to read it:
+- Bar height is median engagement; the error range shows the interquartile range (25th to 75th percentile).
+
 ```{r b2-engagement-summary-plot, fig.width=10, fig.height=8}
 ggplotly(
   engagement_summary_content_type_plot(
@@ -233,6 +245,12 @@ DTSettings(eng_summary_table, class = "display stripe hover", scroll_x = TRUE) %
 ## 2) Category Strengths and Weaknesses
 
 ### Content Priority Ranking (Composite Score)
+What this plot does:
+- Ranks content types for strategic prioritization using a combined score of views, revenue, and engagement.
+
+How to read it:
+- Higher bars indicate higher strategic priority; band labels indicate strength tier.
+
 ```{r b2-priority-rank, fig.width=10, fig.height=8}
 ggplotly(
   bundle_b_priority_rank_plot(
@@ -243,6 +261,12 @@ ggplotly(
 ```
 
 ### Content Opportunity Matrix
+What this plot does:
+- Places each content type on an engagement-to-revenue map with audience scale included.
+
+How to read it:
+- X-axis is median engagement, Y-axis is total revenue, and bubble size represents total views.
+
 ```{r b2-strength-matrix-plot, fig.width=11, fig.height=8}
 ggplotly(
   bundle_b_strength_matrix_plot(
@@ -253,6 +277,12 @@ ggplotly(
 ```
 
 ### Revenue Efficiency by Content Type
+What this plot does:
+- Compares monetization efficiency by format, normalized to views.
+
+How to read it:
+- Bar height is estimated revenue per 1,000 views; higher values indicate better revenue conversion per view.
+
 ```{r b2-revenue-efficiency, fig.width=10, fig.height=8}
 ggplotly(
   bundle_b_revenue_efficiency_plot(
@@ -282,6 +312,33 @@ DTSettings(strength_matrix_table, class = "display stripe hover", scroll_x = TRU
 ## 3) Content Attributes and Engagement
 
 ### Collaboration Lift vs Non-Collaborative
+
+In this section, **lift** means the relative difference between collaborative and non-collaborative content.
+
+What this plot does:
+- Estimates whether collaborative content outperforms or underperforms non-collaborative baseline on per-video views and per-video revenue.
+
+How to read it:
+- Bars above zero are positive lift (better than baseline); bars below zero are negative lift (worse than baseline).
+
+This plot estimates two lifts:
+
+`Views lift = (Avg views per collaborative video / Avg views per non-collaborative video) - 1`
+
+`Revenue lift = (Avg revenue per collaborative video / Avg revenue per non-collaborative video) - 1`
+
+How to interpret:
+
+- Positive lift: collaborative content performs better than non-collaborative baseline.
+- Negative lift: collaborative content performs worse than non-collaborative baseline.
+- `+0.25` means about `+25%` lift; `-0.10` means about `-10%` lift.
+
+Method notes:
+
+- This is a **descriptive estimate**, not a causal effect.
+- The baseline is the non-collaborative average in the same dataset.
+- Revenue and views can be based on different row counts, so read both metrics together.
+
 ```{r b2-collaboration-lift-plot, fig.width=10, fig.height=8}
 collab_summary <- collaboration_effectiveness_prep(analytics, monetary)
 
@@ -309,10 +366,23 @@ collab_table <- collab_summary %>%
 
 decimal_cols <- detect_decimals(collab_table)
 DTSettings(collab_table, class = "display stripe hover", scroll_x = TRUE) %>%
-  DT::formatRound(columns = decimal_cols, digits = 3)
+  DT::formatRound(
+    columns = setdiff(decimal_cols, c("AvgViewsLiftVsNonCollab", "AvgRevenueLiftVsNonCollab")),
+    digits = 3
+  ) %>%
+  DT::formatPercentage(
+    columns = c("AvgViewsLiftVsNonCollab", "AvgRevenueLiftVsNonCollab"),
+    digits = 1
+  )
 ```
 
 ### Topic View Distribution
+What this plot does:
+- Shows the distribution of per-video views within top topics, rather than only topic totals.
+
+How to read it:
+- Compare medians and spread across topics to distinguish stable performance from outlier-driven performance.
+
 ```{r b2-topic-view-distribution-plot, fig.width=12, fig.height=9}
 topic_view_dist <- topic_view_distribution_prep(
   analytics,
@@ -335,6 +405,12 @@ DTSettings(topic_view_dist$summary, class = "display stripe hover", scroll_x = T
 ```
 
 ### Tag View Distribution
+What this plot does:
+- Shows the distribution of per-video views within top tags for finer-grain content attributes.
+
+How to read it:
+- Compare medians, quartiles, and range across tags to see which tags are more consistently strong.
+
 ```{r b2-tag-view-distribution-plot, fig.width=12, fig.height=9}
 tag_view_dist <- tag_view_distribution_prep(
   analytics,
@@ -360,6 +436,12 @@ DTSettings(tag_view_dist$summary, class = "display stripe hover", scroll_x = TRU
 ## 4) Scheduling Effects
 
 ### Day-of-Week Lift
+What this plot does:
+- Estimates day-level upside/downside by comparing each weekday to the overall weekday baseline.
+
+How to read it:
+- Values above zero are above-baseline days; values below zero are below-baseline days for views and revenue lift.
+
 ```{r b2-dow-lift-plot, fig.width=10, fig.height=8}
 dow_summary <- day_of_week_performance_prep(analytics, monetary)
 
