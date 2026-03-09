@@ -196,12 +196,13 @@ bundle_b_content_position_distribution_plot <- function(position_data, talent) {
 
   metric_long %>%
     ggplot2::ggplot(ggplot2::aes(x = .data$Value)) +
-    ggplot2::geom_density(
+    ggplot2::geom_histogram(
+      ggplot2::aes(y = after_stat(count)),
+      bins = 35,
       fill = "grey82",
       color = "grey45",
       linewidth = 0.4,
-      alpha = 0.9,
-      adjust = 1.05
+      alpha = 0.9
     ) +
     ggplot2::geom_vline(
       data = summary_df,
@@ -212,13 +213,17 @@ bundle_b_content_position_distribution_plot <- function(position_data, talent) {
       show.legend = TRUE
     ) +
     ggplot2::facet_wrap(~Metric, scales = "free_x", ncol = 1) +
-    ggplot2::scale_x_continuous(labels = scales::label_number(big.mark = ",", accuracy = 1)) +
+    ggplot2::scale_x_continuous(
+      trans = scales::pseudo_log_trans(base = 10),
+      labels = scales::label_number(big.mark = ",", accuracy = 1)
+    ) +
+    ggplot2::scale_y_continuous(labels = scales::label_comma()) +
     theme_nyt() +
     ggplot2::labs(
       title = paste0(talent, " - Content Type Position in Full Distribution"),
-      subtitle = "Grey density = all videos. Vertical lines = each content type median within that full distribution.",
-      x = "Per-video value",
-      y = "Density",
+      subtitle = "Grey bars = count of videos in each value range. Vertical lines = content type medians.",
+      x = "Per-video value (pseudo-log x scale, raw units)",
+      y = "Video count",
       linetype = "Content type"
     )
 }

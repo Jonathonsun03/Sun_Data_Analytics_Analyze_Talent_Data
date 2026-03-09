@@ -240,9 +240,10 @@ What this plot does:
 - Overlays each content type's median as a vertical marker on that full distribution.
 
 How to read it:
-- Grey density shows where all videos are concentrated for that metric.
+- Grey bars show how many videos fall into each value range for that metric.
 - Each vertical line shows where a content type sits relative to the full population.
 - If a content type median sits further right, that format is typically stronger on that metric.
+- X-axis is pseudo-log scaled for readability, but values are shown in raw units.
 
 ```{r b2-priority-rank, fig.width=10, fig.height=10}
 content_position <- bundle_b_content_position_distribution_prep(
