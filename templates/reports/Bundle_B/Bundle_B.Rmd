@@ -64,17 +64,6 @@ source(file.path(clean_data_dir, "clean_columns.R"))
 source(file.path(clean_data_dir, "video_prep.R"))
 source(file.path(clean_data_dir, "title_classification_join.R"))
 
-if (!exists("DTSettings")) {
-  DTSettings <- function(df, class = NULL, scroll_x = FALSE, ...) {
-    DT::datatable(
-      df,
-      class = class,
-      options = list(scrollX = isTRUE(scroll_x)),
-      ...
-    )
-  }
-}
-
 root <- get_staging_root()
 ```
 
@@ -235,11 +224,12 @@ eng_summary_table <- eng_summary %>%
     Q75_Engagement = Q75
   )
 
-DTSettings(eng_summary_table, class = "display stripe hover", scroll_x = TRUE) %>%
-  DT::formatPercentage(
-    columns = c("Median_Engagement", "Mean_Engagement", "Q25_Engagement", "Q75_Engagement"),
-    digits = 1
-  )
+DTSettings(
+  eng_summary_table,
+  class = "display stripe hover",
+  scroll_x = TRUE,
+  percent_cols = c("Median_Engagement", "Mean_Engagement", "Q25_Engagement", "Q75_Engagement")
+)
 ```
 
 ## 2) Category Strengths and Weaknesses
@@ -280,12 +270,12 @@ priority_components <- content_position$summary %>%
     Performance_Band
   )
 
-DTSettings(priority_components, class = "display stripe hover", scroll_x = TRUE) %>%
-  DT::formatRound(
-    columns = c("VideoCount", "MedianValue", "Q25", "Q75"),
-    digits = 2
-  ) %>%
-  DT::formatPercentage(columns = c("MedianPercentile"), digits = 1)
+DTSettings(
+  priority_components,
+  class = "display stripe hover",
+  scroll_x = TRUE,
+  percent_cols = c("MedianPercentile")
+)
 ```
 
 ### Combined Opportunity Matrix (Content Types, Tags, and Title Labels)
@@ -334,12 +324,12 @@ attribute_opportunity_table <- attribute_opportunity %>%
     Performance_Band
   )
 
-DTSettings(attribute_opportunity_table, class = "display stripe hover", scroll_x = TRUE) %>%
-  DT::formatRound(
-    columns = c("VideoCount", "AvgViewsPerVideo", "AvgRevenuePerVideo", "TotalViews", "TotalRevenue", "Composite_Score"),
-    digits = 2
-  ) %>%
-  DT::formatPercentage(columns = c("MedianEngagement"), digits = 1)
+DTSettings(
+  attribute_opportunity_table,
+  class = "display stripe hover",
+  scroll_x = TRUE,
+  percent_cols = c("MedianEngagement")
+)
 ```
 
 ### Revenue Efficiency by Content Type
@@ -377,17 +367,17 @@ strength_matrix_table <- bundle_b_content_position_overall_summary(content_posit
     Performance_Band
   )
 
-DTSettings(strength_matrix_table, class = "display stripe hover", scroll_x = TRUE) %>%
-  DT::formatRound(columns = c("MetricsCovered"), digits = 0) %>%
-  DT::formatPercentage(
-    columns = c(
-      "ViewsMedianPercentile",
-      "RevenueMedianPercentile",
-      "EngagementMedianPercentile",
-      "AvgMedianPercentile"
-    ),
-    digits = 1
+DTSettings(
+  strength_matrix_table,
+  class = "display stripe hover",
+  scroll_x = TRUE,
+  percent_cols = c(
+    "ViewsMedianPercentile",
+    "RevenueMedianPercentile",
+    "EngagementMedianPercentile",
+    "AvgMedianPercentile"
   )
+)
 ```
 
 ## 3) Content Attributes and Engagement
@@ -445,16 +435,12 @@ collab_table <- collab_summary %>%
     AvgRevenueLiftVsNonCollab
   )
 
-decimal_cols <- detect_decimals(collab_table)
-DTSettings(collab_table, class = "display stripe hover", scroll_x = TRUE) %>%
-  DT::formatRound(
-    columns = setdiff(decimal_cols, c("AvgViewsLiftVsNonCollab", "AvgRevenueLiftVsNonCollab")),
-    digits = 3
-  ) %>%
-  DT::formatPercentage(
-    columns = c("AvgViewsLiftVsNonCollab", "AvgRevenueLiftVsNonCollab"),
-    digits = 1
-  )
+DTSettings(
+  collab_table,
+  class = "display stripe hover",
+  scroll_x = TRUE,
+  percent_cols = c("AvgViewsLiftVsNonCollab", "AvgRevenueLiftVsNonCollab")
+)
 ```
 
 ### Topic View Distribution
@@ -480,9 +466,7 @@ ggplotly(
 ```
 
 ```{r b2-topic-view-distribution-table}
-decimal_cols <- detect_decimals(topic_view_dist$summary)
-DTSettings(topic_view_dist$summary, class = "display stripe hover", scroll_x = TRUE) %>%
-  DT::formatRound(columns = decimal_cols, digits = 3)
+DTSettings(topic_view_dist$summary, class = "display stripe hover", scroll_x = TRUE)
 ```
 
 ### Tag View Distribution
@@ -509,9 +493,7 @@ ggplotly(
 ```
 
 ```{r b2-tag-view-distribution-table}
-decimal_cols <- detect_decimals(tag_view_dist$summary)
-DTSettings(tag_view_dist$summary, class = "display stripe hover", scroll_x = TRUE) %>%
-  DT::formatRound(columns = decimal_cols, digits = 3)
+DTSettings(tag_view_dist$summary, class = "display stripe hover", scroll_x = TRUE)
 ```
 
 ## 4) Scheduling Effects
@@ -535,17 +517,13 @@ ggplotly(
 ```
 
 ```{r b2-dow-table}
-decimal_cols <- detect_decimals(dow_summary)
-DTSettings(dow_summary, class = "display stripe hover", scroll_x = TRUE) %>%
-  DT::formatRound(columns = decimal_cols, digits = 3)
+DTSettings(dow_summary, class = "display stripe hover", scroll_x = TRUE)
 ```
 
 ### Weekend vs Weekday Summary
 ```{r b2-weekend-table}
 wk_summary <- weekend_vs_weekday_prep(analytics, monetary)
-decimal_cols <- detect_decimals(wk_summary)
-DTSettings(wk_summary, class = "display stripe hover", scroll_x = TRUE) %>%
-  DT::formatRound(columns = decimal_cols, digits = 3)
+DTSettings(wk_summary, class = "display stripe hover", scroll_x = TRUE)
 ```
 
 # Wrap-up: What this means

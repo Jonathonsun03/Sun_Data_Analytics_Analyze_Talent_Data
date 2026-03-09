@@ -239,14 +239,14 @@ audience_core_segment_stability_plot <- function(stability_df, talent, show_hhi 
     dplyr::transmute(
       .period = .data$.period,
       value = .data$top_share,
-      panel = paste0("Core audience share: ", top_seg)
+      series = paste0("Core audience share (", top_seg, ")")
     ) %>%
     dplyr::bind_rows(
       stability_df %>%
         dplyr::transmute(
           .period = .data$.period,
           value = pmax(0, 1 - .data$top_share),
-          panel = "Potential audience share: all other segments"
+          series = "Potential audience share (all other segments)"
         )
     )
 
@@ -257,23 +257,52 @@ audience_core_segment_stability_plot <- function(stability_df, talent, show_hhi 
           dplyr::transmute(
             .period = .data$.period,
             value = hhi_scaled,
-            panel = "Audience concentration index (HHI, scaled)"
+            series = "Audience concentration index (HHI, scaled)"
           )
       )
   }
 
+  color_map <- c(
+    setNames("#1f77b4", paste0("Core audience share (", top_seg, ")")),
+    "Potential audience share (all other segments)" = "#e15759",
+    "Audience concentration index (HHI, scaled)" = "#2f2f2f"
+  )
+
+  plot_df <- plot_df %>%
+    dplyr::arrange(.data$.period) %>%
+    dplyr::mutate(
+      series = factor(
+        .data$series,
+        levels = c(
+          paste0("Core audience share (", top_seg, ")"),
+          "Potential audience share (all other segments)",
+          "Audience concentration index (HHI, scaled)"
+        )
+      ),
+      text = paste0(
+        "Period: ", format(.data$.period, "%b %Y"),
+        "<br>Series: ", .data$series,
+        "<br>Value: ", scales::percent(.data$value, accuracy = 0.1)
+      )
+    )
+
   plot_df %>%
-    ggplot2::ggplot(ggplot2::aes(x = .data$.period, y = .data$value)) +
-    ggplot2::geom_line(linewidth = 0.9, color = "grey20") +
-    ggplot2::geom_point(size = 1.4, color = "grey30") +
-    ggplot2::facet_wrap(~panel, ncol = 1, scales = "free_y") +
+    ggplot2::ggplot(ggplot2::aes(x = .data$.period, y = .data$value, color = .data$series, group = .data$series, text = .data$text)) +
+    ggplot2::geom_line(linewidth = 1.0) +
+    ggplot2::geom_point(size = 1.8) +
     ggplot2::scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +
-    ggplot2::scale_y_continuous(labels = scales::label_percent(accuracy = 1)) +
+    ggplot2::scale_y_continuous(
+      limits = c(0, 1),
+      labels = scales::label_percent(accuracy = 1)
+    ) +
+    ggplot2::scale_color_manual(values = color_map) +
     theme_nyt() +
     ggplot2::labs(
       title = paste0(talent, " - Core vs Potential Audience Stability"),
       subtitle = bundle_a_date_range_subtitle(stability_df$.period),
       x = "Period",
-      y = "Audience share"
+      y = "Audience share",
+      color = NULL,
+      caption = "Potential audience share = 100% - core audience share."
     )
 }

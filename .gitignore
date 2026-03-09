@@ -14,7 +14,8 @@ __pycache__/
 # Script-generated report artifacts
 templates/reports/Bundle_*/plots/
 templates/reports/Bundle_*/tables/
-templates/reports/Bundle_*/Bundle_*_test.html
+templates/reports/Bundle_*/**/*.html
+reports/**/*.html
 
 # Script-generated classification exports/logs
 classification/output/*

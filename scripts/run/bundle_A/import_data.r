@@ -195,7 +195,10 @@ export_bundle_a_artifacts <- function(
 root <- get_staging_root()
 talent_root <- list.files(root, full.names = TRUE)
 
-Talent <- c("Avaritia")
+Talent <- trimws(Sys.getenv("TALENT_QUERY", unset = "Ava"))
+if (!nzchar(Talent)) {
+  Talent <- "Ava"
+}
 
 talent_root <- select_talent(Talent)
 files <- TalentFiles(talent_root)

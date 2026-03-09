@@ -252,8 +252,8 @@ bundle_b_content_position_overall_summary <- function(position_data) {
         TRUE ~ as.character(.data$Metric)
       )
     ) %>%
-    dplyr::select(.data$Content_Type, .data$MetricKey, .data$MedianPercentile) %>%
-    tidyr::pivot_wider(names_from = .data$MetricKey, values_from = .data$MedianPercentile)
+    dplyr::select(Content_Type, MetricKey, MedianPercentile) %>%
+    tidyr::pivot_wider(names_from = "MetricKey", values_from = "MedianPercentile")
 
   out <- summary_df %>%
     dplyr::group_by(.data$Content_Type) %>%

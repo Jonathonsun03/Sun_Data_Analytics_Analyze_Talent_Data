@@ -14,3 +14,14 @@ Time-series views and revenue visualizations; Engagement distributions by conten
 
 **Strategic Use:**
 Baseline performance assessment; Stakeholder updates; Early-stage strategy alignment
+
+## Rendering Bundle A
+
+- Single talent:
+  `Rscript scripts/run/bundle_A/render_bundle_A.R --talent Ava`
+- Batch (comma-separated):
+  `Rscript scripts/run/bundle_A/render_bundle_A.R --talents "Ava,Avaritia"`
+- Batch from file (one talent per line):
+  `Rscript scripts/run/bundle_A/render_bundle_A.R --talents-file notes/talent_list.txt`
+- Render all available talents:
+  `Rscript scripts/run/bundle_A/render_bundle_A.R --all`

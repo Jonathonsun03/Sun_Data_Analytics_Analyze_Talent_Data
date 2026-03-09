@@ -3,6 +3,8 @@ title: "BundleA"
 author: "Jonathon Sun"
 date: "`r Sys.Date()`"
 output: html_document
+params:
+  talent: "Ava"
 ---
 
 ```{r setup, include=FALSE}
@@ -71,24 +73,17 @@ source(file.path(clean_data_dir, "clean_columns.R"))
 source(file.path(clean_data_dir, "video_prep.R"))
 source(file.path(clean_data_dir, "title_classification_join.R"))
 
-if (!exists("DTSettings")) {
-  DTSettings <- function(df, class = NULL, scroll_x = FALSE, ...) {
-    DT::datatable(
-      df,
-      class = class,
-      options = list(scrollX = isTRUE(scroll_x)),
-      ...
-    )
-  }
-}
-
 root <- get_staging_root()
 ```
 
 ```{r load_data, include = FALSE}
 talent_root <- list.files(root, full.names = TRUE)
 
-Talent <- c("Ava")
+Talent <- as.character(params$talent)
+if (length(Talent) != 1 || is.na(Talent) || !nzchar(trimws(Talent))) {
+  stop("`params$talent` must be a single non-empty talent name.")
+}
+Talent <- trimws(Talent)
 
 talent_root <- select_talent(Talent)
 files <- TalentFiles(talent_root)
@@ -211,10 +206,7 @@ UIdf<- df %>%
   ) %>%
   mutate(across(any_of(factorCols), as.factor))
 
-decimal_cols <- detect_decimals(UIdf)
-
-DTSettings(UIdf) %>%
-  DT::formatRound(columns = decimal_cols)
+DTSettings(UIdf)
 ```
 
 # Trends Over Time
@@ -272,6 +264,7 @@ ggplotly(
 - If **Core** rises and **Potential** falls, your audience is becoming more concentrated in one segment.  
 - If **Core** falls and **Potential** rises, your audience is broadening across more segments.  
 - Stable lines suggest a steady audience mix month to month.
+- Both lines are on the same 0-100% scale so month-to-month comparisons are direct.
 
 **Why this view is easier:**  
 It turns a technical concentration metric into two plain-language shares that are easier to explain to non-technical readers.
@@ -286,7 +279,8 @@ ggplotly(
   audience_core_segment_stability_plot(
     stability_df = core_stability,
     talent = Talent
-  )
+  ),
+  tooltip = "text"
 )
 ```
 
@@ -295,14 +289,11 @@ ggplotly(
 
 Table <- revenue_stream_ratio_table(monetary)
 
-decimal_cols <- detect_decimals(Table)
-
 DTSettings(
   Table,
   class = "display stripe hover",
   scroll_x = TRUE
-) %>%
-  formatRound(columns = decimal_cols , digits = 2)
+)
 
 ```
 
@@ -326,9 +317,7 @@ ggplotly(
 ```
 
 ```{r weekend-vs-weekday-table}
-decimal_cols <- detect_decimals(wk_summary)
-DTSettings(wk_summary, class = "display stripe hover", scroll_x = TRUE) %>%
-  formatRound(columns = decimal_cols, digits = 3)
+DTSettings(wk_summary, class = "display stripe hover", scroll_x = TRUE)
 ```
 
 ## Timing Effects: Day-of-Week Distribution
@@ -348,9 +337,7 @@ ggplotly(
 ```
 
 ```{r day-of-week-table}
-decimal_cols <- detect_decimals(dow_summary)
-DTSettings(dow_summary, class = "display stripe hover", scroll_x = TRUE) %>%
-  formatRound(columns = decimal_cols, digits = 3)
+DTSettings(dow_summary, class = "display stripe hover", scroll_x = TRUE)
 ```
 
 ## Collaboration Effectiveness
@@ -383,9 +370,7 @@ collab_table <- collab_summary %>%
     AvgRevenueLiftVsNonCollab
   )
 
-decimal_cols <- detect_decimals(collab_table)
-DTSettings(collab_table, class = "display stripe hover", scroll_x = TRUE) %>%
-  formatRound(columns = decimal_cols, digits = 3)
+DTSettings(collab_table, class = "display stripe hover", scroll_x = TRUE)
 ```
 
 ## Topic Performance (Views + Revenue)
@@ -405,9 +390,7 @@ ggplotly(
 ```
 
 ```{r topic-table}
-decimal_cols <- detect_decimals(topic_summary)
-DTSettings(topic_summary, class = "display stripe hover", scroll_x = TRUE) %>%
-  formatRound(columns = decimal_cols, digits = 3)
+DTSettings(topic_summary, class = "display stripe hover", scroll_x = TRUE)
 ```
 
 ## Tag Performance (Top Tags by Views + Revenue)
@@ -446,9 +429,7 @@ ggplotly(
 ```
 
 ```{r tag-table}
-decimal_cols <- detect_decimals(tag_summary)
-DTSettings(tag_summary, class = "display stripe hover", scroll_x = TRUE) %>%
-  formatRound(columns = decimal_cols, digits = 3)
+DTSettings(tag_summary, class = "display stripe hover", scroll_x = TRUE)
 ```
 
 # Wrap-up: What this means
