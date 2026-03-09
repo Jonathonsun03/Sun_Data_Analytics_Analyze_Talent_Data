@@ -197,6 +197,10 @@ build_bundle_b_plot_set <- function(
     monetary = monetary,
     analytics_eng = analytics_eng
   )
+  content_position <- bundle_b_content_position_distribution_prep(
+    analytics_df = analytics,
+    monetary_df = monetary
+  )
   attribute_opportunity <- bundle_b_attribute_opportunity_prep(
     analytics_df = analytics,
     monetary_df = monetary
@@ -216,7 +220,7 @@ build_bundle_b_plot_set <- function(
       metric_label = "Average View %",
       y_as_percent = TRUE
     ),
-    p_priority_rank = bundle_b_priority_rank_plot(strength_matrix, talent),
+    p_priority_rank = bundle_b_content_position_distribution_plot(content_position, talent),
     p_opportunity_matrix = bundle_b_attribute_opportunity_matrix_plot(attribute_opportunity, talent),
     p_revenue_efficiency = bundle_b_revenue_efficiency_plot(strength_matrix, talent),
     p_collab_lift = bundle_b_collaboration_lift_plot(deep_dive$collab_summary, talent),
@@ -252,6 +256,11 @@ build_bundle_b_tables <- function(
       Q25_Engagement = Q25,
       Q75_Engagement = Q75
     )
+  content_position <- bundle_b_content_position_distribution_prep(
+    analytics_df = analytics,
+    monetary_df = monetary
+  )
+  content_position_overall <- bundle_b_content_position_overall_summary(content_position)
 
   list(
     dataset_sizes = tibble::tibble(
@@ -271,6 +280,8 @@ build_bundle_b_tables <- function(
       monetary = monetary,
       analytics_eng = analytics_eng
     ),
+    content_position = content_position$summary,
+    content_position_overall = content_position_overall,
     attribute_opportunity = bundle_b_attribute_opportunity_prep(
       analytics_df = analytics,
       monetary_df = monetary

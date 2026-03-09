@@ -244,52 +244,48 @@ DTSettings(eng_summary_table, class = "display stripe hover", scroll_x = TRUE) %
 
 ## 2) Category Strengths and Weaknesses
 
-### Content Priority Ranking (Composite Score)
+### Content-Type Position in Full Distribution
 What this plot does:
-- Ranks content types for strategic prioritization using a combined score of views, revenue, and engagement.
+- Shows the full per-video distribution for views, revenue, and engagement.
+- Overlays each content type's median as a vertical marker on that full distribution.
 
 How to read it:
-- Higher bars indicate higher strategic priority; band labels indicate strength tier.
+- Grey density shows where all videos are concentrated for that metric.
+- Each vertical line shows where a content type sits relative to the full population.
+- If a content type median sits further right, that format is typically stronger on that metric.
 
-How the score is calculated:
-- `Views_Z = zscore(Total_Views)`
-- `Revenue_Z = zscore(Total_Revenue)`
-- `Engagement_Z = zscore(Median_Engagement)`
-- `Composite_Score = mean(Views_Z, Revenue_Z, Engagement_Z)`
+```{r b2-priority-rank, fig.width=10, fig.height=10}
+content_position <- bundle_b_content_position_distribution_prep(
+  analytics_df = analytics,
+  monetary_df = monetary
+)
 
-`zscore(x)` is computed across content types in this report as `(x - mean(x)) / sd(x)`.
-
-```{r b2-priority-rank, fig.width=10, fig.height=8}
-ggplotly(
-  bundle_b_priority_rank_plot(
-    strength_matrix,
-    Talent
-  )
+bundle_b_content_position_distribution_plot(
+  content_position,
+  Talent
 )
 ```
 
 ```{r b2-priority-components-table}
-priority_components <- strength_matrix %>%
-  mutate(Priority_Rank = row_number(desc(Composite_Score))) %>%
+priority_components <- content_position$summary %>%
+  arrange(Metric, desc(MedianPercentile), Content_Type) %>%
   select(
-    Priority_Rank,
+    Metric,
     Content_Type,
-    Total_Views,
-    Total_Revenue,
-    Median_Engagement,
-    Views_Z,
-    Revenue_Z,
-    Engagement_Z,
-    Composite_Score,
+    VideoCount,
+    MedianValue,
+    Q25,
+    Q75,
+    MedianPercentile,
     Performance_Band
   )
 
 DTSettings(priority_components, class = "display stripe hover", scroll_x = TRUE) %>%
   DT::formatRound(
-    columns = c("Total_Views", "Total_Revenue", "Views_Z", "Revenue_Z", "Engagement_Z", "Composite_Score"),
+    columns = c("VideoCount", "MedianValue", "Q25", "Q75"),
     digits = 2
   ) %>%
-  DT::formatPercentage(columns = c("Median_Engagement"), digits = 1)
+  DT::formatPercentage(columns = c("MedianPercentile"), digits = 1)
 ```
 
 ### Combined Opportunity Matrix (Content Types, Tags, and Title Labels)
@@ -362,21 +358,36 @@ ggplotly(
 )
 ```
 
-### Strength/Weakness Matrix by Content Type
+### Distribution-Based Strength/Weakness Summary by Content Type
+What this table does:
+- Summarizes where each content type lands in the full-video distribution by metric percentile.
+
+How to read it:
+- Higher percentiles mean the content type median is stronger relative to the full distribution.
+
 ```{r b2-strength-matrix-table}
-strength_matrix_table <- strength_matrix %>%
+strength_matrix_table <- bundle_b_content_position_overall_summary(content_position) %>%
   select(
     Content_Type,
-    Total_Views,
-    Total_Revenue,
-    Median_Engagement,
-    Composite_Score,
+    MetricsCovered,
+    ViewsMedianPercentile,
+    RevenueMedianPercentile,
+    EngagementMedianPercentile,
+    AvgMedianPercentile,
     Performance_Band
   )
 
 DTSettings(strength_matrix_table, class = "display stripe hover", scroll_x = TRUE) %>%
-  DT::formatRound(columns = c("Total_Views", "Total_Revenue", "Composite_Score"), digits = 2) %>%
-  DT::formatPercentage(columns = c("Median_Engagement"), digits = 1)
+  DT::formatRound(columns = c("MetricsCovered"), digits = 0) %>%
+  DT::formatPercentage(
+    columns = c(
+      "ViewsMedianPercentile",
+      "RevenueMedianPercentile",
+      "EngagementMedianPercentile",
+      "AvgMedianPercentile"
+    ),
+    digits = 1
+  )
 ```
 
 ## 3) Content Attributes and Engagement

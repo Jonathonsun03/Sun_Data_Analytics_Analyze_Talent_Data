@@ -222,26 +222,48 @@ audience_core_segment_stability_prep <- function(
     dplyr::arrange(.data$.period)
 }
 
-audience_core_segment_stability_plot <- function(stability_df, talent) {
+audience_core_segment_stability_plot <- function(stability_df, talent, show_hhi = FALSE) {
   if (!all(c(".period", "top_segment", "top_share", "hhi") %in% names(stability_df))) {
     stop("stability_df must contain: .period, top_segment, top_share, hhi")
   }
 
   top_seg <- unique(stability_df$top_segment)[1]
+  max_hhi <- suppressWarnings(max(stability_df$hhi, na.rm = TRUE))
+  hhi_scaled <- if (is.finite(max_hhi) && max_hhi > 0) {
+    stability_df$hhi / max_hhi
+  } else {
+    rep(NA_real_, nrow(stability_df))
+  }
 
-  stability_df %>%
-    dplyr::mutate(
-      hhi_scaled = .data$hhi / max(.data$hhi, na.rm = TRUE),
-      panel = "Audience concentration (HHI, scaled)"
+  plot_df <- stability_df %>%
+    dplyr::transmute(
+      .period = .data$.period,
+      value = .data$top_share,
+      panel = paste0("Core audience share: ", top_seg)
     ) %>%
     dplyr::bind_rows(
       stability_df %>%
-        dplyr::mutate(
-          hhi_scaled = .data$top_share,
-          panel = paste0("Top segment share: ", top_seg)
+        dplyr::transmute(
+          .period = .data$.period,
+          value = pmax(0, 1 - .data$top_share),
+          panel = "Potential audience share: all other segments"
         )
-    ) %>%
-    ggplot2::ggplot(ggplot2::aes(x = .data$.period, y = .data$hhi_scaled)) +
+    )
+
+  if (isTRUE(show_hhi)) {
+    plot_df <- plot_df %>%
+      dplyr::bind_rows(
+        stability_df %>%
+          dplyr::transmute(
+            .period = .data$.period,
+            value = hhi_scaled,
+            panel = "Audience concentration index (HHI, scaled)"
+          )
+      )
+  }
+
+  plot_df %>%
+    ggplot2::ggplot(ggplot2::aes(x = .data$.period, y = .data$value)) +
     ggplot2::geom_line(linewidth = 0.9, color = "grey20") +
     ggplot2::geom_point(size = 1.4, color = "grey30") +
     ggplot2::facet_wrap(~panel, ncol = 1, scales = "free_y") +
@@ -249,9 +271,9 @@ audience_core_segment_stability_plot <- function(stability_df, talent) {
     ggplot2::scale_y_continuous(labels = scales::label_percent(accuracy = 1)) +
     theme_nyt() +
     ggplot2::labs(
-      title = paste0(talent, " - Core Audience Stability"),
+      title = paste0(talent, " - Core vs Potential Audience Stability"),
       subtitle = bundle_a_date_range_subtitle(stability_df$.period),
       x = "Period",
-      y = "Share / Scaled index"
+      y = "Audience share"
     )
 }

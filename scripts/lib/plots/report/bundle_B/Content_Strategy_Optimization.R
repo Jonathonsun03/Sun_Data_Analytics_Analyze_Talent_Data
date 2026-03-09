@@ -31,6 +31,261 @@ bundle_b_priority_rank_plot <- function(strength_df, talent) {
     )
 }
 
+bundle_b_content_position_distribution_prep <- function(
+  analytics_df,
+  monetary_df,
+  id_col = "Video ID",
+  content_col = "Content Type",
+  views_col = "views",
+  engagement_col = "averageViewPercentage",
+  revenue_col = "Estimated Revenue"
+) {
+  required_analytics <- c(id_col, views_col, engagement_col)
+  if (!all(required_analytics %in% names(analytics_df))) {
+    stop("analytics_df must include: ", paste(required_analytics, collapse = ", "))
+  }
+  if (!id_col %in% names(monetary_df) || !revenue_col %in% names(monetary_df)) {
+    stop("monetary_df must include: ", id_col, ", ", revenue_col)
+  }
+
+  safe_median <- function(x) {
+    x_num <- suppressWarnings(as.numeric(x))
+    x_num <- x_num[is.finite(x_num)]
+    if (length(x_num) == 0) return(NA_real_)
+    stats::median(x_num, na.rm = TRUE)
+  }
+
+  analytics_video <- analytics_df %>%
+    dplyr::transmute(
+      .video_id = as.character(.data[[id_col]]),
+      .content = if (content_col %in% names(analytics_df)) as.character(.data[[content_col]]) else NA_character_,
+      .views = suppressWarnings(as.numeric(.data[[views_col]])),
+      .eng_pct = suppressWarnings(as.numeric(.data[[engagement_col]]))
+    ) %>%
+    dplyr::filter(!is.na(.data$.video_id), nzchar(.data$.video_id)) %>%
+    dplyr::mutate(
+      .content = trimws(.data$.content),
+      .content = dplyr::if_else(is.na(.data$.content) | !nzchar(.data$.content), "(unclassified)", .data$.content)
+    ) %>%
+    dplyr::group_by(.data$.video_id) %>%
+    dplyr::summarize(
+      Content_Type = dplyr::first(.data$.content),
+      Views = safe_median(.data$.views),
+      EngagementPct = safe_median(.data$.eng_pct),
+      .groups = "drop"
+    )
+
+  revenue_by_video <- monetary_df %>%
+    dplyr::transmute(
+      .video_id = as.character(.data[[id_col]]),
+      .revenue = suppressWarnings(as.numeric(.data[[revenue_col]]))
+    ) %>%
+    dplyr::filter(!is.na(.data$.video_id), nzchar(.data$.video_id)) %>%
+    dplyr::group_by(.data$.video_id) %>%
+    dplyr::summarize(Revenue = sum(.data$.revenue, na.rm = TRUE), .groups = "drop")
+
+  video_df <- analytics_video %>%
+    dplyr::left_join(revenue_by_video, by = ".video_id") %>%
+    dplyr::mutate(Revenue = tidyr::replace_na(.data$Revenue, 0))
+
+  metric_levels <- c("Views per video", "Revenue per video ($)", "Engagement rate (%)")
+  metric_long <- dplyr::bind_rows(
+    video_df %>%
+      dplyr::transmute(Content_Type = .data$Content_Type, Metric = metric_levels[[1]], Value = .data$Views),
+    video_df %>%
+      dplyr::transmute(Content_Type = .data$Content_Type, Metric = metric_levels[[2]], Value = .data$Revenue),
+    video_df %>%
+      dplyr::transmute(Content_Type = .data$Content_Type, Metric = metric_levels[[3]], Value = .data$EngagementPct)
+  ) %>%
+    dplyr::filter(is.finite(.data$Value)) %>%
+    dplyr::filter(
+      !(.data$Metric %in% metric_levels[1:2] & .data$Value <= 0)
+    ) %>%
+    dplyr::mutate(Metric = factor(.data$Metric, levels = metric_levels, ordered = TRUE))
+
+  if (nrow(metric_long) == 0) {
+    empty_summary <- tibble::tibble(
+      Metric = factor(character(), levels = metric_levels, ordered = TRUE),
+      Content_Type = character(),
+      VideoCount = integer(),
+      MedianValue = numeric(),
+      MeanValue = numeric(),
+      Q25 = numeric(),
+      Q75 = numeric(),
+      MedianPercentile = numeric(),
+      Performance_Band = character()
+    )
+    return(list(metric_long = metric_long, summary = empty_summary))
+  }
+
+  summary_df <- metric_long %>%
+    dplyr::group_by(.data$Metric, .data$Content_Type) %>%
+    dplyr::summarize(
+      VideoCount = dplyr::n(),
+      MedianValue = stats::median(.data$Value, na.rm = TRUE),
+      MeanValue = mean(.data$Value, na.rm = TRUE),
+      Q25 = stats::quantile(.data$Value, probs = 0.25, na.rm = TRUE, names = FALSE),
+      Q75 = stats::quantile(.data$Value, probs = 0.75, na.rm = TRUE, names = FALSE),
+      .groups = "drop"
+    ) %>%
+    dplyr::left_join(
+      metric_long %>%
+        dplyr::group_by(.data$Metric) %>%
+        dplyr::summarize(.metric_values = list(.data$Value), .groups = "drop"),
+      by = "Metric"
+    ) %>%
+    dplyr::mutate(
+      MedianPercentile = purrr::map2_dbl(
+        .data$.metric_values,
+        .data$MedianValue,
+        ~ {
+          if (length(.x) == 0 || !is.finite(.y)) return(NA_real_)
+          as.numeric(stats::ecdf(.x)(.y))
+        }
+      )
+    ) %>%
+    dplyr::select(-dplyr::all_of(".metric_values")) %>%
+    dplyr::group_by(.data$Metric) %>%
+    dplyr::mutate(
+      .n_content = dplyr::n_distinct(.data$Content_Type),
+      .high_cut = stats::quantile(.data$MedianPercentile, probs = 0.67, na.rm = TRUE, names = FALSE),
+      .low_cut = stats::quantile(.data$MedianPercentile, probs = 0.33, na.rm = TRUE, names = FALSE),
+      Performance_Band = dplyr::case_when(
+        .data$.n_content < 3 ~ "Middle",
+        .data$MedianPercentile >= .data$.high_cut ~ "Strength",
+        .data$MedianPercentile <= .data$.low_cut ~ "Weakness / Improve",
+        TRUE ~ "Middle"
+      )
+    ) %>%
+    dplyr::ungroup() %>%
+    dplyr::select(-dplyr::any_of(c(".n_content", ".high_cut", ".low_cut"))) %>%
+    dplyr::arrange(.data$Metric, dplyr::desc(.data$MedianPercentile), .data$Content_Type)
+
+  list(
+    metric_long = metric_long,
+    summary = summary_df
+  )
+}
+
+bundle_b_content_position_distribution_plot <- function(position_data, talent) {
+  if (!is.list(position_data) || !all(c("metric_long", "summary") %in% names(position_data))) {
+    stop("position_data must be the output of bundle_b_content_position_distribution_prep().")
+  }
+
+  metric_long <- position_data$metric_long
+  summary_df <- position_data$summary
+
+  if (nrow(metric_long) == 0 || nrow(summary_df) == 0) {
+    return(
+      ggplot2::ggplot() +
+        ggplot2::annotate("text", x = 1, y = 1, label = "No content distribution data available.") +
+        ggplot2::xlim(0.5, 1.5) +
+        ggplot2::ylim(0.5, 1.5) +
+        ggplot2::theme_void() +
+        ggplot2::labs(title = paste0(talent, " - Content Position in Overall Distribution"))
+    )
+  }
+
+  summary_df <- summary_df %>%
+    dplyr::mutate(
+      Content_Type = factor(
+        .data$Content_Type,
+        levels = unique(.data$Content_Type[order(.data$Metric, dplyr::desc(.data$MedianPercentile))])
+      )
+    )
+
+  metric_long %>%
+    ggplot2::ggplot(ggplot2::aes(x = .data$Value)) +
+    ggplot2::geom_density(
+      fill = "grey82",
+      color = "grey45",
+      linewidth = 0.4,
+      alpha = 0.9,
+      adjust = 1.05
+    ) +
+    ggplot2::geom_vline(
+      data = summary_df,
+      ggplot2::aes(xintercept = .data$MedianValue, linetype = .data$Content_Type),
+      linewidth = 0.6,
+      color = "grey20",
+      alpha = 0.9,
+      show.legend = TRUE
+    ) +
+    ggplot2::facet_wrap(~Metric, scales = "free_x", ncol = 1) +
+    ggplot2::scale_x_continuous(labels = scales::label_number(big.mark = ",", accuracy = 1)) +
+    theme_nyt() +
+    ggplot2::labs(
+      title = paste0(talent, " - Content Type Position in Full Distribution"),
+      subtitle = "Grey density = all videos. Vertical lines = each content type median within that full distribution.",
+      x = "Per-video value",
+      y = "Density",
+      linetype = "Content type"
+    )
+}
+
+bundle_b_content_position_overall_summary <- function(position_data) {
+  if (!is.list(position_data) || !"summary" %in% names(position_data)) {
+    stop("position_data must be the output of bundle_b_content_position_distribution_prep().")
+  }
+
+  summary_df <- position_data$summary
+  if (nrow(summary_df) == 0) {
+    return(
+      tibble::tibble(
+        Content_Type = character(),
+        MetricsCovered = integer(),
+        ViewsMedianPercentile = numeric(),
+        RevenueMedianPercentile = numeric(),
+        EngagementMedianPercentile = numeric(),
+        AvgMedianPercentile = numeric(),
+        Performance_Band = character()
+      )
+    )
+  }
+
+  metric_wide <- summary_df %>%
+    dplyr::mutate(
+      MetricKey = dplyr::case_when(
+        .data$Metric == "Views per video" ~ "ViewsMedianPercentile",
+        .data$Metric == "Revenue per video ($)" ~ "RevenueMedianPercentile",
+        .data$Metric == "Engagement rate (%)" ~ "EngagementMedianPercentile",
+        TRUE ~ as.character(.data$Metric)
+      )
+    ) %>%
+    dplyr::select(.data$Content_Type, .data$MetricKey, .data$MedianPercentile) %>%
+    tidyr::pivot_wider(names_from = .data$MetricKey, values_from = .data$MedianPercentile)
+
+  out <- summary_df %>%
+    dplyr::group_by(.data$Content_Type) %>%
+    dplyr::summarize(
+      MetricsCovered = dplyr::n_distinct(.data$Metric),
+      AvgMedianPercentile = mean(.data$MedianPercentile, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    dplyr::left_join(metric_wide, by = "Content_Type")
+
+  if (nrow(out) < 3) {
+    return(
+      out %>%
+        dplyr::mutate(Performance_Band = "Middle") %>%
+        dplyr::arrange(dplyr::desc(.data$AvgMedianPercentile))
+    )
+  }
+
+  high_cut <- stats::quantile(out$AvgMedianPercentile, probs = 0.67, na.rm = TRUE, names = FALSE)
+  low_cut <- stats::quantile(out$AvgMedianPercentile, probs = 0.33, na.rm = TRUE, names = FALSE)
+
+  out %>%
+    dplyr::mutate(
+      Performance_Band = dplyr::case_when(
+        .data$AvgMedianPercentile >= high_cut ~ "Strength",
+        .data$AvgMedianPercentile <= low_cut ~ "Weakness / Improve",
+        TRUE ~ "Middle"
+      )
+    ) %>%
+    dplyr::arrange(dplyr::desc(.data$AvgMedianPercentile))
+}
+
 bundle_b_strength_matrix_plot <- function(strength_df, talent) {
   required_cols <- c(
     "Content_Type",
