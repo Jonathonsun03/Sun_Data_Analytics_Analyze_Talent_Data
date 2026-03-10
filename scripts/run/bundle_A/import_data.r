@@ -4,6 +4,7 @@ library(here)
 library(purrr)
 
 source("scripts/lib/utils/staging_root.R")
+source("scripts/lib/utils/datalake_root.r")
 
 list.files(here("scripts","lib","plots","report","bundle_A"), full.names = TRUE) %>%
     walk(source)
@@ -34,7 +35,7 @@ build_bundle_a_preps <- function(
   titles,
   talent,
   dedupe = TRUE,
-  dedupe_sets = c("analytics", "monetary", "demo"),
+  dedupe_sets = c("analytics", "monetary"),
   key_cols = "Video ID",
   sort_cols = c("confidence", "published_at", "Published At")
 ) {
@@ -119,10 +120,6 @@ build_bundle_a_plot_set <- function(
       y_as_percent = TRUE
     ),
     p_audience_trends = audience_age_gender_trends(demo, talent),
-    p_audience_stability = audience_core_segment_stability_plot(
-      audience_core_segment_stability_prep(demo),
-      talent
-    ),
     p_weekend = weekend_vs_weekday_plot(deep_dive$weekend_summary, talent),
     p_day_of_week = day_of_week_performance_plot(deep_dive$day_of_week_summary, talent, as_share = TRUE),
     p_collab = collaboration_effectiveness_plot(deep_dive$collab_summary, talent),
@@ -192,15 +189,28 @@ export_bundle_a_artifacts <- function(
   invisible(list(plots_dir = plots_dir, tables_dir = tables_dir))
 }
 
-root <- get_staging_root()
-talent_root <- list.files(root, full.names = TRUE)
+data_source <- tolower(trimws(Sys.getenv("TALENT_DATA_SOURCE", unset = "staging")))
+if (!(data_source %in% c("staging", "datalake"))) {
+  stop("TALENT_DATA_SOURCE must be one of: staging, datalake.")
+}
+data_root_override <- trimws(Sys.getenv("TALENT_DATA_ROOT", unset = ""))
+root <- if (nzchar(data_root_override)) {
+  data_root_override
+} else if (identical(data_source, "datalake")) {
+  get_datalake_root()
+} else {
+  get_staging_root()
+}
+if (!dir.exists(root)) {
+  stop("Resolved data root does not exist: ", root)
+}
 
 Talent <- trimws(Sys.getenv("TALENT_QUERY", unset = "Ava"))
 if (!nzchar(Talent)) {
   Talent <- "Ava"
 }
 
-talent_root <- select_talent(Talent)
+talent_root <- select_talent(Talent, root = root)
 files <- TalentFiles(talent_root)
 
 titles <- load_bundle_a_titles(Talent)

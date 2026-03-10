@@ -86,7 +86,18 @@ prepare_analytics <- function(files,
         "DurationISO"
       ))
     ) %>%
+    dplyr::mutate(
+      .snapshot_date = suppressWarnings(as.Date(.data$date)),
+      .published_at_sort = suppressWarnings(as.POSIXct(.data$`Published At`, tz = "UTC"))
+    ) %>%
+    dplyr::arrange(
+      dplyr::desc(.data$.snapshot_date),
+      dplyr::desc(.data$.published_at_sort)
+    ) %>%
     dplyr::distinct(`Video ID`, `Channel ID`, `Channel Name`, .keep_all = TRUE)
+  
+  analytics_clean <- analytics_clean %>%
+    dplyr::select(-dplyr::any_of(c(".snapshot_date", ".published_at_sort")))
   
   # 3) Return cleaned analytics (stream titles not available yet)
   analytics_clean

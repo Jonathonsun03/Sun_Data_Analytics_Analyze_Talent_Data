@@ -4,9 +4,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
-DEFAULT_RENDER_SCRIPT="scripts/run/bundle_A/render_bundle_A.R"
-DEFAULT_BUNDLE_NAME="bundle_A"
-DEFAULT_OUTPUT_PREFIX="Bundle_A"
+DEFAULT_RENDER_SCRIPT="scripts/run/bundle_B/render_bundle_B.R"
+DEFAULT_BUNDLE_NAME="bundle_B"
+DEFAULT_OUTPUT_PREFIX="Bundle_B"
 DEFAULT_REPORT_SUBDIR="reports"
 
 RSCRIPT_BIN="${RSCRIPT_BIN:-Rscript}"
@@ -36,15 +36,15 @@ declare -a EXTRA_RENDER_ARGS=()
 usage() {
   cat <<'USAGE'
 Usage:
-  bin/linux/render_reports/run_bundle_A_report.sh [options] [-- extra render args]
+  bin/linux/render_reports/run_bundle_B_report.sh [options] [-- extra render args]
 
 Description:
-  Linux wrapper for Bundle A rendering that writes each report to a datalake path:
+  Linux wrapper for Bundle B rendering that writes each report to a datalake path:
     <datalake_root>/<talent>/<report_subdir>/<bundle_name>/
-  and names files with window segment in prefix (for example: Bundle_A_window_90d_ava.html).
+  and names files with window segment in prefix (for example: Bundle_B_window_90d_ava.html).
 
   It calls:
-    scripts/run/bundle_A/render_bundle_A.R
+    scripts/run/bundle_B/render_bundle_B.R
 
 Required:
   At least one talent selector OR --all (defaults to Ava if none supplied).
@@ -65,13 +65,13 @@ Analysis window:
 Output routing:
   --datalake-root PATH         Override TALENT_DATALAKE_ROOT
   --report-subdir NAME         Default: reports
-  --bundle-name NAME           Default: bundle_A
-  --output-prefix NAME         Default: Bundle_A
+  --bundle-name NAME           Default: bundle_B
+  --output-prefix NAME         Default: Bundle_B
 
 Render behavior:
   --input-source NAME          Data source for report input: staging|datalake (default: datalake)
   --input-root PATH            Explicit report input root override (talent folders root)
-  --render-script PATH         Override render script path (default: scripts/run/bundle_A/render_bundle_A.R)
+  --render-script PATH         Override render script path (default: scripts/run/bundle_B/render_bundle_B.R)
   --input PATH                 Optional input Rmd override passed to render script
   --rscript-bin PATH           Rscript binary (default: Rscript)
   --staging-root PATH          Override TALENT_STAGING_ROOT (used for --all and render)
@@ -79,17 +79,17 @@ Render behavior:
   --dry-run                    Print commands without running
 
 Pass-through:
-  --                           Everything after -- is passed to render_bundle_A.R as-is
+  --                           Everything after -- is passed to render_bundle_B.R as-is
 
 Examples:
   Single talent, 90d window:
-    bin/linux/render_reports/run_bundle_A_report.sh --talent Ava --window-days 90
+    bin/linux/render_reports/run_bundle_B_report.sh --talent Ava --window-days 90
 
   Batch from file:
-    bin/linux/render_reports/run_bundle_A_report.sh --talents-file notes/talent_list.txt --window-days 30
+    bin/linux/render_reports/run_bundle_B_report.sh --talents-file notes/talent_list.txt --window-days 30
 
   All talents, custom roots:
-    bin/linux/render_reports/run_bundle_A_report.sh \
+    bin/linux/render_reports/run_bundle_B_report.sh \
       --all \
       --staging-root /mnt/staging/staging/Talent_data \
       --datalake-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data \

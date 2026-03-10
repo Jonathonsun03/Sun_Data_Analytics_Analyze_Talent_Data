@@ -98,8 +98,8 @@ engagement_distribution_content_type_plot <- function(
     guides(fill = "none") +
     theme_nyt() +
     ggplot2::labs(
-      title = paste0(talent, " - ", metric_label, " Distribution by Content Type"),
-      subtitle = paste0("Each point is a video. Box = median and IQR."),
+      title = bundle_a_wrap_text(paste0(metric_label, " Distribution by Content Type"), width = 58),
+      subtitle = bundle_a_talent_subtitle(talent, "Each point is a video. Box = median and IQR."),
       x = "Content type",
       y = metric_label
     )
@@ -233,8 +233,11 @@ engagement_summary_content_type_plot <- function(
     ggplot2::guides(fill = "none") +
     theme_nyt() +
     ggplot2::labs(
-      title = paste0(talent, " - Median ", metric_label, " by Content Type"),
-      subtitle = "Error bars show interquartile range (25th to 75th percentile).",
+      title = bundle_a_wrap_text(paste0("Median ", metric_label, " by Content Type"), width = 58),
+      subtitle = bundle_a_talent_subtitle(
+        talent,
+        "Error bars show interquartile range (25th to 75th percentile)."
+      ),
       x = "Content type",
       y = paste0("Median ", metric_label)
     )

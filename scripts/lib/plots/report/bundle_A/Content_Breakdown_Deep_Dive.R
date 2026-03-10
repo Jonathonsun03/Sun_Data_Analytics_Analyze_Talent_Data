@@ -153,8 +153,8 @@ bundle_a_dual_metric_plot <- function(
     ggplot2::scale_y_continuous(labels = y_scale) +
     theme_nyt() +
     ggplot2::labs(
-      title = paste0(talent, " - ", title),
-      subtitle = subtitle,
+      title = bundle_a_wrap_text(title, width = 58),
+      subtitle = bundle_a_talent_subtitle(talent, subtitle),
       x = "",
       y = y_lab
     )
@@ -343,7 +343,10 @@ weekend_vs_weekday_distribution_plot <- function(wk_dist, talent) {
         ggplot2::xlim(0.5, 1.5) +
         ggplot2::ylim(0.5, 1.5) +
         ggplot2::theme_void() +
-        ggplot2::labs(title = paste0(talent, " - Weekend vs Weekday Distribution"))
+        ggplot2::labs(
+          title = bundle_a_wrap_text("Weekend vs Weekday Distribution", width = 58),
+          subtitle = bundle_a_talent_subtitle(talent)
+        )
     )
   }
 
@@ -372,8 +375,11 @@ weekend_vs_weekday_distribution_plot <- function(wk_dist, talent) {
     ggplot2::scale_y_continuous(labels = scales::label_comma()) +
     theme_nyt() +
     ggplot2::labs(
-      title = paste0(talent, " - Weekend vs Weekday Distribution"),
-      subtitle = "Each point is a video. Box = IQR, line = median, white point = mean.",
+      title = bundle_a_wrap_text("Weekend vs Weekday Distribution", width = 58),
+      subtitle = bundle_a_talent_subtitle(
+        talent,
+        "Each point is a video. Box = IQR, line = median, white point = mean."
+      ),
       x = "",
       y = "Per-video value"
     )
@@ -435,12 +441,22 @@ collaboration_effectiveness_prep <- function(
   revenue_col = "Estimated Revenue"
 ) {
   derive_collab <- function(df) {
-    if (collab_col %in% names(df) && is.logical(df[[collab_col]])) {
-      return(df[[collab_col]])
+    if (collab_col %in% names(df)) {
+      raw_col <- df[[collab_col]]
+      if (is.logical(raw_col)) {
+        return(tidyr::replace_na(raw_col, FALSE))
+      }
+      if (is.numeric(raw_col) || is.integer(raw_col)) {
+        return(!is.na(raw_col) & raw_col != 0)
+      }
+      if (is.character(raw_col) || is.factor(raw_col)) {
+        txt <- tolower(trimws(as.character(raw_col)))
+        return(txt %in% c("true", "t", "1", "yes", "y", "collab", "collaborative"))
+      }
     }
     if (tags_col %in% names(df)) {
       tags <- tolower(as.character(df[[tags_col]]))
-      return(grepl("collab|collaboration|duo|guest", tags))
+      return(grepl("collab|collaboration|duo|guest", tags) & !is.na(tags))
     }
     rep(FALSE, nrow(df))
   }
@@ -710,8 +726,11 @@ topic_view_distribution_plot <- function(topic_dist, talent) {
         ggplot2::ylim(0.5, 1.5) +
         ggplot2::theme_void() +
         ggplot2::labs(
-          title = paste0(talent, " - Topic View Distribution"),
-          subtitle = "Top topics by average views per video."
+          title = bundle_a_wrap_text("Topic View Distribution", width = 58),
+          subtitle = bundle_a_talent_subtitle(
+            talent,
+            "Top topics by average views per video."
+          )
         )
     )
   }
@@ -757,8 +776,11 @@ topic_view_distribution_plot <- function(topic_dist, talent) {
     ggplot2::scale_y_continuous(labels = scales::label_comma()) +
     theme_nyt() +
     ggplot2::labs(
-      title = paste0(talent, " - Topic View Distribution"),
-      subtitle = "Top topics ranked by average views per video (box = IQR, line = median, point = mean).",
+      title = bundle_a_wrap_text("Topic View Distribution", width = 58),
+      subtitle = bundle_a_talent_subtitle(
+        talent,
+        "Top topics ranked by average views per video (box = IQR, line = median, point = mean)."
+      ),
       x = "",
       y = "Views per video"
     )
@@ -899,8 +921,11 @@ tag_average_views_plot <- function(summary_df, talent) {
     ggplot2::scale_y_continuous(labels = scales::label_comma()) +
     theme_nyt() +
     ggplot2::labs(
-      title = paste0(talent, " - Average Views per Tag"),
-      subtitle = "Average views per video where each tag appears at least once.",
+      title = bundle_a_wrap_text("Average Views per Tag", width = 58),
+      subtitle = bundle_a_talent_subtitle(
+        talent,
+        "Average views per video where each tag appears at least once."
+      ),
       x = "",
       y = "Average views per tagged video"
     )
@@ -1038,8 +1063,11 @@ tag_view_distribution_plot <- function(tag_dist, talent) {
         ggplot2::ylim(0.5, 1.5) +
         ggplot2::theme_void() +
         ggplot2::labs(
-          title = paste0(talent, " - Tag View Distribution"),
-          subtitle = "Top tags by average views per video."
+          title = bundle_a_wrap_text("Tag View Distribution", width = 58),
+          subtitle = bundle_a_talent_subtitle(
+            talent,
+            "Top tags by average views per video."
+          )
         )
     )
   }
@@ -1085,8 +1113,11 @@ tag_view_distribution_plot <- function(tag_dist, talent) {
     ggplot2::scale_y_continuous(labels = scales::label_comma()) +
     theme_nyt() +
     ggplot2::labs(
-      title = paste0(talent, " - Tag View Distribution"),
-      subtitle = "Top tags ranked by average views per video (box = IQR, line = median, point = mean).",
+      title = bundle_a_wrap_text("Tag View Distribution", width = 58),
+      subtitle = bundle_a_talent_subtitle(
+        talent,
+        "Top tags ranked by average views per video (box = IQR, line = median, point = mean)."
+      ),
       x = "",
       y = "Views per video"
     )

@@ -4,6 +4,7 @@ library(here)
 library(purrr)
 
 source("scripts/lib/utils/staging_root.R")
+source("scripts/lib/utils/datalake_root.r")
 
 bundle_b_plot_dir <- here("scripts", "lib", "plots", "report", "bundle_B")
 if (dir.exists(bundle_b_plot_dir)) {
@@ -205,6 +206,10 @@ build_bundle_b_plot_set <- function(
     analytics_df = analytics,
     monetary_df = monetary
   )
+  collab_dist <- bundle_b_collaboration_distribution_prep(
+    analytics_df = analytics,
+    monetary_df = monetary
+  )
 
   list(
     p_engagement_dist = engagement_distribution_content_type(
@@ -223,10 +228,10 @@ build_bundle_b_plot_set <- function(
     p_priority_rank = bundle_b_content_position_distribution_plot(content_position, talent),
     p_opportunity_matrix = bundle_b_attribute_opportunity_matrix_plot(attribute_opportunity, talent),
     p_revenue_efficiency = bundle_b_revenue_efficiency_plot(strength_matrix, talent),
-    p_collab_lift = bundle_b_collaboration_lift_plot(deep_dive$collab_summary, talent),
+    p_collab_lift = bundle_b_collaboration_lift_plot(collab_dist, talent),
     p_schedule_lift = bundle_b_day_of_week_lift_plot(deep_dive$day_of_week_summary, talent),
-    p_topic_view_dist = topic_view_distribution_plot(deep_dive$topic_view_distribution, talent),
-    p_tag_view_dist = tag_view_distribution_plot(deep_dive$tag_view_distribution, talent)
+    p_topic_view_dist = bundle_b_topic_view_distribution_plot(deep_dive$topic_view_distribution, talent),
+    p_tag_view_dist = bundle_b_tag_view_distribution_plot(deep_dive$tag_view_distribution, talent)
   )
 }
 
@@ -381,7 +386,22 @@ render_bundle_b_test <- function(
   )
 }
 
-root <- get_staging_root()
+data_source <- tolower(trimws(Sys.getenv("TALENT_DATA_SOURCE", unset = "datalake")))
+if (!(data_source %in% c("staging", "datalake"))) {
+  stop("TALENT_DATA_SOURCE must be one of: staging, datalake.")
+}
+data_root_override <- trimws(Sys.getenv("TALENT_DATA_ROOT", unset = ""))
+root <- if (nzchar(data_root_override)) {
+  data_root_override
+} else if (identical(data_source, "datalake")) {
+  get_datalake_root()
+} else {
+  get_staging_root()
+}
+if (!dir.exists(root)) {
+  stop("Resolved data root does not exist: ", root)
+}
+
 talent_root <- list.files(root, full.names = TRUE)
 
 Talent <- c("Avaritia")

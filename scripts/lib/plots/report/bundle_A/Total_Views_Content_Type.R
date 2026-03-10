@@ -22,7 +22,8 @@ total_views_content_type_plot <- function(plot_df, talent) {
     guides(fill = "none") +
     theme_nyt() +
     labs(
-      title = paste0(talent, " — Total Views by Content Type"),
+      title = bundle_a_wrap_text("Total Views by Content Type", width = 58),
+      subtitle = bundle_a_talent_subtitle(talent),
       x = "Content type",
       y = "Total views"
     ) +
@@ -79,7 +80,8 @@ average_views_content_type_plot <- function(plot_df, talent) {
     guides(fill = "none") +
     theme_nyt() +
     labs(
-      title = paste0(talent, " — Average Views per Video by Content Type"),
+      title = bundle_a_wrap_text("Average Views per Video by Content Type", width = 58),
+      subtitle = bundle_a_talent_subtitle(talent),
       x = "Content type",
       y = "Average views per video"
     ) +
@@ -153,8 +155,11 @@ views_content_type_comparison_plot <- function(plot_df, talent) {
     ggplot2::guides(fill = "none") +
     theme_nyt() +
     ggplot2::labs(
-      title = paste0(talent, " — Views by Content Type (Total vs Average)"),
-      subtitle = "Side-by-side comparison to separate volume impact from per-video performance.",
+      title = bundle_a_wrap_text("Views by Content Type (Total vs Average)", width = 58),
+      subtitle = bundle_a_talent_subtitle(
+        talent,
+        "Side-by-side comparison to separate volume impact from per-video performance."
+      ),
       x = "Content type",
       y = "Views"
     ) +

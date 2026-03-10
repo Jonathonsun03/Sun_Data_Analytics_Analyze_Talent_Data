@@ -1,12 +1,26 @@
 ---
-title: "BundleB"
-author: "Jonathon Sun"
-date: "`r Sys.Date()`"
+title: "`r { t <- params$talent; if (!(length(t) == 1 && !is.na(t) && nzchar(trimws(as.character(t))))) t <- 'Talent'; t <- trimws(as.character(t)); t_clean <- trimws(gsub('\\s*[\\[【].*$', '', t)); paste0('Content Strategy Optimization Report: ', t_clean) }`"
+subtitle: "`r { r <- params$included_date_range; if (!(length(r) == 1 && !is.na(r) && nzchar(trimws(as.character(r))))) r <- 'All available dates'; paste0('Data Range: ', as.character(r)) }`"
+author: "Author: Zhuni Excel & Jonathon Sun"
+date: "`r { x <- params$render_generated_at; if (length(x) == 1 && !is.na(x) && nzchar(trimws(as.character(x)))) { x <- trimws(as.character(x)); x_date <- sub('^([0-9]{4}-[0-9]{2}-[0-9]{2}).*$', '\\\\1', x); if (grepl('^[0-9]{4}-[0-9]{2}-[0-9]{2}$', x_date)) paste0('Report Date: ', x_date) else paste0('Report Date: ', format(Sys.Date(), '%Y-%m-%d')) } else paste0('Report Date: ', format(Sys.Date(), '%Y-%m-%d')) }`"
 output:
   html_document:
     self_contained: true
     toc: true
     toc_float: true
+    toc_depth: 3
+params:
+  talent: "Ava"
+  data_source: "datalake"
+  data_root: null
+  render_generated_at: null
+  included_date_range: null
+  render_cli: null
+  render_output_dir: null
+  render_output_prefix: null
+  window_days: null
+  start_date: null
+  end_date: null
 ---
 
 ```{r setup, include=FALSE}
@@ -28,7 +42,8 @@ if (knitr::is_latex_output()) {
 } else {
   knitr::opts_chunk$set(
     fig.width = 10,
-    fig.height = 5
+    fig.height = 5,
+    out.width = "100%"
   )
 }
 ```
@@ -44,6 +59,7 @@ library(plotly)
 
 ```{r modules, include=FALSE}
 source("scripts/lib/utils/staging_root.R")
+source("scripts/lib/utils/datalake_root.r")
 
 bundle_b_plot_dir <- here("scripts", "lib", "plots", "report", "bundle_B")
 if (dir.exists(bundle_b_plot_dir)) {
@@ -67,16 +83,89 @@ source(file.path(clean_data_dir, "analytics_join.R"))
 source(file.path(clean_data_dir, "clean_columns.R"))
 source(file.path(clean_data_dir, "video_prep.R"))
 source(file.path(clean_data_dir, "title_classification_join.R"))
-
-root <- get_staging_root()
 ```
 
 ```{r load_data, include=FALSE}
-talent_root <- list.files(root, full.names = TRUE)
+data_source <- tolower(trimws(as.character(params$data_source)))
+if (!nzchar(data_source)) {
+  data_source <- "datalake"
+}
+if (!(data_source %in% c("staging", "datalake"))) {
+  stop("`params$data_source` must be one of: 'staging', 'datalake'.")
+}
 
-Talent <- c("Ava")
+data_root_param <- if (is.null(params$data_root) || (length(params$data_root) == 1 && is.na(params$data_root))) {
+  ""
+} else {
+  trimws(as.character(params$data_root[[1]]))
+}
 
-talent_root <- select_talent(Talent)
+root <- if (nzchar(data_root_param)) {
+  data_root_param
+} else if (identical(data_source, "datalake")) {
+  get_datalake_root()
+} else {
+  get_staging_root()
+}
+
+if (!dir.exists(root)) {
+  stop("Resolved data root does not exist: ", root)
+}
+
+Talent <- as.character(params$talent)
+if (length(Talent) != 1 || is.na(Talent) || !nzchar(trimws(Talent))) {
+  stop("`params$talent` must be a single non-empty talent name.")
+}
+Talent <- trimws(Talent)
+
+window_days <- params$window_days
+if (is.null(window_days) || (length(window_days) == 1 && is.na(window_days))) {
+  window_days <- NA_integer_
+} else {
+  window_days <- suppressWarnings(as.integer(window_days))
+  if (length(window_days) != 1 || is.na(window_days) || window_days <= 0) {
+    stop("`params$window_days` must be NULL/NA or a single positive integer.")
+  }
+}
+
+parse_optional_date <- function(x, label) {
+  if (is.null(x) || (length(x) == 1 && is.na(x)) || !nzchar(trimws(as.character(x)))) {
+    return(as.Date(NA))
+  }
+  d <- suppressWarnings(as.Date(as.character(x)))
+  if (is.na(d)) {
+    stop("`params$", label, "` must be in YYYY-MM-DD format when provided.")
+  }
+  d
+}
+
+start_date_param <- parse_optional_date(params$start_date, "start_date")
+end_date_param <- parse_optional_date(params$end_date, "end_date")
+
+if (!is.na(start_date_param) || !is.na(end_date_param)) {
+  if (is.na(start_date_param)) {
+    start_date_param <- as.Date("1900-01-01")
+  }
+  if (is.na(end_date_param)) {
+    end_date_param <- Sys.Date()
+  }
+  if (start_date_param > end_date_param) {
+    stop("`params$start_date` cannot be after `params$end_date`.")
+  }
+  window_start_date <- start_date_param
+  window_end_date <- end_date_param
+  window_mode <- "explicit_range"
+} else if (!is.na(window_days)) {
+  window_end_date <- Sys.Date()
+  window_start_date <- window_end_date - as.integer(window_days) + 1
+  window_mode <- "days_back"
+} else {
+  window_start_date <- as.Date(NA)
+  window_end_date <- as.Date(NA)
+  window_mode <- "all_data"
+}
+
+talent_root <- select_talent(Talent, root = root)
 files <- TalentFiles(talent_root)
 
 titles <- load_title_classifications(talent = Talent)
@@ -93,6 +182,42 @@ preps <- video_preps_with_titles(
 analytics <- preps$analytics
 monetary <- preps$monetary
 demo <- preps$demo
+
+apply_days_back_window <- function(df) {
+  if (window_mode == "all_data" || nrow(df) == 0) {
+    return(df)
+  }
+
+  date_col <- bundle_a_optional_col(
+    df,
+    candidates = c("publish_date", "Published At", "date"),
+    label = "analysis window date column"
+  )
+  if (is.null(date_col)) {
+    return(df)
+  }
+
+  df %>%
+    mutate(.window_date = bundle_a_as_date(.data[[date_col]])) %>%
+    filter(
+      !is.na(.data$.window_date),
+      .data$.window_date >= window_start_date,
+      .data$.window_date <= window_end_date
+    ) %>%
+    select(-.window_date)
+}
+
+analytics <- apply_days_back_window(analytics)
+monetary <- apply_days_back_window(monetary)
+demo <- apply_days_back_window(demo)
+
+if (nrow(analytics) == 0 || nrow(monetary) == 0) {
+  stop(
+    "No data after applying the selected window. ",
+    "At least analytics and monetary data are required. ",
+    "Try a larger `window_days` value or set it to NULL for all available data."
+  )
+}
 
 # Backward-compatible alias used by legacy chunks.
 df <- analytics
@@ -119,6 +244,16 @@ revenue_by_content <- total_metric_content_type_prep(
 eng_summary <- engagement_summary_content_type_prep(
   analytics_eng,
   metric_col = "avg_view_prop"
+)
+
+eng_dist <- engagement_distribution_content_type_prep(
+  analytics_eng,
+  metric_col = "avg_view_prop"
+)
+
+revenue_eff_dist <- bundle_b_revenue_efficiency_distribution_prep(
+  analytics,
+  monetary
 )
 
 safe_zscore <- function(x) {
@@ -170,25 +305,30 @@ strength_matrix <- strength_matrix %>%
   arrange(desc(Composite_Score))
 ```
 
-# Bundle B: Content Strategy & Optimization
+# How This Report Supports Content Strategy Decisions
 
-This report is structured to answer the Bundle B questions directly:
+This report is structured to support tactical content decisions with transparent, descriptive analysis.
+Each primary section answers a practical planning question: where performance is stable, where it is strong or weak, which content attributes move outcomes, and when publishing windows tend to outperform.
+
+**Scope note:** This version of Bundle B depends on monetary data and is optimized for talents with both analytics and revenue coverage. For talents without monetary data, use a non-monetary strategy variant centered on views and engagement diagnostics.
 
 - Which formats consistently retain viewer attention?
 - Where are performance strengths and weaknesses by category?
 - How do specific content attributes affect engagement?
 
-## 1) Format Retention Consistency
+## Why Format-Level Retention Consistency Matters
+This section establishes a quality baseline before optimization.
+Retention-focused metrics are used first because they are less sensitive to posting volume than totals and help identify which formats consistently hold viewer attention.
 
 ### Engagement Distribution by Content Type
-What this plot does:
+**What this plot does:**
 - Shows the full spread of engagement outcomes for each content type so you can evaluate reliability, not just averages.
 
-How to read it:
+**How to read it:**
 - Compare each category's center and spread to see which formats are consistently strong versus volatile.
 
 ```{r b2-engagement-distribution, fig.width=10, fig.height=8}
-ggplotly(
+bundle_b_ggplotly(
   engagement_distribution_content_type(
     analytics_eng,
     Talent,
@@ -200,16 +340,16 @@ ggplotly(
 ```
 
 ### Median Engagement by Content Type
-What this plot does:
+**What this plot does:**
 - Summarizes typical engagement per format and how tight or wide the middle performance range is.
 
-How to read it:
-- Bar height is median engagement; the error range shows the interquartile range (25th to 75th percentile).
+**How to read it:**
+- Box shows median and quartiles for each content type; jittered points are individual videos.
 
 ```{r b2-engagement-summary-plot, fig.width=10, fig.height=8}
-ggplotly(
-  engagement_summary_content_type_plot(
-    eng_summary,
+bundle_b_ggplotly(
+  bundle_b_engagement_summary_distribution_plot(
+    eng_dist,
     Talent,
     metric_label = "Average View %",
     y_as_percent = TRUE
@@ -236,14 +376,16 @@ DTSettings(
 )
 ```
 
-## 2) Category Strengths and Weaknesses
+## Why Category Strengths and Weaknesses Matter for Prioritization
+This section translates performance into prioritization signals.
+Views, revenue, and engagement are analyzed together so recommendations are balanced across reach, monetization, and audience quality rather than driven by a single metric.
 
 ### Content-Type Position in Full Distribution
-What this plot does:
+**What this plot does:**
 - Shows the full per-video distribution for views, revenue, and engagement.
 - Overlays each content type's median as a vertical marker on that full distribution.
 
-How to read it:
+**How to read it:**
 - Grey bars show how many videos fall into each value range for that metric.
 - Each vertical line shows where a content type sits relative to the full population.
 - If a content type median sits further right, that format is typically stronger on that metric.
@@ -273,11 +415,11 @@ DTSettings(
 ```
 
 ### Combined Opportunity Matrix (Content Types, Tags, and Title Labels)
-What this plot does:
+**What this plot does:**
 - Combines content types, tags, and title labels into one opportunity map.
 - Keeps `Strength`, `Middle`, and `Weakness / Improve` as shape categories.
 
-How to read it:
+**How to read it:**
 - Each point is a content descriptor (content type, tag, or title label).
 - X-axis is median engagement, Y-axis is average revenue per video, and bubble size is video count.
 - Point shape indicates performance band.
@@ -305,6 +447,38 @@ bundle_b_attribute_opportunity_matrix_plotly(
 )
 ```
 
+### Combined Opportunity Matrix (Median Engagement vs Average Views)
+**What this plot does:**
+- Uses the same combined attribute set, but with `Average views per video` on Y for performance scale.
+
+**How to read it:**
+- X-axis remains median engagement.
+- Y-axis is average views per video (raw values).
+- Bubble size is video count and shape is performance band.
+
+```{r b2-opportunity-matrix-engagement-views, fig.width=12, fig.height=9}
+bundle_b_attribute_engagement_views_matrix_plotly(
+  attribute_opportunity,
+  Talent
+)
+```
+
+### Combined Opportunity Matrix (Average Views vs Average Revenue)
+**What this plot does:**
+- Directly compares view scale to monetization scale across the same combined attributes.
+
+**How to read it:**
+- X-axis is average views per video.
+- Y-axis is average revenue per video.
+- Bubble size is video count and shape is performance band.
+
+```{r b2-opportunity-matrix-views-revenue, fig.width=12, fig.height=9}
+bundle_b_attribute_views_revenue_matrix_plotly(
+  attribute_opportunity,
+  Talent
+)
+```
+
 ```{r b2-attribute-opportunity-table}
 attribute_opportunity_table <- bundle_b_attribute_opportunity_table(attribute_opportunity)
 
@@ -317,26 +491,26 @@ DTSettings(
 ```
 
 ### Revenue Efficiency by Content Type
-What this plot does:
+**What this plot does:**
 - Compares monetization efficiency by format, normalized to views.
 
-How to read it:
-- Bar height is estimated revenue per 1,000 views; higher values indicate better revenue conversion per view.
+**How to read it:**
+- Box shows median and quartiles of per-video revenue efficiency; jittered points are individual videos.
 
 ```{r b2-revenue-efficiency, fig.width=10, fig.height=8}
-ggplotly(
+bundle_b_ggplotly(
   bundle_b_revenue_efficiency_plot(
-    strength_matrix,
+    revenue_eff_dist,
     Talent
   )
 )
 ```
 
 ### Distribution-Based Strength/Weakness Summary by Content Type
-What this table does:
+**What this table does:**
 - Summarizes where each content type lands in the full-video distribution by metric percentile.
 
-How to read it:
+**How to read it:**
 - `ViewsMedianPercentile`: percentile position of that content type's median views per video.
 - `RevenueMedianPercentile`: percentile position of median revenue per video.
 - `EngagementMedianPercentile`: percentile position of median engagement rate.
@@ -363,49 +537,52 @@ DTSettings(
 )
 ```
 
-## 3) Content Attributes and Engagement
+## Why Content Attributes Matter for Engagement Outcomes
+This section moves from format-level performance to creative levers.
+By breaking performance down by collaboration, topic, and tag attributes, the report helps identify what to scale, what to refine, and what to test next.
 
-### Collaboration Lift vs Non-Collaborative
+### Collaboration Distribution vs Non-Collaborative Baseline
 
-In this section, **lift** means the relative difference between collaborative and non-collaborative content.
+**What this plot does:**
+- Shows per-video distributions for collaborative vs non-collaborative uploads (box + whisker + points).
+- Shows each group's mean and directly connects those means to make the collaborative delta explicit.
 
-What this plot does:
-- Estimates whether collaborative content outperforms or underperforms non-collaborative baseline on per-video views and per-video revenue.
+**What this adds vs Bundle A:**
+- Bundle A shows absolute collaboration effectiveness levels.
+- Bundle B adds a baseline-change lens to support decision framing: *how much does collaboration change outcomes vs non-collab baseline?*
 
-How to read it:
-- Bars above zero are positive lift (better than baseline); bars below zero are negative lift (worse than baseline).
+**How to read it:**
+- Each point is one video; box shows quartiles/median spread.
+- Diamond markers are group means (non-collab vs collaborative).
+- Connector line links those two means; center label reports `absolute delta` and `% change` vs non-collab baseline.
 
-This plot estimates two lifts:
-
-`Views lift = (Avg views per collaborative video / Avg views per non-collaborative video) - 1`
-
-`Revenue lift = (Avg revenue per collaborative video / Avg revenue per non-collaborative video) - 1`
-
-How to interpret:
-
-- Positive lift: collaborative content performs better than non-collaborative baseline.
-- Negative lift: collaborative content performs worse than non-collaborative baseline.
-- `+0.25` means about `+25%` lift; `-0.10` means about `-10%` lift.
-
-Method notes:
-
+**Method notes:**
 - This is a **descriptive estimate**, not a causal effect.
-- The baseline is the non-collaborative average in the same dataset.
-- Revenue and views can be based on different row counts, so read both metrics together.
+- Baseline is non-collaborative average in the same dataset.
+- Views and revenue can be based on different row counts, so read both metrics together.
 
-```{r b2-collaboration-lift-plot, fig.width=10, fig.height=8}
+```{r b2-collaboration-lift-plot, fig.width=11, fig.height=9}
 collab_summary <- collaboration_effectiveness_prep(analytics, monetary)
+collab_dist <- bundle_b_collaboration_distribution_prep(analytics, monetary)
 
-ggplotly(
+bundle_b_ggplotly(
   bundle_b_collaboration_lift_plot(
-    collab_summary,
+    collab_dist,
     Talent
   )
-)
+) %>%
+  bundle_b_plotly_layout(margin_l = 170, margin_r = 35)
 ```
 
 ```{r b2-collaboration-table}
+base_views <- collab_summary$AverageViewsPerVideo[collab_summary$collab_group == "Non-collaborative"][1]
+base_revenue <- collab_summary$AverageRevenuePerVideo[collab_summary$collab_group == "Non-collaborative"][1]
+
 collab_table <- collab_summary %>%
+  mutate(
+    ViewsDeltaVsNonCollab = AverageViewsPerVideo - base_views,
+    RevenueDeltaVsNonCollab = AverageRevenuePerVideo - base_revenue
+  ) %>%
   select(
     collab_group,
     VideoCountViews,
@@ -414,6 +591,8 @@ collab_table <- collab_summary %>%
     TotalRevenue,
     AverageViewsPerVideo,
     AverageRevenuePerVideo,
+    ViewsDeltaVsNonCollab,
+    RevenueDeltaVsNonCollab,
     AvgViewsLiftVsNonCollab,
     AvgRevenueLiftVsNonCollab
   )
@@ -427,10 +606,10 @@ DTSettings(
 ```
 
 ### Topic View Distribution
-What this plot does:
+**What this plot does:**
 - Shows the distribution of per-video views within top topics, rather than only topic totals.
 
-How to read it:
+**How to read it:**
 - Compare medians and spread across topics to distinguish stable performance from outlier-driven performance.
 
 ```{r b2-topic-view-distribution-plot, fig.width=12, fig.height=9}
@@ -440,8 +619,8 @@ topic_view_dist <- topic_view_distribution_prep(
   min_videos = 2
 )
 
-ggplotly(
-  topic_view_distribution_plot(
+bundle_b_ggplotly(
+  bundle_b_topic_view_distribution_plot(
     topic_view_dist,
     Talent
   )
@@ -453,10 +632,10 @@ DTSettings(topic_view_dist$summary, class = "display stripe hover", scroll_x = T
 ```
 
 ### Tag View Distribution
-What this plot does:
+**What this plot does:**
 - Shows the distribution of per-video views within top tags for finer-grain content attributes.
 
-How to read it:
+**How to read it:**
 - Compare medians, quartiles, and range across tags to see which tags are more consistently strong.
 
 ```{r b2-tag-view-distribution-plot, fig.width=12, fig.height=9}
@@ -467,8 +646,8 @@ tag_view_dist <- tag_view_distribution_prep(
   min_views_per_video = 10
 )
 
-ggplotly(
-  tag_view_distribution_plot(
+bundle_b_ggplotly(
+  bundle_b_tag_view_distribution_plot(
     tag_view_dist,
     Talent
   )
@@ -479,13 +658,15 @@ ggplotly(
 DTSettings(tag_view_dist$summary, class = "display stripe hover", scroll_x = TRUE)
 ```
 
-## 4) Scheduling Effects
+## Why Scheduling Effects Matter for Publishing Decisions
+This section isolates timing effects so publishing cadence can be tuned with evidence.
+The goal is to show whether weekday patterns and weekend/weekday differences create meaningful upside or downside on a per-video basis.
 
 ### Day-of-Week Deviation from Average
-What this plot does:
+**What this plot does:**
 - Shows how far each weekday is above or below the overall weekday average.
 
-How to read it:
+**How to read it:**
 - Values above `0` are above-average days.
 - Values below `0` are below-average days.
 - This is not a z-score.
@@ -495,7 +676,7 @@ How to read it:
 ```{r b2-dow-lift-plot, fig.width=10, fig.height=8}
 dow_summary <- day_of_week_performance_prep(analytics, monetary)
 
-ggplotly(
+bundle_b_ggplotly(
   bundle_b_day_of_week_lift_plot(
     dow_summary,
     Talent
@@ -503,17 +684,59 @@ ggplotly(
 )
 ```
 
+**Day-of-week table calculation notes:**
+- `AverageViewsPerVideo` = average per-video views for that weekday.
+- `AverageRevenuePerVideo` = average per-video revenue for that weekday.
+- `ViewsDeviation` = `AverageViewsPerVideo - OverallAverageViewsPerVideo`.
+- `RevenueDeviation` = `AverageRevenuePerVideo - OverallAverageRevenuePerVideo`.
+- The overall baseline columns are used for calculation but intentionally hidden from this display table.
+
 ```{r b2-dow-table}
 dow_deviation_table <- bundle_b_day_of_week_deviation_table(dow_summary)
-DTSettings(dow_deviation_table, class = "display stripe hover", scroll_x = TRUE)
+dow_deviation_display <- dow_deviation_table %>%
+  dplyr::transmute(
+    day_of_week = .data$day_of_week,
+    AverageViewsPerVideo = .data$AverageViewsPerVideo,
+    ViewsDeviation = .data$ViewsDeviation,
+    AverageRevenuePerVideo = .data$AverageRevenuePerVideo,
+    RevenueDeviation = .data$RevenueDeviation
+  )
+
+DTSettings(dow_deviation_display, class = "display stripe hover", scroll_x = TRUE)
 ```
 
 ### Weekend vs Weekday Summary
+**What this plot does:**
+- Shows per-video distributions for weekday vs weekend uploads (box + whisker + points).
+- Shows each group's mean and directly connects those means to make the weekend delta explicit.
+
+**How to read it:**
+- Each point is one video; box shows quartiles/median spread.
+- Diamond markers are group means (weekday vs weekend).
+- Connector line links those two means; center label reports `absolute delta` and `% change` vs weekday baseline.
+
+**Method notes:**
+- This is a **descriptive estimate**, not a causal effect.
+- Baseline is weekday average in the same dataset.
+- Views and revenue can be based on different row counts, so read both metrics together.
+
+```{r b2-weekend-weekday-distribution-plot, fig.width=11, fig.height=9}
+wk_dist <- weekend_vs_weekday_distribution_prep(analytics, monetary)
+
+bundle_b_ggplotly(
+  bundle_b_weekend_weekday_distribution_plot(
+    wk_dist,
+    Talent
+  )
+) %>%
+  bundle_b_plotly_layout(margin_l = 170, margin_r = 35)
+```
+
 ```{r b2-weekend-table}
 wk_summary <- weekend_vs_weekday_prep(analytics, monetary)
 DTSettings(wk_summary, class = "display stripe hover", scroll_x = TRUE)
 ```
 
-# Wrap-up: What this means
+# How to Turn These Findings into Action
 
 Use the retention and strength/weakness sections to prioritize content types to scale, then use topic/tag/collaboration/scheduling sections to tune execution for higher engagement and monetization efficiency.

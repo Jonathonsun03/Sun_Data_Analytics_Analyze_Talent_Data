@@ -271,7 +271,7 @@ bundle_b_attribute_opportunity_matrix_plot <- function(
         ggplot2::ylim(0.5, 1.5) +
         ggplot2::theme_void() +
         ggplot2::labs(
-          title = paste0(talent, " - Opportunity Matrix by Tags and Title Labels")
+          title = bundle_b_title_text(talent, "Opportunity Matrix by Tags and Title Labels")
         )
     )
   }
@@ -306,7 +306,7 @@ bundle_b_attribute_opportunity_matrix_plot <- function(
         ggplot2::ylim(0.5, 1.5) +
         ggplot2::theme_void() +
         ggplot2::labs(
-          title = paste0(talent, " - Combined Opportunity Matrix")
+          title = bundle_b_title_text(talent, "Combined Opportunity Matrix")
         )
     )
   }
@@ -342,11 +342,12 @@ bundle_b_attribute_opportunity_matrix_plot <- function(
       labels = scales::label_dollar(scale = 1)
     ) +
     theme_nyt() +
+    bundle_b_theme_standard() +
     ggplot2::labs(
-      title = paste0(talent, " - Combined Opportunity Matrix"),
+      title = bundle_b_title_text(talent, "Combined Opportunity Matrix"),
       subtitle = "Content types, tags, and title labels in one map. Y-axis uses avg revenue per video (linear scale).",
       x = "Median engagement",
-      y = "Average revenue per video",
+      y = "Revenue per video",
       size = "Video count",
       shape = "Performance band"
     ) +
@@ -381,7 +382,7 @@ bundle_b_attribute_opportunity_matrix_plot <- function(
   p
 }
 
-bundle_b_attribute_opportunity_matrix_plotly <- function(attr_df, talent) {
+bundle_b_attribute_opportunity_plotly_data <- function(attr_df) {
   required_cols <- c(
     "Attribute",
     "LabelType",
@@ -394,11 +395,8 @@ bundle_b_attribute_opportunity_matrix_plotly <- function(attr_df, talent) {
   if (!all(required_cols %in% names(attr_df))) {
     stop("attr_df must include: ", paste(required_cols, collapse = ", "))
   }
-  if (!requireNamespace("plotly", quietly = TRUE)) {
-    stop("Package 'plotly' is required for interactive matrix.")
-  }
 
-  plot_df <- attr_df %>%
+  attr_df %>%
     dplyr::filter(
       is.finite(.data$MedianEngagement),
       is.finite(.data$AvgRevenuePerVideo),
@@ -424,15 +422,56 @@ bundle_b_attribute_opportunity_matrix_plotly <- function(attr_df, talent) {
         "<br>Total Revenue: ", scales::dollar(.data$TotalRevenue)
       )
     )
+}
+
+bundle_b_attribute_metric_matrix_plotly <- function(
+  plot_df,
+  talent,
+  x_col,
+  y_col,
+  title_suffix,
+  x_label,
+  y_label,
+  x_axis_type = c("percent", "dollar", "number"),
+  y_axis_type = c("percent", "dollar", "number")
+) {
+  x_axis_type <- match.arg(x_axis_type)
+  y_axis_type <- match.arg(y_axis_type)
+
+  if (!requireNamespace("plotly", quietly = TRUE)) {
+    stop("Package 'plotly' is required for interactive matrix.")
+  }
+  if (!(x_col %in% names(plot_df)) || !(y_col %in% names(plot_df))) {
+    stop("plot_df must include x and y columns: ", x_col, ", ", y_col)
+  }
+
+  keep <- is.finite(plot_df[[x_col]]) & is.finite(plot_df[[y_col]]) &
+    (plot_df[[x_col]] > 0) & (plot_df[[y_col]] > 0)
+  plot_df <- plot_df[keep, , drop = FALSE]
 
   if (nrow(plot_df) == 0) {
     return(plotly::plotly_empty(type = "scatter", mode = "markers"))
   }
 
+  axis_layout <- function(axis_type, axis_title) {
+    if (identical(axis_type, "percent")) {
+      return(list(title = axis_title, tickformat = ".0%"))
+    }
+    if (identical(axis_type, "dollar")) {
+      return(list(
+        title = axis_title,
+        tickprefix = "$",
+        separatethousands = TRUE,
+        tickformat = ",.0f"
+      ))
+    }
+    list(title = axis_title, separatethousands = TRUE, tickformat = ",.0f")
+  }
+
   plotly::plot_ly(
     data = plot_df,
-    x = ~MedianEngagement,
-    y = ~AvgRevenuePerVideo,
+    x = plot_df[[x_col]],
+    y = plot_df[[y_col]],
     type = "scatter",
     mode = "markers",
     color = ~Performance_Band,
@@ -453,19 +492,57 @@ bundle_b_attribute_opportunity_matrix_plotly <- function(attr_df, talent) {
     hovertemplate = "%{text}<extra></extra>"
   ) %>%
     plotly::layout(
-      title = list(text = paste0(talent, " - Combined Opportunity Matrix")),
-      xaxis = list(
-        title = "Median engagement",
-        tickformat = ".0%"
-      ),
-      yaxis = list(
-        title = "Average revenue per video",
-        tickprefix = "$",
-        separatethousands = TRUE,
-        tickformat = ",.0f"
-      ),
+      title = list(text = bundle_b_title_text(talent, title_suffix), x = 0.02, xanchor = "left"),
+      xaxis = axis_layout(x_axis_type, x_label),
+      yaxis = axis_layout(y_axis_type, y_label),
       legend = list(title = list(text = "Performance band"))
-    )
+    ) %>%
+    bundle_b_plotly_layout(margin_l = 90)
+}
+
+bundle_b_attribute_opportunity_matrix_plotly <- function(attr_df, talent) {
+  plot_df <- bundle_b_attribute_opportunity_plotly_data(attr_df)
+  bundle_b_attribute_metric_matrix_plotly(
+    plot_df = plot_df,
+    talent = talent,
+    x_col = "MedianEngagement",
+    y_col = "AvgRevenuePerVideo",
+    title_suffix = "Combined Opportunity Matrix",
+    x_label = "Median engagement",
+    y_label = "Average revenue per video",
+    x_axis_type = "percent",
+    y_axis_type = "dollar"
+  )
+}
+
+bundle_b_attribute_engagement_views_matrix_plotly <- function(attr_df, talent) {
+  plot_df <- bundle_b_attribute_opportunity_plotly_data(attr_df)
+  bundle_b_attribute_metric_matrix_plotly(
+    plot_df = plot_df,
+    talent = talent,
+    x_col = "MedianEngagement",
+    y_col = "AvgViewsPerVideo",
+    title_suffix = "Engagement vs Average Views Matrix",
+    x_label = "Median engagement",
+    y_label = "Average views per video",
+    x_axis_type = "percent",
+    y_axis_type = "number"
+  )
+}
+
+bundle_b_attribute_views_revenue_matrix_plotly <- function(attr_df, talent) {
+  plot_df <- bundle_b_attribute_opportunity_plotly_data(attr_df)
+  bundle_b_attribute_metric_matrix_plotly(
+    plot_df = plot_df,
+    talent = talent,
+    x_col = "AvgViewsPerVideo",
+    y_col = "AvgRevenuePerVideo",
+    title_suffix = "Average Views vs Average Revenue Matrix",
+    x_label = "Average views per video",
+    y_label = "Average revenue per video",
+    x_axis_type = "number",
+    y_axis_type = "dollar"
+  )
 }
 
 bundle_b_attribute_opportunity_table <- function(attr_df) {

@@ -83,19 +83,19 @@ args <- commandArgs(trailingOnly = TRUE)
 render_generated_at <- format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")
 render_cli <- paste(args, collapse = " ")
 
-input_rmd <- rr_arg_value(args, "--input", repo_path("templates", "reports", "Bundle_A", "Bundle_A.Rmd"))
+input_rmd <- rr_arg_value(args, "--input", repo_path("templates", "reports", "Bundle_B", "Bundle_B.Rmd"))
 input_rmd <- resolve_repo_or_abs(input_rmd)
 if (!file.exists(input_rmd)) {
   stop("Input Rmd not found: ", input_rmd)
 }
 
-output_dir <- rr_arg_value(args, "--output-dir", repo_path("reports", "bundle_A"))
+output_dir <- rr_arg_value(args, "--output-dir", repo_path("reports", "bundle_B"))
 output_dir <- resolve_repo_or_abs(output_dir)
 dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 
-output_prefix <- rr_arg_value(args, "--output-prefix", "Bundle_A")
+output_prefix <- rr_arg_value(args, "--output-prefix", "Bundle_B")
 quiet_render <- rr_has_flag(args, "--quiet")
-data_source <- tolower(trimws(rr_arg_value(args, "--data-source", "staging")))
+data_source <- tolower(trimws(rr_arg_value(args, "--data-source", "datalake")))
 if (!(data_source %in% c("staging", "datalake"))) {
   stop("`--data-source` must be one of: staging, datalake.")
 }
@@ -159,7 +159,49 @@ if (length(talents) == 0) {
   talents <- "Ava"
 }
 
-cat("Bundle A render targets:", paste(talents, collapse = ", "), "\n")
+get_declared_param_names <- function(rmd_path) {
+  if (!requireNamespace("rmarkdown", quietly = TRUE)) {
+    return(character())
+  }
+  fm <- tryCatch(
+    rmarkdown::yaml_front_matter(rmd_path),
+    error = function(e) NULL
+  )
+  if (is.null(fm) || is.null(fm$params) || is.null(names(fm$params))) {
+    return(character())
+  }
+  unique(as.character(names(fm$params)))
+}
+
+declared_params <- get_declared_param_names(input_rmd)
+if (!("talent" %in% declared_params) && length(talents) > 1) {
+  warning(
+    "Input Rmd does not declare `params$talent`; rendering with multiple `--talents` ",
+    "will produce similarly parameterized reports."
+  )
+}
+
+build_render_params <- function(talent) {
+  raw_params <- list(
+    talent = talent,
+    data_source = data_source,
+    data_root = data_root,
+    render_generated_at = render_generated_at,
+    included_date_range = included_date_range,
+    render_cli = render_cli,
+    render_output_dir = output_dir,
+    render_output_prefix = output_prefix,
+    window_days = if (is.na(window_days)) NULL else window_days,
+    start_date = if (is.na(start_date)) NULL else start_date,
+    end_date = if (is.na(end_date)) NULL else end_date
+  )
+  if (length(declared_params) == 0) {
+    return(list())
+  }
+  raw_params[names(raw_params) %in% declared_params]
+}
+
+cat("Bundle B render targets:", paste(talents, collapse = ", "), "\n")
 cat("Input Rmd:", input_rmd, "\n")
 cat("Output dir:", output_dir, "\n")
 cat("Data source:", data_source, "\n")
@@ -186,21 +228,7 @@ result_df <- rr_render_for_talents(
   input_rmd = input_rmd,
   output_dir = output_dir,
   output_prefix = output_prefix,
-  params_builder = function(talent) {
-    list(
-      talent = talent,
-      data_source = data_source,
-      data_root = data_root,
-      render_generated_at = render_generated_at,
-      included_date_range = included_date_range,
-      render_cli = render_cli,
-      render_output_dir = output_dir,
-      render_output_prefix = output_prefix,
-      window_days = if (is.na(window_days)) NULL else window_days,
-      start_date = if (is.na(start_date)) NULL else start_date,
-      end_date = if (is.na(end_date)) NULL else end_date
-    )
-  },
+  params_builder = build_render_params,
   slugify_fn = talent_slugify,
   quiet_render = quiet_render,
   label = "Rendering talent"

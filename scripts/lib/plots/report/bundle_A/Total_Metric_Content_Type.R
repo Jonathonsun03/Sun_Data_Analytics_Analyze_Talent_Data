@@ -52,39 +52,91 @@ total_metric_content_type_plot <- function(plot_df,
                                            subtitle_text = NULL,
                                            x_axis_label = "Window (start to end month)",
                                            bar_position = c("dodge", "stack"),
-                                           show_counts = FALSE) {
+                                           show_counts = FALSE,
+                                           unique_bar_colors = FALSE) {
   bar_position <- match.arg(bar_position)
 
   if (bar_position == "stack") {
-    plot_df %>%
-      ggplot(aes(
-        x = window_label,
-        y = Total,
-        fill = `Content Type`
-      )) +
-      geom_col(position = "stack") +
-      geom_text(
-        aes(label = if (show_counts) {
-          paste0(scales::comma(Total), "\n", "n=", scales::comma(VideoCount))
-        } else {
-          scales::comma(Total)
-        }),
-        position = position_stack(vjust = 1.02),
-        size = 3.5,
-        color = "grey20"
-      ) +
-      scale_fill_sun_data(variant = "brand") +
-      theme_nyt() +
-      labs(
-        title = paste0(talent, " - Total ", metric_label, " by Content Type"),
-        subtitle = subtitle_text,
-        x = x_axis_label,
-        y = paste0("Total ", metric_label)
-      ) +
-      scale_y_continuous(
-        labels = scales::comma,
-        expand = expansion(mult = c(0, 0.12))
-      )
+    if (isTRUE(unique_bar_colors)) {
+      plot_df_colored <- plot_df %>%
+        arrange(.window_start, `Content Type`) %>%
+        mutate(
+          .fill_key = if (dplyr::n_distinct(`Content Type`, na.rm = TRUE) <= 1) {
+            as.character(window_label)
+          } else {
+            paste0(as.character(window_label), " | ", `Content Type`)
+          }
+        )
+
+      fill_levels <- unique(plot_df_colored$.fill_key)
+      fill_values <- sun_data_palette(length(fill_levels), variant = "brand")
+      fill_map <- stats::setNames(fill_values, fill_levels)
+      fill_legend <- if (dplyr::n_distinct(plot_df_colored$`Content Type`, na.rm = TRUE) <= 1) {
+        "Month"
+      } else {
+        "Period | Content Type"
+      }
+
+      plot_df_colored %>%
+        ggplot(aes(
+          x = window_label,
+          y = Total,
+          fill = .fill_key
+        )) +
+        geom_col(position = "stack") +
+        geom_text(
+          aes(label = if (show_counts) {
+            paste0(scales::comma(Total), "\n", "n=", scales::comma(VideoCount))
+          } else {
+            scales::comma(Total)
+          }),
+          position = position_stack(vjust = 1.02),
+          size = 3.5,
+          color = "grey20"
+        ) +
+        scale_fill_manual(values = fill_map, name = fill_legend) +
+        theme_nyt() +
+        labs(
+          title = bundle_a_wrap_text(paste0("Total ", metric_label, " by Content Type"), width = 58),
+          subtitle = bundle_a_talent_subtitle(talent, subtitle_text),
+          x = x_axis_label,
+          y = paste0("Total ", metric_label)
+        ) +
+        scale_y_continuous(
+          labels = scales::comma,
+          expand = expansion(mult = c(0, 0.12))
+        )
+    } else {
+      plot_df %>%
+        ggplot(aes(
+          x = window_label,
+          y = Total,
+          fill = `Content Type`
+        )) +
+        geom_col(position = "stack") +
+        geom_text(
+          aes(label = if (show_counts) {
+            paste0(scales::comma(Total), "\n", "n=", scales::comma(VideoCount))
+          } else {
+            scales::comma(Total)
+          }),
+          position = position_stack(vjust = 1.02),
+          size = 3.5,
+          color = "grey20"
+        ) +
+        scale_fill_sun_data(variant = "brand") +
+        theme_nyt() +
+        labs(
+          title = bundle_a_wrap_text(paste0("Total ", metric_label, " by Content Type"), width = 58),
+          subtitle = bundle_a_talent_subtitle(talent, subtitle_text),
+          x = x_axis_label,
+          y = paste0("Total ", metric_label)
+        ) +
+        scale_y_continuous(
+          labels = scales::comma,
+          expand = expansion(mult = c(0, 0.12))
+        )
+    }
   } else {
     plot_df %>%
       ggplot(aes(
@@ -108,8 +160,8 @@ total_metric_content_type_plot <- function(plot_df,
       guides(fill = "none") +
       theme_nyt() +
       labs(
-        title = paste0(talent, " - Total ", metric_label, " by Content Type"),
-        subtitle = subtitle_text,
+        title = bundle_a_wrap_text(paste0("Total ", metric_label, " by Content Type"), width = 58),
+        subtitle = bundle_a_talent_subtitle(talent, subtitle_text),
         x = "Content type",
         y = paste0("Total ", metric_label)
       ) +
@@ -128,7 +180,8 @@ total_metric_content_type <- function(df,
                                       date_col = "publish_date",
                                       max_months = NULL,
                                       bar_position = c("dodge", "stack"),
-                                      show_counts = FALSE) {
+                                      show_counts = FALSE,
+                                      unique_bar_colors = FALSE) {
   plot_df <- total_metric_content_type_prep(
     df,
     metric_col,
@@ -149,7 +202,8 @@ total_metric_content_type <- function(df,
     subtitle_text = subtitle_text,
     x_axis_label = x_axis_label,
     bar_position = bar_position,
-    show_counts = show_counts
+    show_counts = show_counts,
+    unique_bar_colors = unique_bar_colors
   )
 }
 
@@ -161,7 +215,8 @@ total_metric_content_type_with_data <- function(df,
                                                 date_col = "publish_date",
                                                 max_months = NULL,
                                                 bar_position = c("dodge", "stack"),
-                                                show_counts = FALSE) {
+                                                show_counts = FALSE,
+                                                unique_bar_colors = FALSE) {
   plot_df <- total_metric_content_type_prep(
     df,
     metric_col,
@@ -184,7 +239,8 @@ total_metric_content_type_with_data <- function(df,
       subtitle_text = subtitle_text,
       x_axis_label = x_axis_label,
       bar_position = bar_position,
-      show_counts = show_counts
+      show_counts = show_counts,
+      unique_bar_colors = unique_bar_colors
     )
   )
 }

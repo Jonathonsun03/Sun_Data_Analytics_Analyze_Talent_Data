@@ -30,6 +30,27 @@ filter_recent_windows <- function(df, max_months = NULL) {
   dplyr::filter(df, .month_start >= cutoff)
 }
 
+report_tables_wrap_title <- function(x, width = 58) {
+  if (exists("bundle_a_wrap_text", mode = "function")) {
+    return(bundle_a_wrap_text(x, width = width))
+  }
+  paste(strwrap(as.character(x), width = width), collapse = "\n")
+}
+
+report_tables_talent_subtitle <- function(talent, detail = NULL) {
+  if (exists("bundle_a_talent_subtitle", mode = "function")) {
+    return(bundle_a_talent_subtitle(talent, detail))
+  }
+  t <- trimws(as.character(talent[[1]]))
+  if (!nzchar(t)) {
+    t <- "Unknown"
+  }
+  if (is.null(detail) || !nzchar(trimws(as.character(detail[[1]])))) {
+    return(paste0("Talent: ", t))
+  }
+  paste0("Talent: ", t, " | ", trimws(as.character(detail[[1]])))
+}
+
 total_metric_content_type <- function(df,
                                       talent,
                                       metric_col,
@@ -84,11 +105,11 @@ total_metric_content_type <- function(df,
         size = 3.5,
         color = "grey20"
       ) +
-      scale_fill_grey(start = 0.35, end = 0.65) +
+      scale_fill_sun_data(variant = "brand") +
       theme_nyt() +
       labs(
-        title = paste0(talent, " - Total ", metric_label, " by Content Type"),
-        subtitle = subtitle_text,
+        title = report_tables_wrap_title(paste0("Total ", metric_label, " by Content Type"), width = 58),
+        subtitle = report_tables_talent_subtitle(talent, subtitle_text),
         x = "Window (start to end month)",
         y = paste0("Total ", metric_label)
       ) +
@@ -115,12 +136,12 @@ total_metric_content_type <- function(df,
         color = "grey20"
       ) +
       facet_wrap(~window_label, scales = "free_y") +
-      scale_fill_grey(start = 0.35, end = 0.65) +
+      scale_fill_sun_data(variant = "brand") +
       guides(fill = "none") +
       theme_nyt() +
       labs(
-        title = paste0(talent, " - Total ", metric_label, " by Content Type"),
-        subtitle = subtitle_text,
+        title = report_tables_wrap_title(paste0("Total ", metric_label, " by Content Type"), width = 58),
+        subtitle = report_tables_talent_subtitle(talent, subtitle_text),
         x = "Content type",
         y = paste0("Total ", metric_label)
       ) +

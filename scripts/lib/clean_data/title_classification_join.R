@@ -19,11 +19,42 @@ load_title_classifications <- function(
   }
 
   if (!is.null(talent) && length(talent) > 0) {
-    pattern <- paste(as.character(talent), collapse = "|")
-    titles <- dplyr::filter(
-      titles,
-      grepl(pattern, .data$talent_name, ignore.case = TRUE)
-    )
+    normalize_talent_key <- function(x) {
+      x <- enc2utf8(as.character(x))
+      x <- tolower(x)
+      gsub("[^a-z0-9]+", "", x)
+    }
+
+    talent_keys <- unique(normalize_talent_key(talent))
+    titles <- titles %>%
+      dplyr::mutate(.talent_key = normalize_talent_key(.data$talent_name))
+
+    exact_match <- dplyr::filter(titles, .data$.talent_key %in% talent_keys)
+    if (nrow(exact_match) > 0) {
+      titles <- exact_match
+    } else if (length(talent_keys) == 1 && nzchar(talent_keys[[1]])) {
+      q <- talent_keys[[1]]
+      fuzzy_match <- dplyr::filter(
+        titles,
+        grepl(q, .data$.talent_key, fixed = TRUE) |
+          grepl(.data$.talent_key, q, fixed = TRUE)
+      )
+      if (nrow(fuzzy_match) > 0) {
+        titles <- fuzzy_match
+      } else {
+        warning(
+          "No title classifications matched talent filter `", as.character(talent[[1]]),
+          "`. Falling back to all titles and joining by Video ID."
+        )
+      }
+    } else {
+      warning(
+        "No title classifications matched talent filter. ",
+        "Falling back to all titles and joining by Video ID."
+      )
+    }
+
+    titles <- dplyr::select(titles, -dplyr::any_of(".talent_key"))
   }
 
   if (isTRUE(latest_per_video)) {
@@ -101,7 +132,9 @@ dedupe_latest_rows <- function(
     stop("Missing key column(s): ", paste(missing_keys, collapse = ", "))
   }
 
-  existing_sort <- sort_cols[sort_cols %in% names(df)]
+  # Prefer most recent snapshot row when available, then user-provided sort keys.
+  snapshot_cols <- c("date")
+  existing_sort <- unique(c(snapshot_cols[snapshot_cols %in% names(df)], sort_cols[sort_cols %in% names(df)]))
 
   out <- df
   if (length(existing_sort) > 0) {

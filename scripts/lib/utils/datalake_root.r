@@ -11,8 +11,8 @@ get_datalake_root <- function() {
 
   linux_candidates <- c(
     "/mnt/router_data/DataLake/Sun_Data_Analytics/Talent_data",
-    "/mnt/datalake/Datalake/Sun_Data_Analytics/Talent_data",
-    "/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data"
+    "/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data",
+    "/mnt/datalake/Datalake/Sun_Data_Analytics/Talent_data"
   )
   linux_existing <- linux_candidates[dir.exists(linux_candidates)]
   if (length(linux_existing) > 0) return(linux_existing[[1]])

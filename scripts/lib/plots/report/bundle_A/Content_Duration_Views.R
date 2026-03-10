@@ -9,6 +9,9 @@ Content_duration_views <- function(
   talent,
   span = 0.35,
   show_ci = TRUE,
+  raw_linewidth = 0.55,
+  smooth_linewidth = 0.9,
+  smooth_alpha = 0.18,
   y_label = "Total views",
   title_suffix = "- Views Over Time by Content Type"
 ) {
@@ -18,6 +21,9 @@ Content_duration_views <- function(
     talent,
     span = span,
     show_ci = show_ci,
+    raw_linewidth = raw_linewidth,
+    smooth_linewidth = smooth_linewidth,
+    smooth_alpha = smooth_alpha,
     y_label = y_label,
     title_suffix = title_suffix
   )
@@ -28,6 +34,9 @@ content_duration_views_plot <- function(
   talent,
   span = 0.35,
   show_ci = TRUE,
+  raw_linewidth = 0.55,
+  smooth_linewidth = 0.9,
+  smooth_alpha = 0.18,
   y_label = "Total views",
   title_suffix = "- Views Over Time by Content Type"
 ) {
@@ -39,6 +48,10 @@ content_duration_views_plot <- function(
     " to ",
     format(end_date, "%b %Y")
   )
+  clean_title <- trimws(gsub("^-\\s*", "", as.character(title_suffix)))
+  if (!nzchar(clean_title)) {
+    clean_title <- "Views Over Time by Content Type"
+  }
 
   plot_df %>%
     ggplot(aes(
@@ -47,7 +60,7 @@ content_duration_views_plot <- function(
     )) +
     geom_line(
       aes(color = `Content Type`),
-      linewidth = 0.7,
+      linewidth = raw_linewidth,
       alpha = 0.6
     ) +
     geom_smooth(
@@ -55,15 +68,17 @@ content_duration_views_plot <- function(
       span = span,
       se = show_ci,
       color = sun_data_brand_colors()[["midnight"]],
-      linewidth = 1.4
+      fill = sun_data_brand_colors()[["cloud"]],
+      alpha = smooth_alpha,
+      linewidth = smooth_linewidth
     ) +
     facet_wrap(~`Content Type`, ncol = 1, scales = "free_y") +
     scale_color_sun_data(variant = "brand") +
     guides(color = "none") +
     theme_nyt() +
     labs(
-      title = paste0(talent, " ", title_suffix),
-      subtitle = subtitle_text,
+      title = bundle_a_wrap_text(clean_title, width = 58),
+      subtitle = bundle_a_talent_subtitle(talent, subtitle_text),
       x = "Publish date",
       y = y_label
     ) +
@@ -78,6 +93,9 @@ Content_duration_views_with_data <- function(
   talent,
   span = 0.35,
   show_ci = TRUE,
+  raw_linewidth = 0.55,
+  smooth_linewidth = 0.9,
+  smooth_alpha = 0.18,
   y_label = "Total views",
   title_suffix = "- Views Over Time by Content Type"
 ) {
@@ -89,6 +107,9 @@ Content_duration_views_with_data <- function(
       talent,
       span = span,
       show_ci = show_ci,
+      raw_linewidth = raw_linewidth,
+      smooth_linewidth = smooth_linewidth,
+      smooth_alpha = smooth_alpha,
       y_label = y_label,
       title_suffix = title_suffix
     )

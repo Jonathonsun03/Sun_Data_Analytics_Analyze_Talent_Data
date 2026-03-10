@@ -14,3 +14,7 @@ Category-level engagement and revenue comparisons; Strength/weakness summaries b
 
 **Strategic Use:**
 Content mix optimization; Format experimentation planning; Scheduling strategy
+
+**Notes / Limitations:**
+Bundle B is currently revenue-dependent and assumes monetary data is available for the talent.
+For streamers without monetary data, build/use a non-monetary Bundle B variant organized around views, engagement, retention consistency, timing effects, collaboration effects, and topic/tag distributions (excluding revenue-based scoring and revenue-driven matrices).

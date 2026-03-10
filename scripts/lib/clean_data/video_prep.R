@@ -56,6 +56,11 @@ video_monetary_prep <- function(files, talent = NULL, talent_index = NULL){
     talent_index = talent_index
   )
 
+  # Keep revenue fields from the monetary source table; analytics versions are often
+  # zero/placeholder and can overwrite true values during attach_analytics().
+  Analytics <- Analytics %>%
+    dplyr::select(-dplyr::any_of(c("Estimated Revenue", "CPM")))
+
   Data <- .get_type_data(
       files = files,
       type = "video_monetary",

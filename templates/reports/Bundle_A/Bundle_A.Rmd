@@ -1,7 +1,8 @@
 ---
-title: "BundleA"
-author: "Jonathon Sun"
-date: "`r Sys.Date()`"
+title: "`r { t <- params$talent; if (!(length(t) == 1 && !is.na(t) && nzchar(trimws(as.character(t))))) t <- 'Talent'; t <- trimws(as.character(t)); t_clean <- trimws(gsub('\\s*[\\[【].*$', '', t)); paste0('Performance and Growth Overview Report: ', t_clean) }`"
+subtitle: "`r { r <- params$included_date_range; if (!(length(r) == 1 && !is.na(r) && nzchar(trimws(as.character(r))))) r <- 'All available dates'; paste0('Data Range: ', as.character(r)) }`"
+author: "Author: Zhuni Excel & Jonathon Sun"
+date: "`r { x <- params$render_generated_at; if (length(x) == 1 && !is.na(x) && nzchar(trimws(as.character(x)))) { x <- trimws(as.character(x)); x_date <- sub('^([0-9]{4}-[0-9]{2}-[0-9]{2}).*$', '\\\\1', x); if (grepl('^[0-9]{4}-[0-9]{2}-[0-9]{2}$', x_date)) paste0('Report Date: ', x_date) else paste0('Report Date: ', format(Sys.Date(), '%Y-%m-%d')) } else paste0('Report Date: ', format(Sys.Date(), '%Y-%m-%d')) }`"
 output:
   html_document:
     self_contained: true
@@ -10,6 +11,13 @@ output:
     toc_depth: 3
 params:
   talent: "Ava"
+  data_source: "staging"
+  data_root: null
+  render_generated_at: null
+  included_date_range: null
+  render_cli: null
+  render_output_dir: null
+  render_output_prefix: null
   window_days: null
   start_date: null
   end_date: null
@@ -60,9 +68,191 @@ library(plotly)
 
 ```
 
+```{r report_layout_style, echo=FALSE, results='asis'}
+cat(
+  "<style>
+  .main-container {
+    max-width: 1200px !important;
+  }
+  .section.level1,
+  .section.level2,
+  .section.level3 {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  .html-widget,
+  .plotly.html-widget,
+  .js-plotly-plot,
+  .plot-container,
+  .svg-container {
+    max-width: 100% !important;
+  }
+  .plotly.html-widget {
+    width: 100% !important;
+  }
+  .dataTables_wrapper {
+    width: 100%;
+    max-width: 100%;
+  }
+  .dataTables_wrapper .dataTables_scroll {
+    overflow-x: auto;
+  }
+  table.dataTable {
+    width: 100% !important;
+  }
+  .dataTables_wrapper table.dataTable thead th,
+  .dataTables_wrapper table.dataTable thead td {
+    white-space: normal !important;
+    line-height: 1.2;
+    vertical-align: bottom;
+  }
+  </style>"
+)
+```
+
+```{r plotly_helpers, include=FALSE}
+bundle_a_ggplotly <- function(plot_obj, tooltip = NULL, rotate_y_axis_title = FALSE) {
+  p <- if (is.null(tooltip)) {
+    plotly::ggplotly(plot_obj)
+  } else {
+    plotly::ggplotly(plot_obj, tooltip = tooltip)
+  }
+
+  if (!inherits(plot_obj, "ggplot")) {
+    return(p)
+  }
+
+  title_txt <- plot_obj$labels$title
+  subtitle_txt <- plot_obj$labels$subtitle
+
+  clean_talent_name <- function(x) {
+    if (is.null(x) || length(x) == 0) {
+      return("Unknown")
+    }
+    t <- trimws(as.character(x[[1]]))
+    if (!nzchar(t)) {
+      return("Unknown")
+    }
+    t <- gsub("\\s*[\\[【].*$", "", t)
+    t <- trimws(t)
+    if (!nzchar(t)) "Unknown" else t
+  }
+
+  fallback_talent <- NULL
+  if (exists("Talent", inherits = TRUE)) {
+    fallback_talent <- get("Talent", inherits = TRUE)
+  } else if (exists("params", inherits = TRUE) &&
+             is.list(get("params", inherits = TRUE)) &&
+             !is.null(get("params", inherits = TRUE)$talent)) {
+    fallback_talent <- get("params", inherits = TRUE)$talent
+  }
+  fallback_talent <- paste0("Talent: ", clean_talent_name(fallback_talent))
+
+  wrap_for_plotly <- function(x, width = 80) {
+    txt <- trimws(as.character(x))
+    if (!nzchar(txt)) {
+      return("")
+    }
+    txt <- gsub("\\s+", " ", txt)
+    paste(strwrap(txt, width = width), collapse = "\n")
+  }
+
+  title_txt <- if (is.null(title_txt) || !nzchar(trimws(as.character(title_txt)))) {
+    ""
+  } else {
+    as.character(title_txt[[1]])
+  }
+  subtitle_txt <- if (is.null(subtitle_txt) || !nzchar(trimws(as.character(subtitle_txt)))) {
+    fallback_talent
+  } else {
+    as.character(subtitle_txt[[1]])
+  }
+
+  if (nzchar(fallback_talent) && !grepl("(^|\\|)\\s*Talent\\s*:", subtitle_txt, perl = TRUE)) {
+    subtitle_txt <- paste0(fallback_talent, " | ", subtitle_txt)
+  }
+
+  title_plain <- wrap_for_plotly(title_txt, width = 54)
+  subtitle_plain <- wrap_for_plotly(subtitle_txt, width = 88)
+
+  title_txt <- gsub("\n", "<br>", htmltools::htmlEscape(title_plain), fixed = TRUE)
+  subtitle_txt <- gsub("\n", "<br>", htmltools::htmlEscape(subtitle_plain), fixed = TRUE)
+
+  title_lines <- max(1L, length(strsplit(title_plain, "\n", fixed = TRUE)[[1]]))
+  subtitle_lines <- if (nzchar(subtitle_plain)) {
+    length(strsplit(subtitle_plain, "\n", fixed = TRUE)[[1]])
+  } else {
+    0L
+  }
+
+  current_top <- p$x$layout$margin$t
+  if (is.null(current_top) || !is.finite(current_top)) {
+    current_top <- 60
+  }
+  needed_top <- 58 + (title_lines * 24) + (subtitle_lines * 18) + 16
+  top_margin <- max(as.numeric(current_top), as.numeric(needed_top))
+
+  combined_title <- if (nzchar(subtitle_txt)) {
+    paste0(
+      "<b>", title_txt, "</b>",
+      "<br><span style='font-size:0.78em;'>", subtitle_txt, "</span>"
+    )
+  } else {
+    paste0("<b>", title_txt, "</b>")
+  }
+
+  if (isTRUE(rotate_y_axis_title) && length(p$x$layout$annotations) > 0) {
+    anns <- p$x$layout$annotations
+    for (i in seq_along(anns)) {
+      ann <- anns[[i]]
+      ann_x <- if (is.null(ann$x)) NA_real_ else suppressWarnings(as.numeric(ann$x))
+      ann_y <- if (is.null(ann$y)) NA_real_ else suppressWarnings(as.numeric(ann$y))
+      is_axis_annot <- identical(ann$annotationType, "axis")
+      is_y_axis_title <- isTRUE(is_axis_annot) &&
+        is.finite(ann_x) && is.finite(ann_y) &&
+        abs(ann_x - 0) < 1e-9 &&
+        abs(ann_y - 0.5) < 1e-9
+
+      if (is_y_axis_title) {
+        anns[[i]]$textangle <- -90
+        anns[[i]]$xanchor <- "center"
+        anns[[i]]$yanchor <- "middle"
+        anns[[i]]$xshift <- -55
+      }
+    }
+    p$x$layout$annotations <- anns
+  }
+
+  margin_cfg <- list(t = top_margin)
+  if (isTRUE(rotate_y_axis_title)) {
+    current_left <- p$x$layout$margin$l
+    if (is.null(current_left) || !is.finite(current_left)) {
+      current_left <- 120
+    }
+    margin_cfg$l <- max(as.numeric(current_left), 140)
+  }
+
+  p %>%
+    plotly::layout(
+      title = list(
+        text = combined_title,
+        x = 0,
+        xanchor = "left",
+        y = 0.96,
+        yanchor = "top",
+        pad = list(t = 10, b = 8)
+      ),
+      margin = margin_cfg,
+      autosize = TRUE
+    ) %>%
+    plotly::config(responsive = TRUE)
+}
+```
+
 ```{r modules, include=FALSE}
 
 source("scripts/lib/utils/staging_root.R")
+source("scripts/lib/utils/datalake_root.r")
 
 list.files(here("scripts","lib","plots","report","bundle_A"), full.names = TRUE) %>%
     walk(source)
@@ -81,11 +271,34 @@ source(file.path(clean_data_dir, "clean_columns.R"))
 source(file.path(clean_data_dir, "video_prep.R"))
 source(file.path(clean_data_dir, "title_classification_join.R"))
 
-root <- get_staging_root()
 ```
 
 ```{r load_data, include = FALSE}
-talent_root <- list.files(root, full.names = TRUE)
+data_source <- tolower(trimws(as.character(params$data_source)))
+if (!nzchar(data_source)) {
+  data_source <- "staging"
+}
+if (!(data_source %in% c("staging", "datalake"))) {
+  stop("`params$data_source` must be one of: 'staging', 'datalake'.")
+}
+
+data_root_param <- if (is.null(params$data_root) || (length(params$data_root) == 1 && is.na(params$data_root))) {
+  ""
+} else {
+  trimws(as.character(params$data_root[[1]]))
+}
+
+root <- if (nzchar(data_root_param)) {
+  data_root_param
+} else if (identical(data_source, "datalake")) {
+  get_datalake_root()
+} else {
+  get_staging_root()
+}
+
+if (!dir.exists(root)) {
+  stop("Resolved data root does not exist: ", root)
+}
 
 Talent <- as.character(params$talent)
 if (length(Talent) != 1 || is.na(Talent) || !nzchar(trimws(Talent))) {
@@ -140,7 +353,7 @@ if (!is.na(start_date_param) || !is.na(end_date_param)) {
   window_mode <- "all_data"
 }
 
-talent_root <- select_talent(Talent)
+talent_root <- select_talent(Talent, root = root)
 files <- TalentFiles(talent_root)
 
 titles <- load_title_classifications(talent = Talent)
@@ -151,7 +364,7 @@ preps <- video_preps_with_titles(
   dedupe = TRUE,
   key_cols = "Video ID",
   sort_cols = c("confidence", "published_at", "Published At"),
-  dedupe_sets = c("analytics", "monetary", "demo")
+  dedupe_sets = c("analytics", "monetary")
 )
 
 analytics <- preps$analytics
@@ -201,18 +414,17 @@ df <- analytics
 ```
 
 # Start Here: How To Use This Report
-This report is designed for quick scanning by managers and talent teams.  
-Use the floating table of contents to jump directly to the section tied to your decision.
+This report is designed to support quick, practical decisions for managers and talent teams.  
+Use the floating table of contents to jump directly to the section that matches the decision you need to make now.
 
 ## Quick Paths by Role
 1. **Manager fast scan (5-10 minutes):** Overall Performance Snapshot -> Trends Over Time -> Collaboration Effectiveness -> Wrap-up.
 2. **Talent optimization path:** Engagement Distribution -> Timing Effects -> Topic Performance -> Tag Performance.
-3. **Audience strategy path:** Audience Age + Gender Trends -> Core Audience Stability.
+3. **Audience strategy path:** Audience Age + Gender Trends.
 
 ## How to Interpret Responsibly
 - This report is **observational**, not causal. It shows patterns, not proof of cause-and-effect.
 - Tag and topic metrics can be influenced by timing, promotion, seasonality, and posting volume.
-- Core and Potential audience shares are complementary (`Potential = 100% - Core`), so inverse movement is expected.
 - Tag totals are directional because tags can overlap across videos.
 
 ## Standard vs Customized Content
@@ -221,44 +433,106 @@ Use the **Wrap-up** section to add talent-specific narrative and recommendations
 
 ## Active Analysis Window
 ```{r analysis-window-summary}
-if (is.na(window_days)) {
-  if (window_mode == "explicit_range") {
-    cat(
-      "**Window setting:** Explicit range (",
-      format(window_start_date, "%Y-%m-%d"), " to ", format(window_end_date, "%Y-%m-%d"), ").",
-      sep = ""
-    )
-  } else {
-    cat("**Window setting:** All available staged data (no days-back filter).")
-  }
-} else {
-  cat(
-    "**Window setting:** Last ", window_days, " days ",
-    "(", format(window_start_date, "%Y-%m-%d"), " to ", format(window_end_date, "%Y-%m-%d"), ").",
-    sep = ""
-  )
+pick_col <- function(df, candidates) {
+  hit <- intersect(candidates, names(df))
+  if (length(hit) == 0) return(NA_character_)
+  hit[[1]]
 }
 
-cat("\n\n")
-cat(
-  "**Rows in active window:** ",
-  "analytics=", nrow(analytics), ", ",
-  "monetary=", nrow(monetary), ", ",
-  "demographics=", nrow(demo),
-  ".",
-  sep = ""
+safe_unique_videos <- function(df) {
+  id_col <- pick_col(df, c("Video ID"))
+  if (is.na(id_col) || nrow(df) == 0) return(NA_integer_)
+  dplyr::n_distinct(df[[id_col]])
+}
+
+safe_date_span <- function(df) {
+  date_col <- pick_col(df, c("publish_date", "Published At", "date"))
+  if (is.na(date_col) || nrow(df) == 0) return("N/A")
+  d <- suppressWarnings(as.Date(df[[date_col]]))
+  d <- d[!is.na(d)]
+  if (length(d) == 0) return("N/A")
+  paste0(format(min(d), "%Y-%m-%d"), " to ", format(max(d), "%Y-%m-%d"))
+}
+
+window_setting <- if (window_mode == "explicit_range") {
+  "Explicit date range"
+} else if (window_mode == "days_back") {
+  paste0("Last ", window_days, " days")
+} else {
+  "All available dates"
+}
+
+included_range <- if (window_mode == "all_data") {
+  "All available dates"
+} else {
+  paste0(format(window_start_date, "%Y-%m-%d"), " to ", format(window_end_date, "%Y-%m-%d"))
+}
+
+demo_gender_col <- pick_col(demo, c("Gender", "gender"))
+demo_age_col <- pick_col(demo, c("Age", "age"))
+audience_segment_count <- if (!is.na(demo_gender_col) && !is.na(demo_age_col) && nrow(demo) > 0) {
+  demo %>%
+    dplyr::transmute(.seg = paste(.data[[demo_gender_col]], .data[[demo_age_col]], sep = " | ")) %>%
+    dplyr::filter(!is.na(.data$.seg), nzchar(.data$.seg)) %>%
+    dplyr::summarise(n = dplyr::n_distinct(.data$.seg)) %>%
+    dplyr::pull(.data$n)
+} else {
+  NA_integer_
+}
+
+import_summary <- tibble::tibble(
+  Metric = c(
+    "Window setting",
+    "Included date range",
+    "Analytics rows",
+    "Monetary rows",
+    "Audience demographic rows",
+    "Unique videos (analytics)",
+    "Unique videos (monetary)",
+    "Distinct audience segments (age x gender)",
+    "Analytics date span",
+    "Monetary date span",
+    "Demographics date span"
+  ),
+  Value = c(
+    window_setting,
+    included_range,
+    scales::comma(nrow(analytics)),
+    scales::comma(nrow(monetary)),
+    scales::comma(nrow(demo)),
+    ifelse(is.na(safe_unique_videos(analytics)), "N/A", scales::comma(safe_unique_videos(analytics))),
+    ifelse(is.na(safe_unique_videos(monetary)), "N/A", scales::comma(safe_unique_videos(monetary))),
+    ifelse(is.na(audience_segment_count), "N/A", scales::comma(audience_segment_count)),
+    safe_date_span(analytics),
+    safe_date_span(monetary),
+    safe_date_span(demo)
+  )
+)
+
+DT::datatable(
+  import_summary,
+  rownames = FALSE,
+  class = "compact stripe hover",
+  colnames = if (exists("dt_pretty_colnames", mode = "function")) dt_pretty_colnames(import_summary) else names(import_summary),
+  options = list(
+    dom = "t",
+    paging = FALSE,
+    ordering = FALSE,
+    searching = FALSE,
+    info = FALSE
+  )
 )
 ```
 
 # Overall Performance Snapshot
-**Section goal:** Establish a shared baseline of total scale, per-video efficiency, and revenue mix.
+This section establishes a common baseline for current channel health. It combines total views (scale), average views per video (efficiency), revenue (monetization), and engagement distribution (retention quality and consistency) so decisions are based on both volume and quality, not just one metric.
 
 ## Views by Content Type (Total vs Average)
 **What this chart shows:** Total views and average views per video for each content type in one side-by-side view.  
 **How to read it:** Use the Total panel to see overall volume and the Average panel to see per-upload performance, then compare formats across both.
 
 ```{r views by content comparison, fig.width=plot_w_facet, fig.height=plot_h_facet}
-ggplotly(
+bundle_a_ggplotly(
   views_content_type_comparison(analytics, Talent) +
   theme_nyt()
 )
@@ -270,7 +544,7 @@ ggplotly(
 **How to read it:** Look for rises, drops, and turning points to see when performance accelerated or slowed.
 
 ```{r combined performance trends, fig.width=plot_w_std, fig.height=plot_h_std}
-ggplotly(
+bundle_a_ggplotly(
   performance_trends_over_time(
     analytics_df = analytics,
     monetary_df = monetary,
@@ -282,61 +556,121 @@ ggplotly(
 ```
 
 ## Total Revenue by content type 
-**What this chart shows:** Total estimated revenue grouped by content type for each month.  
-**How to read it:** Larger segments indicate where more revenue was generated in that month.
+**What this chart shows:** Total estimated revenue by content type for videos published in each month.  
+**How to read it:** This is a publish-month cohort view (lifetime revenue-to-date per cohort), not cash earned only inside that calendar month.
 
 ```{r views by content over time, fig.width=plot_w_std, fig.height=plot_h_std}
-ggplotly(
-  total_metric_content_type(
-    monetary,
-    Talent,
-    metric_col = "Estimated Revenue",
-    metric_label = "Revenue",
-    window_months = 1,
-    bar_position = "stack",
-    show_counts = TRUE
-  )
+revenue_monthly_ct <- total_metric_content_type_with_data(
+  monetary,
+  Talent,
+  metric_col = "Estimated Revenue",
+  metric_label = "Revenue",
+  window_months = 1,
+  bar_position = "stack",
+  show_counts = TRUE,
+  unique_bar_colors = TRUE
 )
+
+bundle_a_ggplotly(revenue_monthly_ct$plot)
 
 ```
 
-## Engagement Distribution by Content Type
-**What this chart shows:** Distribution of per-video engagement for each content type.  
-**How to read it:** Each dot is a video; the box shows the middle range, the center line is the median, and the spread shows consistency vs volatility.
+```{r revenue-by-content-table}
+revenue_monthly_table <- revenue_monthly_ct$data %>%
+  mutate(
+    Period = as.character(.data$window_label),
+    `Total Revenue` = .data$Total,
+    `Video Count` = .data$VideoCount,
+    `Avg Revenue per Video` = dplyr::if_else(
+      .data$VideoCount > 0,
+      .data$Total / .data$VideoCount,
+      NA_real_
+    )
+  ) %>%
+  arrange(.data$.window_start, .data$`Content Type`) %>%
+  select(
+    .data$Period,
+    .data$`Content Type`,
+    .data$`Total Revenue`,
+    .data$`Video Count`,
+    .data$`Avg Revenue per Video`
+  )
 
-```{r engagement distribution, fig.width=plot_w_std, fig.height=plot_h_std}
+DTSettings(
+  revenue_monthly_table,
+  class = "display stripe hover",
+  scroll_x = TRUE
+)
+```
+
+## Engagement Distribution and Successful Videos by Content Type
+**What this chart shows:** Per-video Average View % distribution by content type, with top-quartile videos highlighted.  
+**How to read it:** Boxes show baseline performance and consistency by format; highlighted points show standout videos within each format.
+
+**How to use this in two contexts:**  
+1. **Average View % distribution context (format reliability):** Use the median line and box spread to decide which content type is most consistently retaining viewers.  
+2. **Successful video context (replicable winners):** Use highlighted points to identify high-performing outlier videos, then review titles/topics to replicate winning patterns.
+
+```{r engagement summary by content, fig.width=plot_w_std, fig.height=plot_h_std}
 analytics_eng <- analytics %>%
   mutate(avg_view_prop = averageViewPercentage / 100)
 
-ggplotly(
-  engagement_distribution_content_type(
-    analytics_eng,
-    Talent,
-    metric_col = "avg_view_prop",
-    metric_label = "Average View %",
-    y_as_percent = TRUE
-  ),
-  tooltip = "text"
-)
-```
-
-## Median Engagement by Content Type
-**What this chart shows:** Median engagement level by content type, with variability shown around that median.  
-**How to read it:** Higher bars mean stronger typical engagement; wider error bars mean outcomes vary more between videos.
-
-```{r engagement summary by content, fig.width=plot_w_std, fig.height=plot_h_std}
-eng_summary <- engagement_summary_content_type_prep(
+eng_success_df <- engagement_distribution_content_type_prep(
   analytics_eng,
   metric_col = "avg_view_prop"
 )
 
-ggplotly(
-  engagement_summary_content_type_plot(
-    eng_summary,
-    Talent,
-    metric_label = "Average View %",
-    y_as_percent = TRUE
+eng_success_df <- eng_success_df %>%
+  dplyr::group_by(.data$.content) %>%
+  dplyr::mutate(
+    .success_cut = stats::quantile(.data$.metric, probs = 0.75, na.rm = TRUE),
+    .is_success = .data$.metric >= .data$.success_cut
+  ) %>%
+  dplyr::ungroup() %>%
+  dplyr::mutate(
+    .metric_fmt = scales::label_percent(accuracy = 0.1)(.data$.metric),
+    .hover_text = paste0(
+      "Video: ", .data$.video_label,
+      "<br>Content Type: ", .data$.content,
+      "<br>Average View %: ", .data$.metric_fmt
+    )
   )
+
+p_eng_success <- ggplot2::ggplot(
+  eng_success_df,
+  ggplot2::aes(x = .data$.content, y = .data$.metric, fill = .data$.content)
+) +
+  ggplot2::geom_boxplot(
+    color = sun_data_brand_colors()[["midnight"]],
+    alpha = 0.65,
+    outlier.shape = NA,
+    width = 0.62
+  ) +
+  ggplot2::geom_jitter(
+    data = dplyr::filter(eng_success_df, .data$.is_success),
+    ggplot2::aes(text = .data$.hover_text),
+    width = 0.16,
+    alpha = 0.85,
+    size = 2.0,
+    color = sun_data_brand_colors()[["orange"]]
+  ) +
+  scale_fill_sun_data(variant = "brand") +
+  ggplot2::guides(fill = "none") +
+  theme_nyt() +
+  ggplot2::labs(
+    title = bundle_a_wrap_text("Average View % Distribution by Content Type", width = 58),
+    subtitle = bundle_a_talent_subtitle(
+      Talent,
+      "Highlighted points are top-quartile videos within each content type."
+    ),
+    x = "Content type",
+    y = "Average View %"
+  ) +
+  ggplot2::scale_y_continuous(labels = scales::label_percent(accuracy = 1))
+
+bundle_a_ggplotly(
+  p_eng_success,
+  tooltip = "text"
 )
 ```
 
@@ -356,37 +690,44 @@ DTSettings(UIdf)
 ```
 
 # Trends Over Time
-**Section goal:** Show whether performance patterns are improving, stable, or declining over time.
-
-## Views over time by content type
-**What this chart shows:** How views change over time for each content type.  
-**How to read it:** Compare trend lines to see which formats are growing, stable, or declining over time.
-
-```{r import monetary data, fig.width=plot_w_facet, fig.height=plot_h_facet}
-ggplotly(
-  Content_duration_views(df, Talent) +
-  theme_nyt()
-)
-
-```
+This section shows momentum: whether performance is improving, flattening, or declining over time. By tracking views and revenue together, it becomes easier to spot turning points early and separate audience demand shifts from monetization changes that a single-period snapshot might hide.
 
 ## Revenue over time by content type
 **What this chart shows:** How estimated revenue changes over time for each content type.  
 **How to read it:** Compare trajectories to identify which formats are contributing more monetization over time.
 
-```{r monetary data by content, fig.width=plot_w_facet, fig.height=plot_h_facet}
+```{r revenue over time by content, fig.width=plot_w_facet, fig.height=plot_h_facet}
 
-ggplotly(
+bundle_a_ggplotly(
   content_duration_metric(monetary, Talent, "Estimated Revenue") +
-  theme_nyt()
+  theme_nyt(),
+  rotate_y_axis_title = TRUE
 
 )
 
 
 ```
 
+## Total Views over time by content type
+**What this chart shows:** How total views change over time for each content type using the same trend format as the revenue chart above.  
+**How to read it:** Compare month-to-month direction and volatility by format, then read alongside revenue to see whether monetization changes are backed by view demand.
+
+```{r total views over time by content, fig.width=plot_w_facet, fig.height=plot_h_facet}
+bundle_a_ggplotly(
+  content_duration_metric(
+    analytics,
+    Talent,
+    metric_col = "views",
+    metric_label = "Views"
+  ) +
+    theme_nyt(),
+  rotate_y_axis_title = TRUE
+)
+
+```
+
 # Audience Composition
-**Section goal:** Clarify who the audience is and whether the audience mix is concentrating or broadening.
+This section explains who is watching and how that audience is changing month to month. Age and gender share trends provide a stable baseline for creative positioning, partnership fit, and identifying where the audience is expanding or contracting.
 
 ## Audience Age + Gender Trends
 **What this chart shows:** Audience share trends over time by age and gender segments.  
@@ -405,11 +746,12 @@ if (!isTRUE(demo_available)) {
       if (nrow(plot_df) == 0) {
         cat("No audience trend rows available in the selected window.")
       } else {
-        ggplotly(
+        bundle_a_ggplotly(
           audience_age_gender_trends_plot(
             plot_df = plot_df,
             talent = Talent
-          )
+          ),
+          rotate_y_axis_title = TRUE
         )
       }
     },
@@ -420,66 +762,8 @@ if (!isTRUE(demo_available)) {
 }
 ```
 
-## Core Audience Stability
-
-**What this chart shows:**  
-- **Core audience share:** the monthly share of your largest audience segment (top age + gender group).  
-- **Potential audience share:** everyone else combined (all non-core segments).
-
-**How to read it:**  
-- If **Core** rises and **Potential** falls, your audience is becoming more concentrated in one segment.  
-- If **Core** falls and **Potential** rises, your audience is broadening across more segments.  
-- Stable lines suggest a steady audience mix month to month.
-- Both lines are on the same 0-100% scale so month-to-month comparisons are direct.
-
-**Why this view is easier:**  
-It turns a technical concentration metric into two plain-language shares that are easier to explain to non-technical readers.
-
-```{r audience stability, fig.width=plot_w_facet, fig.height=plot_h_facet}
-if (!isTRUE(demo_available)) {
-  cat("No audience demographics data available in the selected window.")
-} else {
-  tryCatch(
-    {
-      core_stability <- audience_core_segment_stability_prep(
-        demo_df = demo,
-        freq = "month"
-      )
-      if (nrow(core_stability) == 0) {
-        cat("No core audience rows available in the selected window.")
-      } else {
-        ggplotly(
-          audience_core_segment_stability_plot(
-            stability_df = core_stability,
-            talent = Talent
-          ),
-          tooltip = "text"
-        )
-      }
-    },
-    error = function(e) {
-      cat("Core audience section unavailable for the selected window:", conditionMessage(e))
-    }
-  )
-}
-```
-
-# Monetization Quality (Views to Dollars)
-**Section goal:** Connect consumption performance to monetization efficiency.
-```{r monetary data table}
-
-Table <- revenue_stream_ratio_table(monetary)
-
-DTSettings(
-  Table,
-  class = "display stripe hover",
-  scroll_x = TRUE
-)
-
-```
-
 # Content Strategy Deep Dive
-**Section goal:** Turn performance patterns into actionable choices across timing, collaboration, topics, and tags.
+This section turns the performance signal into operating choices for upcoming uploads. Timing, collaboration, topic, and tag analyses focus on controllable levers so teams can prioritize high-impact experiments and make clearer trade-offs in the next publishing cycle.
 
 ## Timing Effects: Weekend vs Weekday
 **What this chart shows:** Per-video distributions of views and revenue for weekend vs weekday uploads.  
@@ -489,17 +773,91 @@ DTSettings(
 wk_summary <- weekend_vs_weekday_prep(analytics, monetary)
 wk_dist <- weekend_vs_weekday_distribution_prep(analytics, monetary)
 
-ggplotly(
+bundle_a_ggplotly(
   weekend_vs_weekday_distribution_plot(
     wk_dist,
     Talent
   ),
-  tooltip = "text"
+  tooltip = "text",
+  rotate_y_axis_title = TRUE
 )
 ```
 
 ```{r weekend-vs-weekday-table}
-DTSettings(wk_summary, class = "display stripe hover", scroll_x = TRUE)
+wk_metric_order <- c(
+  "TotalViews",
+  "AverageViewsPerVideo",
+  "MedianViewsPerVideo",
+  "TotalRevenue",
+  "AverageRevenuePerVideo",
+  "MedianRevenuePerVideo",
+  "VideoCountViews",
+  "VideoCountRevenue",
+  "ShareViews",
+  "ShareRevenue"
+)
+
+wk_day_col <- intersect(c("Day Type", "weekend_group", "Weekend Group", "day_type"), names(wk_summary))
+if (length(wk_day_col) == 0) {
+  stop("Weekend vs weekday summary missing day-type column.")
+}
+wk_day_col <- wk_day_col[[1]]
+
+wk_compact <- wk_summary %>%
+  dplyr::transmute(
+    .day_type = as.character(.data[[wk_day_col]]),
+    dplyr::across(
+      dplyr::any_of(wk_metric_order),
+      ~ suppressWarnings(as.numeric(.x))
+    )
+  ) %>%
+  tidyr::pivot_longer(
+    cols = dplyr::any_of(wk_metric_order),
+    names_to = "Metric",
+    values_to = "Value"
+  ) %>%
+  dplyr::mutate(
+    .metric_key = tolower(gsub("[^a-z0-9]+", "", .data$Metric)),
+    .metric_rank = match(.data$Metric, wk_metric_order),
+    Metric = if (exists("dt_display_label", mode = "function")) {
+      vapply(.data$Metric, dt_display_label, character(1))
+    } else {
+      .data$Metric
+    },
+    Value = dplyr::case_when(
+      grepl("share", .data$.metric_key) ~ scales::percent(.data$Value, accuracy = 0.1),
+      grepl("revenue", .data$.metric_key) ~ scales::dollar(.data$Value, accuracy = 0.01),
+      grepl("count", .data$.metric_key) ~ scales::comma(round(.data$Value)),
+      TRUE ~ scales::number(.data$Value, accuracy = 0.01, big.mark = ",")
+    )
+  ) %>%
+  tidyr::pivot_wider(
+    names_from = .data$.day_type,
+    values_from = Value
+  ) %>%
+  dplyr::arrange(.data$.metric_rank) %>%
+  dplyr::select(
+    .data$Metric,
+    dplyr::any_of(c("Weekday", "Weekend"))
+  )
+
+DT::datatable(
+  wk_compact,
+  rownames = FALSE,
+  class = "compact stripe hover",
+  colnames = if (exists("dt_pretty_colnames", mode = "function")) dt_pretty_colnames(wk_compact) else names(wk_compact),
+  extensions = "Buttons",
+  filter = "none",
+  options = list(
+    dom = "Bt",
+    buttons = dt_export_buttons(),
+    paging = FALSE,
+    ordering = FALSE,
+    searching = FALSE,
+    info = FALSE,
+    autoWidth = TRUE
+  )
+)
 ```
 
 ## Timing Effects: Day-of-Week Distribution
@@ -514,7 +872,7 @@ if (nrow(dow_summary) == 0) {
 } else {
   tryCatch(
     {
-      ggplotly(
+      bundle_a_ggplotly(
         day_of_week_performance_plot(
           dow_summary,
           Talent,
@@ -545,12 +903,13 @@ if (nrow(collab_summary) == 0) {
 } else {
   tryCatch(
     {
-      ggplotly(
+      bundle_a_ggplotly(
         collaboration_effectiveness_plot(
           collab_summary,
           Talent,
           as_share = FALSE
-        )
+        ),
+        rotate_y_axis_title = TRUE
       )
     },
     error = function(e) {
@@ -564,20 +923,82 @@ if (nrow(collab_summary) == 0) {
 if (nrow(collab_summary) == 0) {
   cat("No collaboration table rows available in the selected window.")
 } else {
-  collab_table <- collab_summary %>%
-    select(
-      collab_group,
-      VideoCountViews,
-      VideoCountRevenue,
-      TotalViews,
-      TotalRevenue,
-      AverageViewsPerVideo,
-      AverageRevenuePerVideo,
-      AvgViewsLiftVsNonCollab,
-      AvgRevenueLiftVsNonCollab
+  collab_metric_order <- c(
+    "VideoCountViews",
+    "VideoCountRevenue",
+    "TotalViews",
+    "TotalRevenue",
+    "AverageViewsPerVideo",
+    "AverageRevenuePerVideo",
+    "AvgViewsLiftVsNonCollab",
+    "AvgRevenueLiftVsNonCollab"
+  )
+
+  collab_group_col <- intersect(c("collab_group", "Collaboration Type", "collaboration_type"), names(collab_summary))
+  if (length(collab_group_col) == 0) {
+    stop("Collaboration summary missing group column.")
+  }
+  collab_group_col <- collab_group_col[[1]]
+
+  collab_compact <- collab_summary %>%
+    dplyr::transmute(
+      .group = as.character(.data[[collab_group_col]]),
+      dplyr::across(
+        dplyr::any_of(collab_metric_order),
+        ~ suppressWarnings(as.numeric(.x))
+      )
+    ) %>%
+    tidyr::pivot_longer(
+      cols = dplyr::any_of(collab_metric_order),
+      names_to = "Metric",
+      values_to = "Value"
+    ) %>%
+    dplyr::mutate(
+      .metric_key = tolower(gsub("[^a-z0-9]+", "", .data$Metric)),
+      .metric_rank = match(.data$Metric, collab_metric_order),
+      Metric = if (exists("dt_display_label", mode = "function")) {
+        vapply(.data$Metric, dt_display_label, character(1))
+      } else {
+        .data$Metric
+      },
+      Value = dplyr::case_when(
+        grepl("lift", .data$.metric_key) ~ scales::percent(.data$Value, accuracy = 0.1),
+        grepl("revenue", .data$.metric_key) ~ scales::dollar(.data$Value, accuracy = 0.01),
+        grepl("count", .data$.metric_key) ~ scales::comma(round(.data$Value)),
+        TRUE ~ scales::number(.data$Value, accuracy = 0.01, big.mark = ",")
+      )
+    ) %>%
+    tidyr::pivot_wider(
+      names_from = .data$.group,
+      values_from = .data$Value
+    ) %>%
+    dplyr::arrange(.data$.metric_rank) %>%
+    dplyr::select(
+      .data$Metric,
+      dplyr::any_of(c("Non-collaborative", "Collaborative"))
     )
 
-  DTSettings(collab_table, class = "display stripe hover", scroll_x = TRUE)
+  collab_display_colnames <- names(collab_compact)
+  collab_display_colnames[collab_display_colnames == "Non-collaborative"] <- "Non-collab"
+  collab_display_colnames[collab_display_colnames == "Collaborative"] <- "Collab"
+
+  DT::datatable(
+    collab_compact,
+    rownames = FALSE,
+    class = "compact stripe hover",
+    colnames = collab_display_colnames,
+    extensions = "Buttons",
+    filter = "none",
+    options = list(
+      dom = "Bt",
+      buttons = dt_export_buttons(),
+      paging = FALSE,
+      ordering = FALSE,
+      searching = FALSE,
+      info = FALSE,
+      autoWidth = TRUE
+    )
+  )
 }
 ```
 
@@ -593,7 +1014,7 @@ if (nrow(topic_summary) == 0) {
 } else {
   tryCatch(
     {
-      ggplotly(
+      bundle_a_ggplotly(
         topic_performance_plot(
           topic_summary,
           Talent,
@@ -633,7 +1054,7 @@ if (nrow(tag_summary) == 0) {
 } else {
   tryCatch(
     {
-      ggplotly(
+      bundle_a_ggplotly(
         tag_performance_plot(
           tag_summary,
           Talent,
@@ -658,7 +1079,7 @@ if (nrow(tag_summary) == 0) {
 } else {
   tryCatch(
     {
-      ggplotly(
+      bundle_a_ggplotly(
         tag_average_views_plot(
           tag_summary,
           Talent
@@ -680,13 +1101,3 @@ if (nrow(tag_summary) == 0) {
   DTSettings(tag_summary, class = "display stripe hover", scroll_x = TRUE)
 }
 ```
-
-# Wrap-up: What this means
-Use this section to add tailored commentary after reviewing the standard charts above.
-
-**Default executive summary template (edit for each talent):**
-1. **Performance direction:** Views and revenue are [rising/stable/declining], led by [top formats].
-2. **Efficiency signal:** Per-video performance is strongest in [formats/topics/tags], while [areas] underperform.
-3. **Audience signal:** Core audience is [stable/concentrating/broadening]; potential audience is [rising/falling].
-4. **Operating signal:** [Weekday/weekend/day] and [collab/non-collab] content currently show higher average outcomes.
-5. **Recommended next 30 days:** Double down on [2-3 actions], test [1-2 experiments], and monitor [key risks].

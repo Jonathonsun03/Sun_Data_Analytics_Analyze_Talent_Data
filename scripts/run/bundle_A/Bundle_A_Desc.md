@@ -27,14 +27,13 @@ Talent/creator optimization path:
 
 Audience strategy path:
 1. Audience Age + Gender Trends
-2. Core vs Potential Audience Stability
 
 ### 4) Section map (question -> where to look)
 - Performance pulse -> Combined Performance Trends (Views + Revenue)
 - Total vs per-video format performance -> Views by Content Type (Total vs Average)
 - Revenue mix by format -> Total Revenue by Content Type
 - Engagement consistency/volatility -> Engagement Distribution + Median Engagement
-- Audience stability -> Core Audience Stability
+- Audience composition shifts -> Audience Age + Gender Trends
 - Monetization efficiency -> Monetization Quality (Views to Dollars)
 - Timing decisions -> Weekend vs Weekday + Day-of-Week
 - Collaboration value -> Collaboration Effectiveness
@@ -46,7 +45,7 @@ Views by content type (total and average per video), combined views + revenue tr
 2. Trends over time:
 Views and revenue by content type by month.
 3. Audience composition:
-Audience age + gender trends and Core vs Potential audience stability.
+Audience age + gender trends.
 4. Monetization quality:
 Views-to-dollars ratio table.
 5. Content-type deep dive:
@@ -55,7 +54,6 @@ Weekend vs weekday distribution, day-of-week contribution, collaboration effecti
 ### 6) Interpretation guardrails
 - This report is observational, not causal. Differences across groups do not prove one factor caused the outcome.
 - Tag/topic effects can be confounded by release timing, promotion, seasonality, and publishing volume.
-- Core and Potential audience shares are complementary (Potential = 100% - Core), plotted on the same 0-100% scale.
 - Tag totals are directional because tags can overlap (tags are not mutually exclusive).
 
 ### 7) Data requirements

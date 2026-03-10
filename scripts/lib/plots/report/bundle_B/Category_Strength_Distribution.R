@@ -152,7 +152,7 @@ bundle_b_content_position_distribution_plot <- function(position_data, talent) {
         ggplot2::xlim(0.5, 1.5) +
         ggplot2::ylim(0.5, 1.5) +
         ggplot2::theme_void() +
-        ggplot2::labs(title = paste0(talent, " - Content Position in Overall Distribution"))
+        ggplot2::labs(title = bundle_b_title_text(talent, "Content Position in Overall Distribution"))
     )
   }
 
@@ -188,11 +188,12 @@ bundle_b_content_position_distribution_plot <- function(position_data, talent) {
     ) +
     ggplot2::scale_y_continuous(labels = scales::label_comma()) +
     theme_nyt() +
+    bundle_b_theme_standard() +
     ggplot2::labs(
-      title = paste0(talent, " - Content Type Position in Full Distribution"),
+      title = bundle_b_title_text(talent, "Content Type Position in Full Distribution"),
       subtitle = "Bars = count of videos in each value range. Vertical lines = content type medians.",
       x = "Per-video value (raw units)",
-      y = "Video count",
+      y = "Count",
       linetype = "Content type"
     )
 }
@@ -243,6 +244,13 @@ bundle_b_content_position_distribution_plotly <- function(position_data, talent,
         dplyr::filter(as.character(.data$Metric) == metric_name) %>%
         dplyr::arrange(dplyr::desc(.data$MedianPercentile), .data$Content_Type)
 
+      x_axis_cfg <- dplyr::case_when(
+        identical(metric_name, "Views per video") ~ "views",
+        identical(metric_name, "Revenue per video ($)") ~ "revenue",
+        identical(metric_name, "Engagement rate (%)") ~ "engagement",
+        TRUE ~ "default"
+      )
+
       hist_counts <- graphics::hist(panel_values$Value, breaks = bins, plot = FALSE)$counts
       y_max <- suppressWarnings(max(hist_counts, na.rm = TRUE))
       if (!is.finite(y_max) || y_max <= 0) y_max <- 1
@@ -276,8 +284,15 @@ bundle_b_content_position_distribution_plotly <- function(position_data, talent,
             font = list(size = 18)
           ),
           xaxis = list(
-            title = if (panel_idx == length(metric_levels)) "Per-video value (raw units)" else "",
-            tickformat = ",.0f"
+            title = dplyr::case_when(
+              x_axis_cfg == "views" ~ "Views per video",
+              x_axis_cfg == "revenue" ~ "Revenue per video ($)",
+              x_axis_cfg == "engagement" ~ "Engagement rate (%)",
+              TRUE ~ "Per-video value"
+            ),
+            tickformat = ",.0f",
+            tickprefix = if (x_axis_cfg == "revenue") "$" else "",
+            ticksuffix = if (x_axis_cfg == "engagement") "%" else ""
           ),
           yaxis = list(
             title = "Video count",
@@ -327,7 +342,16 @@ bundle_b_content_position_distribution_plotly <- function(position_data, talent,
     }
   )
 
-  plotly::subplot(
+  panel_metric_label <- function(metric_name) {
+    dplyr::case_when(
+      identical(metric_name, "Views per video") ~ "Views per video",
+      identical(metric_name, "Revenue per video ($)") ~ "Revenue per video ($)",
+      identical(metric_name, "Engagement rate (%)") ~ "Engagement rate (%)",
+      TRUE ~ as.character(metric_name)
+    )
+  }
+
+  p <- plotly::subplot(
     panel_plots,
     nrows = length(panel_plots),
     shareX = FALSE,
@@ -337,12 +361,170 @@ bundle_b_content_position_distribution_plotly <- function(position_data, talent,
   ) %>%
     plotly::layout(
       title = list(
-        text = paste0(talent, " - Content Type Position in Full Distribution"),
+        text = bundle_b_title_text(talent, "Content Type Position in Full Distribution"),
         x = 0.02,
         xanchor = "left"
       ),
       legend = list(title = list(text = "Content type"))
     )
+
+  # Add facet-strip style bars + labels so each panel clearly states its metric.
+  strip_shapes <- list()
+  strip_annotations <- list()
+  for (i in seq_along(metric_levels)) {
+    suffix <- if (i == 1) "" else as.character(i)
+    x_axis_key <- paste0("xaxis", suffix)
+    y_axis_key <- paste0("yaxis", suffix)
+    x_dom <- p$x$layout[[x_axis_key]]$domain
+    y_dom <- p$x$layout[[y_axis_key]]$domain
+    if (is.null(x_dom) || is.null(y_dom) || length(x_dom) != 2 || length(y_dom) != 2) {
+      next
+    }
+
+    strip_y0 <- min(0.995, y_dom[[2]] + 0.004)
+    strip_y1 <- min(0.999, strip_y0 + 0.020)
+    strip_x0 <- x_dom[[1]]
+    strip_x1 <- x_dom[[2]]
+
+    strip_shapes[[length(strip_shapes) + 1]] <- list(
+      type = "rect",
+      xref = "paper",
+      yref = "paper",
+      x0 = strip_x0,
+      x1 = strip_x1,
+      y0 = strip_y0,
+      y1 = strip_y1,
+      line = list(color = "rgba(0,0,0,0)"),
+      fillcolor = "rgba(239,242,247,0.95)",
+      layer = "above"
+    )
+
+    strip_annotations[[length(strip_annotations) + 1]] <- list(
+      x = (strip_x0 + strip_x1) / 2,
+      y = (strip_y0 + strip_y1) / 2,
+      xref = "paper",
+      yref = "paper",
+      text = paste0("<b>", panel_metric_label(metric_levels[[i]]), "</b>"),
+      showarrow = FALSE,
+      xanchor = "center",
+      yanchor = "middle",
+      font = list(size = 12, color = "rgba(33,37,41,1)")
+    )
+  }
+
+  existing_shapes <- p$x$layout$shapes
+  if (is.null(existing_shapes)) existing_shapes <- list()
+  existing_annotations <- p$x$layout$annotations
+  if (is.null(existing_annotations)) existing_annotations <- list()
+
+  p %>%
+    plotly::layout(
+      shapes = c(existing_shapes, strip_shapes),
+      annotations = c(existing_annotations, strip_annotations)
+    ) %>%
+    bundle_b_plotly_layout(margin_l = 85)
+}
+
+bundle_b_engagement_summary_distribution_plot <- function(
+  plot_df,
+  talent,
+  metric_label = "Average View %",
+  y_as_percent = TRUE
+) {
+  required_cols <- c(".content", ".metric")
+  if (!all(required_cols %in% names(plot_df))) {
+    stop("plot_df must include: ", paste(required_cols, collapse = ", "))
+  }
+
+  if (!".video_label" %in% names(plot_df)) {
+    plot_df <- plot_df %>%
+      dplyr::mutate(.video_label = "Untitled video")
+  }
+
+  order_tbl <- plot_df %>%
+    dplyr::group_by(.data$.content) %>%
+    dplyr::summarize(.median = stats::median(.data$.metric, na.rm = TRUE), .groups = "drop") %>%
+    dplyr::arrange(dplyr::desc(.data$.median))
+
+  plot_df <- plot_df %>%
+    dplyr::mutate(
+      .content = factor(as.character(.data$.content), levels = order_tbl$.content, ordered = TRUE),
+      .metric_fmt = if (isTRUE(y_as_percent)) {
+        scales::label_percent(accuracy = 0.1)(.data$.metric)
+      } else {
+        scales::label_comma(accuracy = 1)(.data$.metric)
+      },
+      .hover_text = paste0(
+        "Video: ", .data$.video_label,
+        "<br>Content Type: ", .data$.content,
+        "<br>", metric_label, ": ", .data$.metric_fmt
+      )
+    )
+
+  median_df <- plot_df %>%
+    dplyr::group_by(.data$.content) %>%
+    dplyr::summarize(.median = stats::median(.data$.metric, na.rm = TRUE), .groups = "drop") %>%
+    dplyr::mutate(
+      .hover_text = if (isTRUE(y_as_percent)) {
+        paste0(
+          "Content Type: ", .data$.content,
+          "<br>Median ", metric_label, ": ",
+          scales::label_percent(accuracy = 0.1)(.data$.median)
+        )
+      } else {
+        paste0(
+          "Content Type: ", .data$.content,
+          "<br>Median ", metric_label, ": ",
+          scales::label_comma(accuracy = 1)(.data$.median)
+        )
+      }
+    )
+
+  p <- plot_df %>%
+    ggplot2::ggplot(ggplot2::aes(x = .data$.metric, y = .data$.content, fill = .data$.content)) +
+    ggplot2::geom_boxplot(
+      outlier.shape = NA,
+      alpha = 0.6,
+      width = 0.62,
+      linewidth = 0.55,
+      color = sun_data_brand_colors()[["midnight"]]
+    ) +
+    ggplot2::geom_jitter(
+      ggplot2::aes(text = .data$.hover_text),
+      inherit.aes = TRUE,
+      height = 0.14,
+      width = 0,
+      size = 1.5,
+      alpha = 0.3,
+      color = sun_data_brand_colors()[["midnight"]],
+      stroke = 0
+    ) +
+    ggplot2::geom_point(
+      data = median_df,
+      ggplot2::aes(x = .data$.median, y = .data$.content, text = .data$.hover_text),
+      inherit.aes = FALSE,
+      shape = 23,
+      size = 3.6,
+      stroke = 0.25,
+      fill = "white",
+      color = sun_data_brand_colors()[["midnight"]]
+    ) +
+    scale_fill_sun_data(variant = "brand") +
+    ggplot2::guides(fill = "none") +
+    theme_nyt() +
+    bundle_b_theme_standard() +
+    ggplot2::labs(
+      title = bundle_b_title_text(talent, paste0("Median ", metric_label, " by Content Type")),
+      subtitle = "Box = quartiles/median. Points = individual videos.",
+      x = metric_label,
+      y = "Content type"
+    )
+
+  if (isTRUE(y_as_percent)) {
+    p + ggplot2::scale_x_continuous(labels = scales::label_percent(accuracy = 1))
+  } else {
+    p + ggplot2::scale_x_continuous(labels = scales::label_comma())
+  }
 }
 
 bundle_b_content_position_overall_summary <- function(position_data) {
@@ -433,6 +615,26 @@ bundle_b_content_position_overall_table <- function(position_data) {
     bundle_b_content_position_overall_summary(position_data)
   } else {
     as.data.frame(position_data)
+  }
+
+  # Some talents can be missing one metric family (for example revenue),
+  # so ensure the output table keeps a stable schema with NA placeholders.
+  required_numeric <- c(
+    "ViewsMedianPercentile",
+    "RevenueMedianPercentile",
+    "EngagementMedianPercentile",
+    "AvgMedianPercentile"
+  )
+  for (nm in required_numeric) {
+    if (!nm %in% names(overall)) {
+      overall[[nm]] <- NA_real_
+    }
+  }
+  if (!"MetricsCovered" %in% names(overall)) {
+    overall[["MetricsCovered"]] <- NA_integer_
+  }
+  if (!"Performance_Band" %in% names(overall)) {
+    overall[["Performance_Band"]] <- "Middle"
   }
 
   overall %>%
