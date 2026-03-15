@@ -1,0 +1,474 @@
+[monthly-reports] Started: 2026-03-11T02:01:01Z
+[monthly-reports] Repo root: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+[monthly-reports] Window days: 90
+[monthly-reports] Input source: datalake
+
+[monthly-reports] Stage 1/2: Bundle A
+[monthly-reports] Command: bin/linux/render_reports/run_bundle_A_report.sh --all --window-days 90 --input-source datalake --input-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --datalake-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --dry-run
+
+Attaching package: 'dplyr'
+
+The following objects are masked from 'package:stats':
+
+    filter, lag
+
+The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union
+
+Repo root: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+Render script: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_A/render_bundle_A.R
+Rscript bin: Rscript
+Datalake root: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Input source: datalake
+Input root override: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Bundle: bundle_A
+Report subdir: reports
+Window segment: window_90d
+Talents: Avaritia Hawthorne <U+3010>Variance Project<U+3011> Katya Sable <U+3010>Variance Project<U+3011> Leia Memoria<U+3010>Variance Project<U+3011> Terberri Solaris Ch
+Error: ERR: no exact folder match for talent query: Avaritia Hawthorne <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Katya Sable <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Leia Memoria<U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+
+==> Talent query: Terberri Solaris Ch
+    Resolved output folder: Terberri Solaris Ch
+    Output dir: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_A
+    Output prefix: Bundle_A_window_90d
+    Command: Rscript /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_A/render_bundle_A.R --talent Terberri Solaris Ch --output-dir /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_A --output-prefix Bundle_A_window_90d --data-source datalake --data-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --window-days 90
+
+Dry run complete.
+[monthly-reports] Bundle A failed with status 1
+
+[monthly-reports] Stage 2/2: Bundle B
+[monthly-reports] Command: bin/linux/render_reports/run_bundle_B_report.sh --all --window-days 90 --input-source datalake --input-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --datalake-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --dry-run
+
+Attaching package: 'dplyr'
+
+The following objects are masked from 'package:stats':
+
+    filter, lag
+
+The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union
+
+Repo root: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+Render script: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_B/render_bundle_B.R
+Rscript bin: Rscript
+Datalake root: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Input source: datalake
+Input root override: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Bundle: bundle_B
+Report subdir: reports
+Window segment: window_90d
+Talents: Avaritia Hawthorne <U+3010>Variance Project<U+3011> Katya Sable <U+3010>Variance Project<U+3011> Leia Memoria<U+3010>Variance Project<U+3011> Terberri Solaris Ch
+Error: ERR: no exact folder match for talent query: Avaritia Hawthorne <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Katya Sable <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Leia Memoria<U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+
+==> Talent query: Terberri Solaris Ch
+    Resolved output folder: Terberri Solaris Ch
+    Output dir: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_B
+    Output prefix: Bundle_B_window_90d
+    Command: Rscript /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_B/render_bundle_B.R --talent Terberri Solaris Ch --output-dir /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_B --output-prefix Bundle_B_window_90d --data-source datalake --data-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --window-days 90
+
+Dry run complete.
+[monthly-reports] Bundle B failed with status 1
+
+[monthly-reports] Complete: one or more stages failed
+[monthly-reports] Started: 2026-03-11T02:02:01Z
+[monthly-reports] Repo root: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+[monthly-reports] Window days: 90
+[monthly-reports] Input source: datalake
+
+[monthly-reports] Stage 1/2: Bundle A
+[monthly-reports] Command: bin/linux/render_reports/run_bundle_A_report.sh --all --window-days 90 --input-source datalake --input-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --datalake-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --dry-run
+
+Attaching package: 'dplyr'
+
+The following objects are masked from 'package:stats':
+
+    filter, lag
+
+The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union
+
+Repo root: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+Render script: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_A/render_bundle_A.R
+Rscript bin: Rscript
+Datalake root: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Input source: datalake
+Input root override: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Bundle: bundle_A
+Report subdir: reports
+Window segment: window_90d
+Talents: Avaritia Hawthorne <U+3010>Variance Project<U+3011> Katya Sable <U+3010>Variance Project<U+3011> Leia Memoria<U+3010>Variance Project<U+3011> Terberri Solaris Ch
+Error: ERR: no exact folder match for talent query: Avaritia Hawthorne <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Katya Sable <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Leia Memoria<U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+
+==> Talent query: Terberri Solaris Ch
+    Resolved output folder: Terberri Solaris Ch
+    Output dir: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_A
+    Output prefix: Bundle_A_window_90d
+    Command: Rscript /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_A/render_bundle_A.R --talent Terberri Solaris Ch --output-dir /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_A --output-prefix Bundle_A_window_90d --data-source datalake --data-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --window-days 90
+
+Dry run complete.
+[monthly-reports] Bundle A failed with status 1
+
+[monthly-reports] Stage 2/2: Bundle B
+[monthly-reports] Command: bin/linux/render_reports/run_bundle_B_report.sh --all --window-days 90 --input-source datalake --input-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --datalake-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --dry-run
+
+Attaching package: 'dplyr'
+
+The following objects are masked from 'package:stats':
+
+    filter, lag
+
+The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union
+
+Repo root: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+Render script: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_B/render_bundle_B.R
+Rscript bin: Rscript
+Datalake root: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Input source: datalake
+Input root override: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Bundle: bundle_B
+Report subdir: reports
+Window segment: window_90d
+Talents: Avaritia Hawthorne <U+3010>Variance Project<U+3011> Katya Sable <U+3010>Variance Project<U+3011> Leia Memoria<U+3010>Variance Project<U+3011> Terberri Solaris Ch
+Error: ERR: no exact folder match for talent query: Avaritia Hawthorne <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Katya Sable <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Leia Memoria<U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+
+==> Talent query: Terberri Solaris Ch
+    Resolved output folder: Terberri Solaris Ch
+    Output dir: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_B
+    Output prefix: Bundle_B_window_90d
+    Command: Rscript /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_B/render_bundle_B.R --talent Terberri Solaris Ch --output-dir /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_B --output-prefix Bundle_B_window_90d --data-source datalake --data-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --window-days 90
+
+Dry run complete.
+[monthly-reports] Bundle B failed with status 1
+
+[monthly-reports] Complete: one or more stages failed
+[monthly-reports] Started: 2026-03-11T02:03:01Z
+[monthly-reports] Repo root: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+[monthly-reports] Window days: 90
+[monthly-reports] Input source: datalake
+
+[monthly-reports] Stage 1/2: Bundle A
+[monthly-reports] Command: bin/linux/render_reports/run_bundle_A_report.sh --all --window-days 90 --input-source datalake --input-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --datalake-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --dry-run
+
+Attaching package: 'dplyr'
+
+The following objects are masked from 'package:stats':
+
+    filter, lag
+
+The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union
+
+Repo root: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+Render script: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_A/render_bundle_A.R
+Rscript bin: Rscript
+Datalake root: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Input source: datalake
+Input root override: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Bundle: bundle_A
+Report subdir: reports
+Window segment: window_90d
+Talents: Avaritia Hawthorne <U+3010>Variance Project<U+3011> Katya Sable <U+3010>Variance Project<U+3011> Leia Memoria<U+3010>Variance Project<U+3011> Terberri Solaris Ch
+Error: ERR: no exact folder match for talent query: Avaritia Hawthorne <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Katya Sable <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Leia Memoria<U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+
+==> Talent query: Terberri Solaris Ch
+    Resolved output folder: Terberri Solaris Ch
+    Output dir: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_A
+    Output prefix: Bundle_A_window_90d
+    Command: Rscript /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_A/render_bundle_A.R --talent Terberri Solaris Ch --output-dir /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_A --output-prefix Bundle_A_window_90d --data-source datalake --data-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --window-days 90
+
+Dry run complete.
+[monthly-reports] Bundle A failed with status 1
+
+[monthly-reports] Stage 2/2: Bundle B
+[monthly-reports] Command: bin/linux/render_reports/run_bundle_B_report.sh --all --window-days 90 --input-source datalake --input-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --datalake-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --dry-run
+
+Attaching package: 'dplyr'
+
+The following objects are masked from 'package:stats':
+
+    filter, lag
+
+The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union
+
+Repo root: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+Render script: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_B/render_bundle_B.R
+Rscript bin: Rscript
+Datalake root: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Input source: datalake
+Input root override: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Bundle: bundle_B
+Report subdir: reports
+Window segment: window_90d
+Talents: Avaritia Hawthorne <U+3010>Variance Project<U+3011> Katya Sable <U+3010>Variance Project<U+3011> Leia Memoria<U+3010>Variance Project<U+3011> Terberri Solaris Ch
+Error: ERR: no exact folder match for talent query: Avaritia Hawthorne <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Katya Sable <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Leia Memoria<U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+
+==> Talent query: Terberri Solaris Ch
+    Resolved output folder: Terberri Solaris Ch
+    Output dir: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_B
+    Output prefix: Bundle_B_window_90d
+    Command: Rscript /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_B/render_bundle_B.R --talent Terberri Solaris Ch --output-dir /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_B --output-prefix Bundle_B_window_90d --data-source datalake --data-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --window-days 90
+
+Dry run complete.
+[monthly-reports] Bundle B failed with status 1
+
+[monthly-reports] Complete: one or more stages failed
+[monthly-reports] Started: 2026-03-11T02:04:01Z
+[monthly-reports] Repo root: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+[monthly-reports] Window days: 90
+[monthly-reports] Input source: datalake
+[monthly-reports] LANG: C
+[monthly-reports] LC_ALL: C
+
+[monthly-reports] Stage 1/2: Bundle A
+[monthly-reports] Command: bin/linux/render_reports/run_bundle_A_report.sh --all --window-days 90 --input-source datalake --input-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --datalake-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --dry-run
+
+Attaching package: 'dplyr'
+
+The following objects are masked from 'package:stats':
+
+    filter, lag
+
+The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union
+
+Repo root: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+Render script: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_A/render_bundle_A.R
+Rscript bin: Rscript
+Datalake root: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Input source: datalake
+Input root override: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Bundle: bundle_A
+Report subdir: reports
+Window segment: window_90d
+Talents: Avaritia Hawthorne <U+3010>Variance Project<U+3011> Katya Sable <U+3010>Variance Project<U+3011> Leia Memoria<U+3010>Variance Project<U+3011> Terberri Solaris Ch
+Error: ERR: no exact folder match for talent query: Avaritia Hawthorne <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Katya Sable <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Leia Memoria<U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+
+==> Talent query: Terberri Solaris Ch
+    Resolved output folder: Terberri Solaris Ch
+    Output dir: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_A
+    Output prefix: Bundle_A_window_90d
+    Command: Rscript /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_A/render_bundle_A.R --talent Terberri Solaris Ch --output-dir /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_A --output-prefix Bundle_A_window_90d --data-source datalake --data-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --window-days 90
+
+Dry run complete.
+[monthly-reports] Bundle A failed with status 1
+
+[monthly-reports] Stage 2/2: Bundle B
+[monthly-reports] Command: bin/linux/render_reports/run_bundle_B_report.sh --all --window-days 90 --input-source datalake --input-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --datalake-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --dry-run
+
+Attaching package: 'dplyr'
+
+The following objects are masked from 'package:stats':
+
+    filter, lag
+
+The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union
+
+Repo root: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+Render script: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_B/render_bundle_B.R
+Rscript bin: Rscript
+Datalake root: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Input source: datalake
+Input root override: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Bundle: bundle_B
+Report subdir: reports
+Window segment: window_90d
+Talents: Avaritia Hawthorne <U+3010>Variance Project<U+3011> Katya Sable <U+3010>Variance Project<U+3011> Leia Memoria<U+3010>Variance Project<U+3011> Terberri Solaris Ch
+Error: ERR: no exact folder match for talent query: Avaritia Hawthorne <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Katya Sable <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Leia Memoria<U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+
+==> Talent query: Terberri Solaris Ch
+    Resolved output folder: Terberri Solaris Ch
+    Output dir: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_B
+    Output prefix: Bundle_B_window_90d
+    Command: Rscript /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_B/render_bundle_B.R --talent Terberri Solaris Ch --output-dir /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_B --output-prefix Bundle_B_window_90d --data-source datalake --data-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --window-days 90
+
+Dry run complete.
+[monthly-reports] Bundle B failed with status 1
+
+[monthly-reports] Complete: one or more stages failed
+[monthly-reports] Started: 2026-03-11T02:05:01Z
+[monthly-reports] Repo root: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+[monthly-reports] Window days: 90
+[monthly-reports] Input source: datalake
+[monthly-reports] LANG: C
+[monthly-reports] LC_ALL: C
+
+[monthly-reports] Stage 1/2: Bundle A
+[monthly-reports] Command: bin/linux/render_reports/run_bundle_A_report.sh --all --window-days 90 --input-source datalake --input-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --datalake-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --dry-run
+
+Attaching package: 'dplyr'
+
+The following objects are masked from 'package:stats':
+
+    filter, lag
+
+The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union
+
+Repo root: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+Render script: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_A/render_bundle_A.R
+Rscript bin: Rscript
+Datalake root: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Input source: datalake
+Input root override: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Bundle: bundle_A
+Report subdir: reports
+Window segment: window_90d
+Talents: Avaritia Hawthorne <U+3010>Variance Project<U+3011> Katya Sable <U+3010>Variance Project<U+3011> Leia Memoria<U+3010>Variance Project<U+3011> Terberri Solaris Ch
+Error: ERR: no exact folder match for talent query: Avaritia Hawthorne <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Katya Sable <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Leia Memoria<U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+
+==> Talent query: Terberri Solaris Ch
+    Resolved output folder: Terberri Solaris Ch
+    Output dir: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_A
+    Output prefix: Bundle_A_window_90d
+    Command: Rscript /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_A/render_bundle_A.R --talent Terberri Solaris Ch --output-dir /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_A --output-prefix Bundle_A_window_90d --data-source datalake --data-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --window-days 90
+
+Dry run complete.
+[monthly-reports] Bundle A failed with status 1
+
+[monthly-reports] Stage 2/2: Bundle B
+[monthly-reports] Command: bin/linux/render_reports/run_bundle_B_report.sh --all --window-days 90 --input-source datalake --input-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --datalake-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --dry-run
+
+Attaching package: 'dplyr'
+
+The following objects are masked from 'package:stats':
+
+    filter, lag
+
+The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union
+
+Repo root: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+Render script: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_B/render_bundle_B.R
+Rscript bin: Rscript
+Datalake root: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Input source: datalake
+Input root override: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Bundle: bundle_B
+Report subdir: reports
+Window segment: window_90d
+Talents: Avaritia Hawthorne <U+3010>Variance Project<U+3011> Katya Sable <U+3010>Variance Project<U+3011> Leia Memoria<U+3010>Variance Project<U+3011> Terberri Solaris Ch
+Error: ERR: no exact folder match for talent query: Avaritia Hawthorne <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Katya Sable <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Leia Memoria<U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+
+==> Talent query: Terberri Solaris Ch
+    Resolved output folder: Terberri Solaris Ch
+    Output dir: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_B
+    Output prefix: Bundle_B_window_90d
+    Command: Rscript /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_B/render_bundle_B.R --talent Terberri Solaris Ch --output-dir /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_B --output-prefix Bundle_B_window_90d --data-source datalake --data-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --window-days 90
+
+Dry run complete.
+[monthly-reports] Bundle B failed with status 1
+
+[monthly-reports] Complete: one or more stages failed
+[monthly-reports] Started: 2026-03-11T02:06:01Z
+[monthly-reports] Repo root: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+[monthly-reports] Window days: 90
+[monthly-reports] Input source: datalake
+[monthly-reports] LANG: C
+[monthly-reports] LC_ALL: C
+
+[monthly-reports] Stage 1/2: Bundle A
+[monthly-reports] Command: bin/linux/render_reports/run_bundle_A_report.sh --all --window-days 90 --input-source datalake --input-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --datalake-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --dry-run
+
+Attaching package: 'dplyr'
+
+The following objects are masked from 'package:stats':
+
+    filter, lag
+
+The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union
+
+Repo root: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+Render script: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_A/render_bundle_A.R
+Rscript bin: Rscript
+Datalake root: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Input source: datalake
+Input root override: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Bundle: bundle_A
+Report subdir: reports
+Window segment: window_90d
+Talents: Avaritia Hawthorne <U+3010>Variance Project<U+3011> Katya Sable <U+3010>Variance Project<U+3011> Leia Memoria<U+3010>Variance Project<U+3011> Terberri Solaris Ch
+Error: ERR: no exact folder match for talent query: Avaritia Hawthorne <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Katya Sable <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Leia Memoria<U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+
+==> Talent query: Terberri Solaris Ch
+    Resolved output folder: Terberri Solaris Ch
+    Output dir: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_A
+    Output prefix: Bundle_A_window_90d
+    Command: Rscript /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_A/render_bundle_A.R --talent Terberri Solaris Ch --output-dir /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_A --output-prefix Bundle_A_window_90d --data-source datalake --data-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --window-days 90
+
+Dry run complete.
+[monthly-reports] Bundle A failed with status 1
+
+[monthly-reports] Stage 2/2: Bundle B
+[monthly-reports] Command: bin/linux/render_reports/run_bundle_B_report.sh --all --window-days 90 --input-source datalake --input-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --datalake-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --dry-run
+
+Attaching package: 'dplyr'
+
+The following objects are masked from 'package:stats':
+
+    filter, lag
+
+The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union
+
+Repo root: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+Render script: /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_B/render_bundle_B.R
+Rscript bin: Rscript
+Datalake root: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Input source: datalake
+Input root override: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+Bundle: bundle_B
+Report subdir: reports
+Window segment: window_90d
+Talents: Avaritia Hawthorne <U+3010>Variance Project<U+3011> Katya Sable <U+3010>Variance Project<U+3011> Leia Memoria<U+3010>Variance Project<U+3011> Terberri Solaris Ch
+Error: ERR: no exact folder match for talent query: Avaritia Hawthorne <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Katya Sable <U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+Error: ERR: no exact folder match for talent query: Leia Memoria<U+3010>Variance Project<U+3011>. Use full folder name or pass --allow-partial-match.
+
+==> Talent query: Terberri Solaris Ch
+    Resolved output folder: Terberri Solaris Ch
+    Output dir: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_B
+    Output prefix: Bundle_B_window_90d
+    Command: Rscript /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/scripts/run/bundle_B/render_bundle_B.R --talent Terberri Solaris Ch --output-dir /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch/reports/bundle_B --output-prefix Bundle_B_window_90d --data-source datalake --data-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --window-days 90
+
+Dry run complete.
+[monthly-reports] Bundle B failed with status 1
+
+[monthly-reports] Complete: one or more stages failed

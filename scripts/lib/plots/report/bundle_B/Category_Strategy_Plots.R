@@ -363,24 +363,49 @@ bundle_b_collaboration_distribution_prep <- function(
 }
 
 bundle_b_collaboration_delta_summary <- function(summary_df) {
-  summary_df %>%
+  wide <- summary_df %>%
     dplyr::select(.data$Metric, .data$collab_group, .data$MeanValue) %>%
-    tidyr::pivot_wider(names_from = .data$collab_group, values_from = .data$MeanValue) %>%
+    tidyr::pivot_wider(names_from = .data$collab_group, values_from = .data$MeanValue)
+
+  # Keep downstream plotting stable even when one collaboration group is absent.
+  if (!("Collaborative" %in% names(wide))) {
+    wide$Collaborative <- NA_real_
+  }
+  if (!("Non-collaborative" %in% names(wide))) {
+    wide$`Non-collaborative` <- NA_real_
+  }
+
+  wide %>%
     dplyr::mutate(
-      AbsDelta = .data$Collaborative - .data$`Non-collaborative`,
+      AbsDelta = dplyr::if_else(
+        is.finite(.data$Collaborative) & is.finite(.data$`Non-collaborative`),
+        .data$Collaborative - .data$`Non-collaborative`,
+        NA_real_
+      ),
       LiftPct = dplyr::if_else(
-        is.finite(.data$`Non-collaborative`) & .data$`Non-collaborative` > 0,
+        is.finite(.data$Collaborative) &
+          is.finite(.data$`Non-collaborative`) &
+          .data$`Non-collaborative` > 0,
         .data$Collaborative / .data$`Non-collaborative` - 1,
         NA_real_
       ),
       Span = pmax(abs(.data$Collaborative), abs(.data$`Non-collaborative`), abs(.data$AbsDelta), 1, na.rm = TRUE),
-      LabelAnchorY = (.data$Collaborative + .data$`Non-collaborative`) / 2,
+      LabelAnchorY = dplyr::if_else(
+        is.finite(.data$Collaborative) & is.finite(.data$`Non-collaborative`),
+        (.data$Collaborative + .data$`Non-collaborative`) / 2,
+        dplyr::if_else(
+          is.finite(.data$Collaborative),
+          .data$Collaborative,
+          dplyr::if_else(is.finite(.data$`Non-collaborative`), .data$`Non-collaborative`, 0)
+        )
+      ),
       LabelNudge = 0.08 * .data$Span,
       LabelY = .data$LabelAnchorY + .data$LabelNudge,
       XStart = 1,
       XEnd = 2,
       LabelX = 1.52,
       DeltaLabel = dplyr::case_when(
+        !is.finite(.data$AbsDelta) ~ "Delta unavailable (missing comparison group)",
         .data$Metric == "Revenue per video ($)" & is.finite(.data$LiftPct) ~ paste0(
           "Delta: ",
           ifelse(.data$AbsDelta > 0, "+", ""),

@@ -4,6 +4,7 @@ This folder contains Linux wrapper scripts that standardize how Bundle reports a
 
 - `run_bundle_A_report.sh`
 - `run_bundle_B_report.sh`
+- `run_monthly_bundle_reports.sh`
 
 These wrappers call the R render scripts, resolve roots, resolve talent folder names, and route outputs into the datalake structure.
 
@@ -138,3 +139,43 @@ Render script not found:
 - Input source: `datalake`
 
 Use `--help` on either wrapper for full flag details.
+
+## Monthly Run (Bundle A + Bundle B, 90 days, all talents)
+
+Path: `bin/linux/render_reports/run_monthly_bundle_reports.sh`
+
+This wrapper runs both bundle wrappers sequentially using:
+
+- `--all`
+- `--window-days 90` (default)
+
+Example (analytics container paths):
+
+```bash
+bin/linux/render_reports/run_monthly_bundle_reports.sh \
+  --input-source datalake \
+  --input-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data \
+  --datalake-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+```
+
+Dry run:
+
+```bash
+bin/linux/render_reports/run_monthly_bundle_reports.sh \
+  --input-source datalake \
+  --input-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data \
+  --datalake-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data \
+  --dry-run
+```
+
+Cron example (run at 03:00 on the 1st day of every month):
+
+```cron
+0 3 1 * * cd /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data && bin/linux/render_reports/run_monthly_bundle_reports.sh --input-source datalake --input-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --datalake-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data >> /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/notes/logs/monthly_bundle_reports.log 2>&1
+```
+
+If using the log path above, create it once:
+
+```bash
+mkdir -p notes/logs
+```
