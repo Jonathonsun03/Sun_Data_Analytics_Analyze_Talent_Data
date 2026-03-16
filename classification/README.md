@@ -8,9 +8,11 @@ This keeps reusable code centralized while allowing classification logic to evol
 
 ## Current Layout
 Entry points:
-- `scripts/run/Title_classification/01_ingest_titles.R`
-- `scripts/run/Title_classification/02_classify_pending_titles.R`
-- `scripts/run/Title_classification/build_talent_profile.R`
+- `scripts/run/Title_classification/title_classification/01_ingest_titles.R`
+- `scripts/run/Title_classification/title_classification/02_classify_pending_titles.R`
+- `scripts/run/Title_classification/title_classification/05_export_results_csv.R`
+- `scripts/run/Title_classification/talent_profile/build_talent_profile.R`
+- `scripts/run/Title_classification/talent_profile/sync_talent_profiles.R`
 
 Shared helpers:
 - `scripts/lib/duckdb/db_connect.R`
@@ -32,8 +34,8 @@ Prompt architecture:
 1. Build the `Classification` dataframe:
    - Columns: `Video ID`, `Title`, `Content Type`, `Published At`
 2. Set `Talent` to the talent selector used by `select_talent()`.
-3. Run `scripts/run/Title_classification/01_ingest_titles.R` to upsert rows into DuckDB.
-4. Run `scripts/run/Title_classification/02_classify_pending_titles.R` to classify pending titles:
+3. Run `scripts/run/Title_classification/title_classification/01_ingest_titles.R` to upsert rows into DuckDB.
+4. Run `scripts/run/Title_classification/title_classification/02_classify_pending_titles.R` to classify pending titles:
    - select talent profile from `talent_profiles.json`
    - compile prompt deterministically from:
      - base `system.txt`
@@ -71,17 +73,17 @@ This avoids duplicating full prompts while still honoring talent-specific title 
 Use the R profile builder to generate a talent description JSON from titles.
 
 Command:
-`Rscript scripts/run/Title_classification/build_talent_profile.R --csv <path/to/titles.csv> --talent "<Talent Name>" --talent-col talent --title-col title --content-type-col content_type --write-overlay --update-master-config`
+`Rscript scripts/run/Title_classification/talent_profile/build_talent_profile.R --csv <path/to/titles.csv> --talent "<Talent Name>" --talent-col talent --title-col title --content-type-col content_type --write-overlay --update-master-config`
 
 All talents in one pass:
-`Rscript scripts/run/Title_classification/build_talent_profile.R --csv notes/titles.csv --all-talents --talent-col talent --title-col "Title" --content-type-col "Content Type" --write-overlay --update-master-config`
+`Rscript scripts/run/Title_classification/talent_profile/build_talent_profile.R --csv notes/titles.csv --all-talents --talent-col talent --title-col "Title" --content-type-col "Content Type" --write-overlay --update-master-config`
 
 Optional canonical-name mapping file:
 `--talent-map notes/talent_name_map.csv`
 with columns: `source_talent,canonical_talent`
 
 GPT-assisted discovery (optional, richer profile inference):
-`Rscript scripts/run/Title_classification/build_talent_profile.R --csv <path/to/titles.csv> --talent "<Talent Name>" --talent-col talent --title-col title --content-type-col content_type --write-overlay --update-master-config --use-gpt --sample-size 250 --model gpt-5-mini`
+`Rscript scripts/run/Title_classification/talent_profile/build_talent_profile.R --csv <path/to/titles.csv> --talent "<Talent Name>" --talent-col talent --title-col title --content-type-col content_type --write-overlay --update-master-config --use-gpt --sample-size 250 --model gpt-5-mini`
 
 What it generates:
 - `classification/config/talents/<talent_slug>.json`
@@ -94,10 +96,9 @@ GPT discovery prompt assets:
 - `classification/prompts/discovery/schema.json`
 
 Sync `talent_profiles.json` from current prompt folders:
-`Rscript scripts/run/Title_classification/sync_talent_profiles.R`
+`Rscript scripts/run/Title_classification/talent_profile/sync_talent_profiles.R`
 
 Run non-recursive local self-test:
 `Rscript scripts/run/Title_classification/title_classification/03_self_test_classification.R`
 
-Example:
-`from classification.python.prompt_bundle import load_prompt_bundle`
+There is no active `classification/python/` runtime scaffold anymore. The maintained prompt-bundle loader lives in `scripts/lib/stream_classification/`.
