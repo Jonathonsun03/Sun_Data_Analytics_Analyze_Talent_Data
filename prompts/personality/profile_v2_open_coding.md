@@ -11,11 +11,17 @@ Hardcoded talent directories to process:
 Objective:
 Build a text-grounded personality analysis using OPEN CODING (emergent codes), not a predefined code list. Let relational style, affective patterns, and idiosyncrasies arise from the data itself.
 
+Core analytic standard:
+- The open-coding workflow must foreground what makes each streamer non-interchangeable, not just what makes them readable as a streamer.
+- If a code, theme family, or profile summary could be copied into another talent's profile with only the name changed, it is too generic and must be rewritten, merged upward, or demoted.
+- The final codebook should capture this streamer's specific interaction patterns, not just broad streamer-common traits.
+
 Important limitations:
 - You do NOT have visual cues (facial expression, camera behavior, body language).
 - You do NOT have full vocal prosody from audio.
 - Infer only from text evidence (chat logs, streamer chat posts, subtitles, summaries).
 - Do not over-claim. If evidence is weak, say "insufficient evidence".
+- Do not let generic traits such as `playful`, `chatty`, `audience-aware`, `appreciative`, or `energetic` dominate the retained code structure unless they are rewritten into this streamer's distinctive version of those behaviors.
 
 Scope:
 Process all 4 hardcoded talents above.
@@ -58,20 +64,37 @@ Phase 1: Stream-level open coding
 - Generate in-vivo or descriptive codes directly from text (short labels, 1-4 words).
 - Do not force data into preset categories.
 - Code interactional units (single line or short exchange windows) with timestamped evidence.
+- Prefer codes that preserve specific interaction form, social stance, or recurring ritual over flat sentiment labels.
+- Avoid retaining generic lexical buckets as final codes unless they are clearly reframed into a more interpretable interaction pattern.
 
 Phase 2: Constant comparison
 - Compare codes within and across streams for the same talent.
 - Merge semantically equivalent codes.
 - Split overly broad codes into specific ones when needed.
 - Keep memos on why merges/splits were made.
+- During merge/split decisions, prefer talent-specific interpretive labels over generic shared-trait labels.
+- If multiple surface codes point to the same deeper behavior, collapse them into a richer behavior-level code instead of preserving near-duplicate lexical buckets.
 
 Phase 3: Higher-order clustering
 - Group emergent codes into higher-order themes (families) after coding is complete.
 - Theme names must come from observed patterns, not imported frameworks.
+- Theme families should describe distinctive interactional patterns, not generic creator traits.
+- At least 2 of the major theme families should be distinctiveness-forward families that would not fit peer talents without major rewriting.
 
 Phase 4: Cross-talent contrast
 - Compare emergent theme families across talents.
 - Identify what is distinctive vs shared.
+
+Phase 4.5: Uniqueness filter before final retention
+- Before finalizing codes and theme families, separate:
+  - shared baseline streamer traits
+  - this streamer's distinctive version of a shared trait
+  - genuinely unique or unusually emphasized patterns
+- If a candidate code or family is mostly shared across peers, either:
+  - rewrite it into a more specific talent-shaped code or family, or
+  - demote it from headline prominence
+- Ask of every major retained code/family: `would this still feel specifically true if I swapped in another talent's name?`
+- If yes, refine it until the answer is no or reclassify it as background context.
 
 Evidence and reliability rules:
 - Every analytic claim must map to raw evidence rows in CSV logs.
@@ -86,6 +109,7 @@ Evidence and reliability rules:
   - at least 3 examples where possible (if fewer exist, state exact count)
 - Keep low-frequency but conceptually important codes if justified in memo.
 - Include at least 2 negative cases (counterexamples) per major theme family.
+- Do not retain a code as major only because it is frequent. Frequency without distinctiveness is not enough.
 
 Required structure for `personality_profile_v2_open_coding.md`:
 
@@ -93,10 +117,13 @@ Required structure for `personality_profile_v2_open_coding.md`:
 - 1-2 paragraphs describing the streamer’s personality style as it emerged from open coding.
 - Confidence level: High / Medium / Low.
 - Explicit limitations from text-only modality.
+- The opening must answer what makes this streamer unique compared with peers in this dataset.
+- Do not open with broad shared traits unless they are immediately specified in this streamer's distinctive form.
 
 ## 2) Open Coding Process Notes
 - Briefly document how codes were generated, merged, split, and elevated into themes.
 - Report coding totals: raw codes, merged codes, final retained codes.
+- Include a short note on which generic candidate codes were rewritten, merged, or demoted for lack of distinctiveness if applicable.
 
 ## 3) Emergent Codebook (Talent-Specific)
 - Present the final retained open codes for this talent.
@@ -108,6 +135,7 @@ Required structure for `personality_profile_v2_open_coding.md`:
   - frequency_count
   - stream_coverage_count
   - 3 evidence quotes with `[timecode] speaker (video_id): "quote"`
+- The retained codebook should emphasize behaviorally meaningful, talent-shaped codes over generic streamer-common labels.
 
 ## 4) Emergent Theme Families
 - Group codes into higher-order theme families.
@@ -116,6 +144,7 @@ Required structure for `personality_profile_v2_open_coding.md`:
   - member codes
   - strongest supporting evidence
   - 2 counterexamples/limits
+- At least 2 major theme families should be clearly distinctiveness-forward rather than merely broad shared categories.
 
 ## 5) Idiosyncratic Charm Markers
 - Identify recurring, non-generic markers unique to this streamer’s text presence.
@@ -133,12 +162,15 @@ Required structure for `personality_profile_v2_open_coding.md`:
 ## 7) Cross-Talent Distinctiveness
 - Contrast this talent against at least 2 other talents using emergent themes.
 - Answer: what makes this streamer non-interchangeable?
+- Do not merely list similarities and differences. Explain what combination of codes and theme families makes this streamer specifically this streamer.
+- Include at least 2 contrasts about how the streamer performs a shared behavior differently from peers.
 - Include one "can resemble X, but differs by Y" statement.
 
 ## 8) Validity and Uncertainty
 - 3 strongest evidence-backed conclusions.
 - 3 uncertainty points.
 - 1 section on possible coder bias and how evidence reduced it.
+- Include 1 brief note about the risk of over-reading generic streamer traits as distinctive personality.
 
 Required structure for `open_codebook_v2.csv`:
 Columns:

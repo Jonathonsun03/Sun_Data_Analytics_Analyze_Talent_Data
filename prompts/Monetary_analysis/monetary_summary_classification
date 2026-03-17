@@ -1,25 +1,244 @@
-Use this summarization prompt file as the source of truth:
-<PROMPT_FILE_PATH>
+You are working in this data root:
 
-Root directory:
-<TALENT_ROOT_PATH>
+/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
 
-Process all talent folders under root, excluding:
-<EXCLUDED_FOLDER_NAMES_OR_PATTERNS>
+Workflow location rules:
+- The canonical runner for this workflow is `scripts/run/stream_summaries/monetary_analysis/monetary_summary_classification_incremental.py`.
+- Keep workflow-specific code inside `scripts/run/stream_summaries/monetary_analysis/` unless logic is truly reusable across workflows, in which case move only the shared helper pieces into `scripts/lib/stream_summaries/`.
 
-For each talent folder:
-1) Read CSV files in `text_playback/`.
-2) Create `stream_summary_codex/` if missing.
-3) For each CSV that does not already have a matching summary, generate one summary strictly following the prompt file.
-4) Output filename format: <original_csv_basename>_summary.md
-5) Save outputs in that talent’s `stream_summary_codex/`.
+Objective:
+Build an incremental per-talent qualitative monetary-relationship analysis from raw text logs only.
 
-Execution controls:
-- Refresh yourself with the prompt file every <N> streams.
-- Idempotent run: skip existing `_summary.md` files (do not overwrite unless I explicitly ask).
-- Start with 1 pilot file and wait for my approval, then continue with the full batch.
+This workflow is meant to understand:
+- why chat appears to give money
+- what kinds of streamer behavior or interaction patterns appear to attract money
+- how paid moments function relationally between streamer and chat
 
-Final validation/report:
-- Per talent, report: csv_count, summary_count, pending_count.
-- Verify each summary contains required section headings from the prompt.
-- Report any failures/missing files.
+This workflow must not rely on any other derived analysis products yet. It is intentionally independent from summary-classification, personality, title, analytics, demographic, and bundle workflows.
+
+Scope rules:
+- Process every talent folder directly under the data root that contains either `text_playback/` or `Chat/Original/`.
+- Skip the aggregate folder `VarianceProject`.
+- Do not process only one talent unless explicitly instructed.
+
+Input paths per talent:
+1) `<talent>/text_playback/*.csv`
+2) `<talent>/Chat/Original/*_chat.csv`
+3) `<talent>/stream_summaries/overall_themes/monetary_analysis/current/monetary_summary_classification_state.json` if present
+
+Strict independence rules:
+- Do not use `stream_summary_codex/*.md`.
+- Do not use `overall_themes_codex.md`.
+- Do not use personality profile outputs.
+- Do not use title classifications, analytics tables, demographics, geography, or bundle outputs.
+- Do not use `money_timestamps.csv` as an input dependency for this workflow.
+- Do not quote or depend on prior generated monetary-analysis markdown as primary evidence.
+
+Input usage rules:
+- Use raw CSV text as the only primary evidence.
+- Treat visible paid-support moments as the analytic anchor for this workflow.
+- Identify money events from raw fields such as `paid_amount`, `paid_currency`, paid-message `message_type`, gifted/membership indicators, or clear direct textual markers such as `super chat`, `donation`, `gifted`, `membership`, or equivalent platform-language in context.
+- When both playback and raw chat cover the same moment, use both to reconstruct the interaction window.
+- If a paid moment is ambiguous, keep it only if the surrounding text gives clear evidence that money/support is being exchanged; otherwise exclude it and note the limitation.
+- Do not fabricate motives. Distinguish clearly between direct evidence and analytic inference.
+- Do not modify raw inputs.
+
+Write outputs to these exact paths:
+1) `<talent>/stream_summaries/overall_themes/monetary_analysis/current/monetary_summary_classification.md`
+2) `<talent>/stream_summaries/overall_themes/monetary_analysis/current/monetary_summary_classification_state.json`
+3) `<talent>/stream_summaries/overall_themes/monetary_analysis/current/monetary_motive_codebook.csv`
+4) `<talent>/stream_summaries/overall_themes/monetary_analysis/current/monetary_event_evidence.csv`
+5) `<talent>/stream_summaries/overall_themes/monetary_analysis/snapshots/monetary_summary_classification_YYYY-MM-DD_HH-MM-SS_±HHMM.md`
+
+Folder organization rules:
+- Keep all outputs for this workflow under `overall_themes/monetary_analysis/`.
+- Keep the live cumulative markdown, state, codebook, and evidence CSV only in `monetary_analysis/current/`.
+- Keep dated historical markdown snapshots only in `monetary_analysis/snapshots/`.
+- Do not drop extra monetary-analysis artifacts loose in `overall_themes/`.
+- Do not create or update `money_timestamps.csv` in this workflow.
+
+Incremental eligibility rules:
+- Before processing a talent, check whether `monetary_summary_classification_state.json` exists.
+- If the state file exists, use it to determine which `video_id`s have already been incorporated.
+- Eligible videos for this run are only those whose `video_id`s are not yet recorded as processed in the state file.
+- If no state file exists, treat the talent as an initial bootstrap run and build the cumulative output from all eligible raw files.
+- If the state file exists but one or more current output files are missing or empty, treat the talent as incomplete and rebuild using already-processed `video_id`s plus the newly eligible ones.
+- Never delete prior snapshots just to rerun the workflow.
+
+Money-event detection and context-window rules:
+- Build candidate money events directly from raw rows.
+- Prefer explicit paid-event metadata when available.
+- If explicit paid-event metadata is missing, use strong textual indicators only when the money exchange is clear from chat and/or streamer acknowledgement.
+- For each retained money event, gather a text window that includes:
+  - up to 90 seconds before the event
+  - the event row itself
+  - up to 120 seconds after the event
+- Use both streamer and chat lines in the context window when available.
+- Dedupe the same event if it appears in both playback and chat exports.
+- If a talent has no visible money events, still write the markdown, state, and CSV files with a clear `no visible money events detected` result.
+
+Analytic rules:
+- Use open coding rather than a rigid predefined taxonomy.
+- The central question is not merely `what money event happened`, but `what relational meaning the money event appears to carry`.
+- Infer three linked layers when evidence allows:
+  1) giver motive: why chat appears to be giving money
+  2) streamer-side attractor or trigger: what the streamer appears to be doing, signaling, or offering that the money is attached to
+  3) relationship function: what the paid moment seems to do in the streamer-chat relationship
+- Let codes emerge from the data. You may use seed lenses only as prompts for comparison, not as forced categories. Seed lenses may include:
+  - appreciation/support
+  - celebration/congratulation
+  - request leverage or bid for attention
+  - sympathy/care/comfort
+  - membership and belonging ritual
+  - shared joke or bit escalation
+  - milestone marking
+  - goal support or progress reward
+  - reciprocity for streamer labor or effort
+- If the evidence does not support motive-level inference, say `unclear from visible text`.
+- Keep the interpretation descriptive and evidence-grounded, not moralizing or diagnostic.
+
+Required contents for `monetary_summary_classification.md`:
+
+Start the document with:
+- `Analysis conducted: YYYY-MM-DD HH:MM TZ`
+- `Update scope: <initial bootstrap|incremental update>`
+- `New video_ids incorporated this run: <count>`
+- `Cumulative video_ids incorporated: <count>`
+- `Money events reviewed this run: <count>`
+- `Cumulative money events reviewed: <count>`
+- `Evidence basis: raw text_playback + raw chat only`
+
+## 1) Monetary Relationship Overview
+- 1-3 paragraphs describing how money appears to function in this streamer’s text-visible relationship with chat.
+- Address both sides of the exchange:
+  - why chat seems to give money
+  - what streamer behavior or interactional framing appears to attract, sustain, or shape those contributions
+- State clearly when the picture is strong versus weak.
+
+## 2) What Chat Appears To Be Paying For
+- Summarize the strongest recurring giver-motive patterns across incorporated evidence.
+- Keep this grounded in visible text, not guesswork.
+- Note whether motives cluster around appreciation, participation, requests, ritual belonging, care, humor, momentum, or other emergent patterns.
+
+## 3) What Streamer Behavior Appears To Attract Money
+- Describe the recurring streamer-side triggers or attractors linked to paid moments.
+- These may include examples such as visible effort, emotional openness, celebratory energy, direct acknowledgment, audience ritual, challenge/goals, cozy reassurance, comedic escalation, or other emergent patterns.
+- Focus on what is visible in the text windows, not broad personality claims.
+
+## 4) Relational Functions Of Paid Moments
+- Explain what paid moments appear to do in the relationship.
+- Possible functions may include:
+  - intensifying attention
+  - marking belonging
+  - rewarding labor
+  - prompting interaction
+  - stabilizing the atmosphere
+  - escalating a joke or ceremony
+- Do not force these if unsupported; use only what emerges repeatedly.
+
+## 5) Emergent Codebook
+- Present the retained cumulative codes across the three layers:
+  - giver motive
+  - streamer attractor/trigger
+  - relationship function
+- For each retained code include:
+  - code_label
+  - code_layer
+  - definition
+  - inclusion_criteria
+  - exclusion_criteria
+  - evidence_count
+  - stream_coverage_count
+  - 2-3 example event windows or quotes where available
+- If a code is newly retained in the current run, label it as `new_this_run: yes`.
+
+## 6) Representative Money-Event Windows
+- Include several representative event windows with compact evidence-backed interpretation.
+- Use exact quotes only when verified in the raw CSV.
+- Prefer examples that show different relational uses of money rather than near-duplicates.
+
+## 7) Coverage and Gaps
+- Note where evidence is thin or missing.
+- Distinguish between:
+  - no visible money events in available text
+  - money event visible but context window weak
+  - money event visible and well-supported
+- Note any talent-specific or platform-specific limitations in the available raw files.
+
+## 8) Evidence Limits and Uncertainty
+- Include at least 3 limitations or uncertainty notes.
+- Explicitly note that this is a raw-text-only workflow and does not use visual cues, tone of voice, off-platform context, or downstream revenue tables.
+- Explicitly note that motive inference is constrained to what can be seen in the text interaction window.
+
+Requirements for `monetary_motive_codebook.csv`:
+- Columns:
+  - `talent`
+  - `code_label`
+  - `code_layer`
+  - `definition`
+  - `inclusion_criteria`
+  - `exclusion_criteria`
+  - `evidence_count`
+  - `stream_coverage_count`
+  - `new_this_run`
+  - `memo_notes`
+
+Requirements for `monetary_event_evidence.csv`:
+- One row per retained evidence line used in the cumulative analysis.
+- Columns:
+  - `talent`
+  - `video_id`
+  - `time_in_seconds`
+  - `timecode`
+  - `source`
+  - `speaker`
+  - `quote`
+  - `window_role`
+  - `money_signal_type`
+  - `code_layer`
+  - `code_label`
+  - `event_group_id`
+  - `inferred_giver_motive`
+  - `inferred_streamer_attractor`
+  - `inferred_relationship_function`
+  - `incorporated_in_run`
+  - `file_path`
+  - `file_line`
+
+Requirements for `monetary_summary_classification_state.json`:
+- `talent`
+- `analysis_conducted_at`
+- `update_scope`
+- `processed_video_ids`
+- `new_video_ids_this_run`
+- `money_events_reviewed_this_run`
+- `money_events_reviewed_cumulative`
+- `latest_snapshot_path`
+- `notes`
+
+Snapshot rules:
+- On each run that writes or refreshes the current markdown, also write a dated snapshot markdown in `monetary_analysis/snapshots/`.
+- The snapshot markdown must include:
+  - the snapshot date/time
+  - the current cumulative `monetary_summary_classification.md` content for that run
+  - the full text of this monetary-analysis prompt
+
+Evidence constraints:
+- Every direct quote in `monetary_summary_classification.md` must be traceable to a raw CSV row.
+- If a raw quote cannot be verified, do not present it as a direct quote.
+- Keep interpretation tied closely to visible lines and immediate interaction windows.
+- Do not smuggle in conclusions from other workflows or prior reports.
+
+Validation and reporting:
+- After writing files, print a per-talent completion summary including:
+  - talent
+  - new video count
+  - cumulative video count
+  - money events reviewed this run
+  - money events reviewed cumulative
+  - current output paths
+  - snapshot path
+- Spot-check at least one quoted example per talent when any money events were retained and report the matching source CSV file path and line.
+
+Execution rule:
+- Execute end-to-end without asking for confirmation unless blocked by permissions.

@@ -18,12 +18,18 @@ Hardcoded talent directories to process:
 Objective:
 Build an incremental text-grounded personality analysis using OPEN CODING (emergent codes), not a predefined code list. This is a weekly update workflow: analyze only newly eligible videos not yet incorporated into the v3 personality profile, then merge those findings into a living cumulative v3 output set.
 
+Core analytic standard:
+- The open-coding workflow must foreground what makes each streamer non-interchangeable, not just what makes them readable as a streamer.
+- If a code, theme family, or personality summary could be copied into another talent's profile with only the name changed, it is too generic and must be rewritten, merged upward, or demoted.
+- The codebook should not be a bag of broad streamer-common traits; it should capture this streamer's specific interaction patterns.
+
 Important limitations:
 - You do NOT have visual cues (facial expression, camera behavior, body language).
 - You do NOT have full vocal prosody from audio.
 - Infer only from text evidence (chat logs, streamer chat posts, subtitles, summaries).
 - Do not over-claim. If evidence is weak, say "insufficient evidence".
 - Treat this as a cumulative profile with incremental updates, not a full historical rerun each week.
+- Do not let generic traits such as `playful`, `chatty`, `audience-aware`, `appreciative`, or `energetic` dominate the retained code structure unless they are rewritten into this streamer's distinctive version of those behaviors.
 
 Scope:
 Process all 4 hardcoded talents above.
@@ -84,6 +90,8 @@ Phase 1: Incremental stream-level open coding
 - Generate in-vivo or descriptive codes directly from text (short labels, 1-4 words).
 - Do not force data into preset categories.
 - Code interactional units (single line or short exchange windows) with timestamped evidence.
+- Prefer codes that preserve specific interaction form, social stance, or recurring ritual over flat sentiment labels.
+- Avoid retaining generic lexical buckets as final codes unless they are clearly reframed into a more interpretable interaction pattern.
 
 Phase 2: Constant comparison against the cumulative v3 profile
 - Compare new codes within the weekly batch and against the previously retained v3 code structure.
@@ -94,16 +102,32 @@ Phase 2: Constant comparison against the cumulative v3 profile
   - genuinely new emergent codes
   - stronger evidence for already known codes
   - weakening or absent support for previously prominent themes
+- During merge/split decisions, prefer talent-specific interpretive labels over generic shared-trait labels.
+- If multiple surface codes mostly point to the same deeper behavior, collapse them into a richer behavior-level code instead of keeping near-duplicate lexical buckets.
+- If a retained code is common across peers, annotate in memo logic what is distinctive about this streamer's version or demote it from headline importance.
 
 Phase 3: Higher-order clustering
 - Group emergent codes into higher-order themes (families) after coding is complete.
 - Theme names must come from observed patterns, not imported frameworks.
 - Update theme-family descriptions when the new weekly evidence materially changes the cumulative interpretation.
+- Theme families should describe distinctive interactional patterns, not generic creator traits.
+- At least 2 of the major cumulative theme families should be distinctiveness-forward families that would not fit peer talents without major rewriting.
 
 Phase 4: Cross-talent contrast
 - Compare emergent theme families across talents.
 - Identify what is distinctive vs shared.
 - When possible, note whether the newest batch reinforced an existing contrast or introduced a new distinction.
+
+Phase 4.5: Uniqueness filter before final retention
+- Before finalizing codes and theme families, separate:
+  - shared baseline streamer traits
+  - this streamer's distinctive version of a shared trait
+  - genuinely unique or unusually emphasized patterns
+- If a candidate code or family is mostly shared across peers, either:
+  - rewrite it into a more specific talent-shaped code or family, or
+  - demote it from headline prominence
+- Ask of every major retained code/family: `would this still feel specifically true if I swapped in another talent's name?`
+- If yes, refine it until the answer is no or reclassify it as background context.
 
 Evidence and reliability rules:
 - Every analytic claim must map to raw evidence rows in CSV logs.
@@ -119,6 +143,8 @@ Evidence and reliability rules:
 - Keep low-frequency but conceptually important codes if justified in memo.
 - Include at least 2 negative cases (counterexamples) per major theme family where cumulative evidence allows.
 - Clearly distinguish weekly-batch evidence from cumulative totals in process notes or state metadata.
+- Do not retain a code as major only because it is frequent. Frequency without distinctiveness is not enough.
+- Prefer behavior-level codes over filler-response codes unless the filler itself serves a distinctive recurring social function.
 
 Required structure for `personality_profile_v3_open_coding.md`:
 
@@ -132,6 +158,8 @@ Start the document with:
 - Confidence level: High / Medium / Low.
 - Explicit limitations from text-only modality.
 - Include 1 short note on whether this run materially changed the personality signature or mainly reinforced prior themes.
+- The opening must answer what makes this streamer unique compared with the peers in this dataset.
+- Do not open with broad shared traits unless they are immediately specified in this streamer's distinctive form.
 
 ## 2) Incremental Open Coding Process Notes
 - Briefly document how codes were generated, merged, split, and elevated into themes for the new batch.
@@ -142,6 +170,7 @@ Start the document with:
   - final retained cumulative codes
   - newly added codes this run
   - merged/retired codes this run if any
+- Include a short note on which generic candidate codes were rewritten, merged, or demoted for lack of distinctiveness if applicable.
 
 ## 3) Emergent Codebook (Talent-Specific, Cumulative)
 - Present the final retained open codes for this talent.
@@ -154,6 +183,8 @@ Start the document with:
   - cumulative stream_coverage_count
   - 3 evidence quotes with `[timecode] speaker (video_id): "quote"`
 - If a code was introduced in the current run, label it as `new_this_run: yes`.
+- The retained codebook should emphasize behaviorally meaningful, talent-shaped codes over generic streamer-common labels.
+- If a code represents this streamer's distinctive version of a shared trait, make that specificity visible in the code label or operational definition.
 
 ## 4) Emergent Theme Families
 - Group codes into higher-order theme families.
@@ -163,6 +194,7 @@ Start the document with:
   - strongest supporting evidence
   - 2 counterexamples/limits
   - note whether this family was reinforced, expanded, narrowed, or unchanged by the current run
+- At least 2 major theme families should be clearly distinctiveness-forward rather than merely broad shared categories.
 
 ## 5) Idiosyncratic Charm Markers
 - Identify recurring, non-generic markers unique to this streamer’s text presence.
@@ -181,6 +213,8 @@ Start the document with:
 ## 7) Cross-Talent Distinctiveness
 - Contrast this talent against at least 2 other talents using emergent themes.
 - Answer: what makes this streamer non-interchangeable?
+- Do not merely list similarities and differences. Explain what combination of codes and theme families makes this streamer specifically this streamer.
+- Include at least 2 contrasts about how the streamer performs a shared behavior differently from peers.
 - Include one "can resemble X, but differs by Y" statement.
 - Note whether the newest batch sharpened or softened any prior contrast.
 
@@ -191,6 +225,7 @@ Start the document with:
 - Include 1 brief note on incremental-risk bias:
   - risk of over-weighting the newest batch
   - how cumulative evidence was used to prevent overreaction
+- Include 1 brief note about the risk of over-reading generic streamer traits as distinctive personality.
 
 Required structure for `open_codebook_v3.csv`:
 Columns:

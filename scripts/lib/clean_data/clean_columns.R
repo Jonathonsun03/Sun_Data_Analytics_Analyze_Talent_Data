@@ -56,7 +56,7 @@ clean_duration_cols <- function(Data) {
       ),
       
       # lubridate period object (good for plotting, summarising, etc.)
-      duration_period = seconds_to_period(DurationSeconds),
+      duration_period = lubridate::seconds_to_period(DurationSeconds),
       
       # convenience numeric columns
       duration_seconds = DurationSeconds,

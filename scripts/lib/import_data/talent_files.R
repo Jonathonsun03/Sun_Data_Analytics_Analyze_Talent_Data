@@ -36,6 +36,70 @@ with_utf8_locale <- function(expr) {
   force(expr)
 }
 
+list_csv_files_utf8 <- function(dir_path) {
+  if (!dir.exists(dir_path)) {
+    return(character(0))
+  }
+
+  has_use_bytes <- "useBytes" %in% names(formals(list.files))
+  files <- if (has_use_bytes) {
+    list.files(dir_path, full.names = FALSE, recursive = FALSE, useBytes = TRUE)
+  } else {
+    list.files(dir_path, full.names = FALSE, recursive = FALSE)
+  }
+
+  files <- files[str_detect(files, "(?i)\\.csv$")]
+  if (length(files) == 0) {
+    return(character(0))
+  }
+
+  full_paths <- file.path(dir_path, files)
+  Encoding(full_paths) <- "UTF-8"
+  full_paths
+}
+
+list_talent_snapshot_files <- function(talent_path) {
+  talent_path <- fix_talent_paths(talent_path)
+
+  root_files <- list_csv_files_utf8(talent_path)
+
+  raw_data_root <- file.path(talent_path, "raw_data")
+  raw_data_root <- fix_talent_paths(raw_data_root)
+  raw_files <- character(0)
+  if (dir.exists(raw_data_root)) {
+    raw_top_files <- list_csv_files_utf8(raw_data_root)
+
+    has_use_bytes <- "useBytes" %in% names(formals(list.files))
+    raw_children <- if (has_use_bytes) {
+      list.files(raw_data_root, full.names = TRUE, recursive = FALSE, useBytes = TRUE)
+    } else {
+      list.files(raw_data_root, full.names = TRUE, recursive = FALSE)
+    }
+    raw_children <- fix_talent_paths(raw_children)
+    raw_type_dirs <- raw_children[dir.exists(raw_children)]
+    raw_type_files <- unlist(map(raw_type_dirs, list_csv_files_utf8), use.names = FALSE)
+
+    raw_files <- c(raw_top_files, raw_type_files)
+  }
+
+  unique(c(root_files, raw_files))
+}
+
+infer_snapshot_type_key <- function(path) {
+  normalized <- fix_talent_paths(path)
+  normalized <- str_replace_all(normalized, "\\\\", "/")
+
+  raw_match <- str_match(normalized, "/raw_data/([^/]+)/[^/]+$")
+  if (!is.na(raw_match[, 2]) && nzchar(raw_match[, 2])) {
+    return(enc2utf8(raw_match[, 2]))
+  }
+
+  base <- basename(normalized)
+  base <- str_remove(base, "(?i)\\.csv$")
+  base <- str_replace(base, "_\\d{4}-\\d{2}-\\d{2}.*$", "")
+  enc2utf8(base)
+}
+
 TalentFiles <- function(Paths) {
   if (is.character(Paths)) {
     # 1. Decode the parent directory path first
@@ -48,23 +112,9 @@ TalentFiles <- function(Paths) {
           return(character(0))
         }
 
-        # 2. Get the files. Do NOT use full.names = TRUE yet.
-        # This prevents R from gluing the mangled parent path to the clean file names.
-        has_use_bytes <- "useBytes" %in% names(formals(list.files))
-        files <- if (has_use_bytes) {
-          list.files(p, full.names = FALSE, useBytes = TRUE)
-        } else {
-          list.files(p, full.names = FALSE)
-        }
-
-        if (length(files) == 0) return(character(0))
-
-        # 3. Filter for CSVs based purely on the filename
-        files <- files[str_detect(files, "(?i)\\.csv$")]
-        if (length(files) == 0) return(character(0))
-
-        # 4. Manually construct the full paths and force UTF-8 encoding
-        full_paths <- file.path(p, files)
+        # Collect legacy root-level snapshot CSVs plus the new raw_data/<type> layout.
+        full_paths <- list_talent_snapshot_files(p)
+        if (length(full_paths) == 0) return(character(0))
         Encoding(full_paths) <- "UTF-8"
 
         full_paths
@@ -121,8 +171,12 @@ TalentFiles <- function(Paths) {
     }
 
     type_keys <- map_chr(files_kept, function(f) {
+      key <- infer_snapshot_type_key(f)
+      if (nzchar(key)) {
+        return(key)
+      }
       base <- safe_basename(f)
-      str_replace(base, "_\\d{4}-\\d{2}-\\d{2}.*$", "")
+      str_remove(str_replace(base, "_\\d{4}-\\d{2}-\\d{2}.*$", ""), "(?i)\\.csv$")
     })
 
     split_indices <- split(seq_along(dfs), type_keys)
