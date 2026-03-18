@@ -304,3 +304,81 @@ v6_renv 1.1.6 was loaded from project library, but this project is configured to
 - Use `renv::restore(packages = "renv")` to install renv 1.1.6 into the project library.
 - The project is out-of-sync -- use `renv::status()` for details.
 v6_20260310_130039.csv
+[weekly-title] Stage 1/2: classification
+renv 1.1.6 was loaded from project library, but this project is configured to use renv 1.1.6.
+- Use `renv::record("renv@1.1.6")` to record renv 1.1.6 in the lockfile.
+- Use `renv::restore(packages = "renv")` to install renv 1.1.6 into the project library.
+- The project is out-of-sync -- use `renv::status()` for details.
+Running talent: Avaritia_Hawthorne_Variance_Project rows: 187 
+
+Attaching package: 'dplyr'
+
+The following objects are masked from 'package:stats':
+
+    filter, lag
+
+The following objects are masked from 'package:base':
+
+    intersect, setdiff, setequal, union
+
+Ingested: 187
+Using talent prompt profile: avaritia_hawthorne_variance_project
+Classification versions: taxonomy=v6 prompt=v6
+Prompt hash (sha256): d1d8bb4130810fca4d8160728c05e39f8fe6faa683bc92e8b27b40b2e5ac7929
+Prompt dump: classification/prompts/talents/avaritia_hawthorne_variance_project/full_prompt/20260317_090102_Avaritia_Hawthorne_Variance_Project_v6_d1d8bb413081.txt
+Using compiled modular prompt bundle.
+Pending titles: 0
+No pending titles to classify.
+Running talent: Katya_Sable_Variance_Project rows: 157 
+Ingested: 157
+Using talent prompt profile: katya_sable_variance_project
+Classification versions: taxonomy=v6 prompt=v6
+Prompt hash (sha256): 8580476c6da5dedec899beb0be8c150d6ed4a7646a70bb765759df23ebe739af
+Prompt dump: classification/prompts/talents/katya_sable_variance_project/full_prompt/20260317_090301_Katya_Sable_Variance_Project_v6_8580476c6da5.txt
+Using compiled modular prompt bundle.
+Pending titles: 0
+No pending titles to classify.
+Running talent: Leia_Memoria_Variance_Project rows: 222 
+Ingested: 222
+Using talent prompt profile: leia_memoria_variance_project
+Classification versions: taxonomy=v6 prompt=v6
+Prompt hash (sha256): 4cebf30de80ee2997dbcabb07582f89e44f47324ce17a29d05b6076de6ded6d3
+Prompt dump: classification/prompts/talents/leia_memoria_variance_project/full_prompt/20260317_090323_Leia_Memoria_Variance_Project_v6_4cebf30de80e.txt
+Using compiled modular prompt bundle.
+Pending titles: 0
+No pending titles to classify.
+Running talent: Terberri_Solaris_Ch rows: 172 
+Ingested: 172
+Using talent prompt profile: terberri_solaris_ch
+Classification versions: taxonomy=v6 prompt=v6
+Prompt hash (sha256): 2f282c79f188e4c4696b62cf147976ca25b8be45ba5b53880f06005731e70812
+Prompt dump: classification/prompts/talents/terberri_solaris_ch/full_prompt/20260317_090356_Terberri_Solaris_Ch_v6_2f282c79f188.txt
+Using compiled modular prompt bundle.
+Pending titles: 0
+No pending titles to classify.
+There were 16 warnings (use warnings() to see them)
+Weekly classification run complete. Input rows processed: 738 
+[weekly-title] Stage 2/2: export
+renv 1.1.6 was loaded from project library, but this project is configured to use renv 1.1.6.
+- Use `renv::record("renv@1.1.6")` to record renv 1.1.6 in the lockfile.
+- Use `renv::restore(packages = "renv")` to install renv 1.1.6 into the project library.
+- The project is out-of-sync -- use `renv::status()` for details.
+No rows found for model=gpt-5-mini, prompt_version=renv 1.1.6 was loaded from project library, but this project is configured to use renv 1.1.6.
+- Use `renv::record("renv@1.1.6")` to record renv 1.1.6 in the lockfile.
+- Use `renv::restore(packages = "renv")` to install renv 1.1.6 into the project library.
+- The project is out-of-sync -- use `renv::status()` for details.
+v6, taxonomy_version=renv 1.1.6 was loaded from project library, but this project is configured to use renv 1.1.6.
+- Use `renv::record("renv@1.1.6")` to record renv 1.1.6 in the lockfile.
+- Use `renv::restore(packages = "renv")` to install renv 1.1.6 into the project library.
+- The project is out-of-sync -- use `renv::status()` for details.
+v6
+[weekly-title] Complete
+[weekly-title] Export: classification/output/title_classifications/classification_export_gpt-5-mini_renv 1.1.6 was loaded from project library, but this project is configured to use renv 1.1.6.
+- Use `renv::record("renv@1.1.6")` to record renv 1.1.6 in the lockfile.
+- Use `renv::restore(packages = "renv")` to install renv 1.1.6 into the project library.
+- The project is out-of-sync -- use `renv::status()` for details.
+v6_renv 1.1.6 was loaded from project library, but this project is configured to use renv 1.1.6.
+- Use `renv::record("renv@1.1.6")` to record renv 1.1.6 in the lockfile.
+- Use `renv::restore(packages = "renv")` to install renv 1.1.6 into the project library.
+- The project is out-of-sync -- use `renv::status()` for details.
+v6_20260317_130404.csv

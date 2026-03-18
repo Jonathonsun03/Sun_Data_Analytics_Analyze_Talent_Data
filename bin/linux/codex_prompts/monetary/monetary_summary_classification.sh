@@ -2,9 +2,10 @@
 set -euo pipefail
 
 REPO="$HOME/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data"
-DEFAULT_PROMPT_FILE="$REPO/prompts/Monetary_analysis/monetary_summary_classification"
+DEFAULT_PROMPT_FILE="$REPO/prompts/monetary/monetary_summary_classification.md"
 PROMPT_FILE="${1:-${PROMPT_FILE:-$DEFAULT_PROMPT_FILE}}"
-LOG_DIR="$REPO/logs/codex"
+LOG_ROOT="/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/codex_prompts"
+LOG_DIR="$LOG_ROOT/monetary/monetary_summary_classification"
 RUN_TS="$(date +%Y-%m-%d_%H-%M-%S)"
 RUN_SLUG="monetary_summary_classification"
 LOG_FILE="$LOG_DIR/${RUN_SLUG}_${RUN_TS}.log"

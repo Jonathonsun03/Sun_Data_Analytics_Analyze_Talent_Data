@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
-DEFAULT_RENDER_SCRIPT="scripts/run/bundle_A/render_bundle_A.R"
+DEFAULT_RENDER_SCRIPT="r_scripts/run/bundle_A/render_bundle_A.R"
 DEFAULT_BUNDLE_NAME="bundle_A"
 DEFAULT_OUTPUT_PREFIX="Bundle_A"
 DEFAULT_REPORT_SUBDIR="reports"
@@ -44,7 +44,7 @@ Description:
   and names files with window segment in prefix (for example: Bundle_A_window_90d_ava.html).
 
   It calls:
-    scripts/run/bundle_A/render_bundle_A.R
+    r_scripts/run/bundle_A/render_bundle_A.R
 
 Required:
   At least one talent selector OR --all (defaults to Ava if none supplied).
@@ -71,7 +71,7 @@ Output routing:
 Render behavior:
   --input-source NAME          Data source for report input: staging|datalake (default: datalake)
   --input-root PATH            Explicit report input root override (talent folders root)
-  --render-script PATH         Override render script path (default: scripts/run/bundle_A/render_bundle_A.R)
+  --render-script PATH         Override render script path (default: r_scripts/run/bundle_A/render_bundle_A.R)
   --input PATH                 Optional input Rmd override passed to render script
   --rscript-bin PATH           Rscript binary (default: Rscript)
   --staging-root PATH          Override TALENT_STAGING_ROOT (used for --all and render)
@@ -129,7 +129,7 @@ resolve_datalake_root() {
 
   (
     cd "${REPO_ROOT}"
-    "${RSCRIPT_BIN}" --vanilla -e "source('scripts/lib/utils/datalake_root.r'); cat(get_datalake_root())"
+    "${RSCRIPT_BIN}" --vanilla -e "source('r_scripts/lib/utils/datalake_root.r'); cat(get_datalake_root())"
   )
 }
 
@@ -153,7 +153,7 @@ load_talents_all() {
   local out
   out="$(
     cd "${REPO_ROOT}"
-    TALENT_DATA_SOURCE_INPUT="${INPUT_SOURCE}" TALENT_DATA_ROOT_INPUT="${INPUT_ROOT}" "${RSCRIPT_BIN}" --vanilla -e "src <- tolower(Sys.getenv('TALENT_DATA_SOURCE_INPUT', 'staging')); root_in <- Sys.getenv('TALENT_DATA_ROOT_INPUT', ''); source('scripts/lib/utils/staging_root.R'); source('scripts/lib/utils/datalake_root.r'); source('scripts/lib/utils/talent_select.R'); root <- if (nzchar(root_in)) root_in else if (identical(src, 'datalake')) get_datalake_root() else get_staging_root(); cat(list_talents(root = root)\$name, sep='\n')"
+    TALENT_DATA_SOURCE_INPUT="${INPUT_SOURCE}" TALENT_DATA_ROOT_INPUT="${INPUT_ROOT}" "${RSCRIPT_BIN}" --vanilla -e "src <- tolower(Sys.getenv('TALENT_DATA_SOURCE_INPUT', 'staging')); root_in <- Sys.getenv('TALENT_DATA_ROOT_INPUT', ''); source('r_scripts/lib/utils/staging_root.R'); source('r_scripts/lib/utils/datalake_root.r'); source('r_scripts/lib/utils/talent_select.R'); root <- if (nzchar(root_in)) root_in else if (identical(src, 'datalake')) get_datalake_root() else get_staging_root(); cat(list_talents(root = root)\$name, sep='\n')"
   )"
   while IFS= read -r line; do
     line="$(trim "$line")"

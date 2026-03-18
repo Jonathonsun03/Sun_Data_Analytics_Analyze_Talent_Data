@@ -4,7 +4,7 @@
 
 Wrapper script for:
 
-- `scripts/run/text_replay/render_text_replay.R`
+- `r_scripts/run/text_replay/render_text_replay.R`
 
 This builds full text replay CSVs by combining subtitle + chat files per stream.
 

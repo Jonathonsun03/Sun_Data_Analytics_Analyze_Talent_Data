@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 CLASSIFY_RUNNER="bin/linux/classification/run_title_classification.sh"
-EXPORT_SCRIPT="scripts/run/Title_classification/title_classification/05_export_results_csv.R"
+EXPORT_SCRIPT="r_scripts/run/Title_classification/title_classification/05_export_results_csv.R"
 CONFIG_JSON="classification/config/talent_profiles.json"
 EXPORT_DIR="classification/output/title_classifications"
 

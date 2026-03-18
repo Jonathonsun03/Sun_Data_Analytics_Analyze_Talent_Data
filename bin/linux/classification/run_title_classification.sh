@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-R_SCRIPT="scripts/run/Title_classification/title_classification/07_run_weekly_classification.R"
+R_SCRIPT="r_scripts/run/Title_classification/title_classification/07_run_weekly_classification.R"
 
 usage() {
   cat <<'EOF'

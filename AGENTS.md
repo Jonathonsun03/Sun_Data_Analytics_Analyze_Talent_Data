@@ -17,8 +17,13 @@
 ## File creation rules
 - Do not create new scripts in the DataLake.
 - Do not create files in the repository root.
-- Put reusable helper functions in `Scripts/lib/`.
-- Put task-specific scripts in `Scripts/tasks/`.
+- Do not create new ad hoc script directories such as additional `r_scripts/`, `scripts/`, `Scripts/`, or task-specific script folders.
+- Repository R scripts live under `r_scripts/`.
+- New Python scripts belong under `py_scripts/`.
+- Put reusable Python helper functions and shared modules in `py_scripts/lib/`.
+- Put runnable Python entrypoint scripts in `py_scripts/run/`.
+- Do not create new Python scripts in legacy locations such as `r_scripts/`, `Scripts/tasks/`, `Scripts/lib/`, or other non-`py_scripts/` folders.
+- Before creating a new Python script, check whether an existing script or helper can be extended or reused.
 - Keep prompt experiments in `prompts/experimental/` unless told otherwise.
 
 ## Safety

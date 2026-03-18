@@ -2,13 +2,21 @@
 set -euo pipefail
 
 REPO="$HOME/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data"
-PROMPT_FILE="$REPO/prompts/personality/profile_v3_incremental_open_coding.md"
-RUNNER_SCRIPT="$REPO/scripts/run/stream_summaries/personality/personality_profile_v3_incremental_open_coding.py"
-LOG_DIR="$REPO/logs/codex"
+DEFAULT_PROMPT_FILE="$REPO/prompts/personality/personality_open_coding.md"
+PROMPT_FILE="${1:-${PROMPT_FILE:-$DEFAULT_PROMPT_FILE}}"
+RUNNER_SCRIPT="$REPO/py_scripts/run/stream_summaries/personality/personality_profile_v3_incremental_open_coding.py"
+LOG_ROOT="/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/codex_prompts"
+LOG_DIR="$LOG_ROOT/personality/personality_open_coding"
 RUN_TS="$(date +%Y-%m-%d_%H-%M-%S)"
-LOG_FILE="$LOG_DIR/personality_open_coding_v3_${RUN_TS}.log"
+RUN_SLUG="personality_open_coding_v3"
+LOG_FILE="$LOG_DIR/${RUN_SLUG}_${RUN_TS}.log"
 
 mkdir -p "$LOG_DIR"
+
+if [[ ! -f "$PROMPT_FILE" ]]; then
+  echo "Error: prompt file not found: $PROMPT_FILE" >&2
+  exit 1
+fi
 
 cd "$REPO"
 

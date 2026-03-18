@@ -4,7 +4,7 @@
 
 Wrapper script for:
 
-- `scripts/run/Subtitle_clean/Subtitle_clean.R`
+- `r_scripts/run/Subtitle_clean/Subtitle_clean.R`
 
 This runs subtitle cleaning for selected talents and writes outputs to each talent's `Subtitles/Processed` + `Subtitles/RData`, plus summary files in:
 

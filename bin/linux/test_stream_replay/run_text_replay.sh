@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-R_SCRIPT="scripts/run/text_replay/render_text_replay.R"
+R_SCRIPT="r_scripts/run/text_replay/render_text_replay.R"
 
 usage() {
   cat <<'USAGE'
@@ -12,7 +12,7 @@ Usage:
 
 Description:
   Wrapper for text replay generation:
-  scripts/run/text_replay/render_text_replay.R
+  r_scripts/run/text_replay/render_text_replay.R
 
 Options:
   --talent-query VALUE           Talent selector passed to select_talent() (default: all)

@@ -1,5 +1,11 @@
 # Notes: Title Classification and Qualitative Coding Plan
 
+## Current Notes
+
+- `2026-03-17_personality_pipeline_and_qualitative_code_log.md`
+  - documents the current personality-analysis pipeline, prompt/runners, output paths, and the qualitative code log design
+  - includes the shared baseline, unique-features, and qualitative-code-log decisions made on 2026-03-17
+
 ## Session Reconstruction (2026-02-17 UTC)
 
 Evidence-based summary of today's work from local repo state:
@@ -14,7 +20,7 @@ Evidence-based summary of today's work from local repo state:
 - Change volume in tracked diffs:
   - `2 files changed, 1296 insertions(+), 132 deletions(-)`
 - `renv.lock` shows a major environment refresh (including R version moving from `4.2.2` to `4.5.2` and expanded package entries).
-- `scripts/run/Title_analysis/Examine_titles.r` was touched on `2026-02-17 03:00:51 +0000`, but there is no current tracked git diff for that file.
+- `r_scripts/run/Title_analysis/Examine_titles.r` was touched on `2026-02-17 03:00:51 +0000`, but there is no current tracked git diff for that file.
 
 Practical interpretation:
 
@@ -33,7 +39,7 @@ Practical interpretation:
 - Confirmed these are enforced by the active schema in:
   - `classification/prompts/base/schema_v2.json`
 - Confirmed the classifier run script is:
-  - `scripts/run/Title_classification/title_classification/02_classify_pending_titles.R`
+  - `r_scripts/run/Title_classification/title_classification/02_classify_pending_titles.R`
 - Updated profile selection logic so classification now takes talent profiles into account more reliably:
   - exact match on normalized talent name
   - matcher-based fallback

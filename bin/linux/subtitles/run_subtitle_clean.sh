@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-R_SCRIPT="scripts/run/Subtitle_clean/Subtitle_clean.R"
+R_SCRIPT="r_scripts/run/Subtitle_clean/Subtitle_clean.R"
 
 usage() {
   cat <<'USAGE'
@@ -12,7 +12,7 @@ Usage:
 
 Description:
   Wrapper for subtitle cleaning + summary generation:
-  scripts/run/Subtitle_clean/Subtitle_clean.R
+  r_scripts/run/Subtitle_clean/Subtitle_clean.R
 
 Options:
   --talent-query VALUE           Talent selector passed to select_talent() (default: all)

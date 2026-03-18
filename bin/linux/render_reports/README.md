@@ -14,7 +14,7 @@ Path: `bin/linux/render_reports/run_bundle_A_report.sh`
 
 It wraps:
 
-- `scripts/run/bundle_A/render_bundle_A.R`
+- `r_scripts/run/bundle_A/render_bundle_A.R`
 
 Primary behavior:
 
@@ -29,7 +29,7 @@ Primary behavior:
 
 ## Defaults (Bundle A)
 
-- Render script: `scripts/run/bundle_A/render_bundle_A.R`
+- Render script: `r_scripts/run/bundle_A/render_bundle_A.R`
 - Bundle name: `bundle_A`
 - Output prefix: `Bundle_A`
 - Report subdir: `reports`
@@ -133,7 +133,7 @@ Render script not found:
 
 `run_bundle_B_report.sh` follows the same wrapper pattern, and defaults to:
 
-- Render script: `scripts/run/bundle_B/render_bundle_B.R`
+- Render script: `r_scripts/run/bundle_B/render_bundle_B.R`
 - Bundle name: `bundle_B`
 - Output prefix: `Bundle_B`
 - Input source: `datalake`

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Runs scripts/run/Title_classification/talent_profile/build_talent_profile.R from repo root.
+# Runs r_scripts/run/Title_classification/talent_profile/build_talent_profile.R from repo root.
 # Passes all CLI arguments through to the R script.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-R_SCRIPT="scripts/run/Title_classification/talent_profile/build_talent_profile.R"
+R_SCRIPT="r_scripts/run/Title_classification/talent_profile/build_talent_profile.R"
 
 usage() {
   cat <<'EOF'
@@ -15,7 +15,7 @@ Usage:
 
 Description:
   Wrapper for the talent profile builder R script:
-  scripts/run/Title_classification/talent_profile/build_talent_profile.R
+  r_scripts/run/Title_classification/talent_profile/build_talent_profile.R
 
 Examples:
   Single talent:

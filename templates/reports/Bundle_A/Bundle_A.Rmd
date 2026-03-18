@@ -251,20 +251,20 @@ bundle_a_ggplotly <- function(plot_obj, tooltip = NULL, rotate_y_axis_title = FA
 
 ```{r modules, include=FALSE}
 
-source("scripts/lib/utils/staging_root.R")
-source("scripts/lib/utils/datalake_root.r")
+source("r_scripts/lib/utils/staging_root.R")
+source("r_scripts/lib/utils/datalake_root.r")
 
-list.files(here("scripts","lib","plots","report","bundle_A"), full.names = TRUE) %>%
+list.files(here("r_scripts","lib","plots","report","bundle_A"), full.names = TRUE) %>%
     walk(source)
-list.files(here("scripts","lib","utils"), full.names = TRUE) %>%
+list.files(here("r_scripts","lib","utils"), full.names = TRUE) %>%
     walk(source)
-list.files(here("scripts", "lib", "import_data"), pattern = "[rR]$", full.names = TRUE) %>%
+list.files(here("r_scripts", "lib", "import_data"), pattern = "[rR]$", full.names = TRUE) %>%
   walk(source)
-list.files(here("scripts", "lib", "report_tables"), pattern = "[rR]$", full.names = TRUE) %>%
+list.files(here("r_scripts", "lib", "report_tables"), pattern = "[rR]$", full.names = TRUE) %>%
   walk(source)
-source(here("scripts","lib","plots","PlottingThemes.R"))
+source(here("r_scripts","lib","plots","PlottingThemes.R"))
 
-clean_data_dir <- here::here("scripts", "lib", "clean_data")
+clean_data_dir <- here::here("r_scripts", "lib", "clean_data")
 source(file.path(clean_data_dir, "analytics_core.R"))
 source(file.path(clean_data_dir, "analytics_join.R"))
 source(file.path(clean_data_dir, "clean_columns.R"))

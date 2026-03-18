@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-R_SCRIPT="scripts/run/Text_Replay_Analysis/Text_replay_analysis_openAI"
+R_SCRIPT="r_scripts/run/Text_Replay_Analysis/Text_replay_analysis_openAI"
 
 usage() {
   cat <<'EOF'
@@ -11,15 +11,16 @@ Usage:
   bin/linux/stream_summary/run_stream_summary.sh [options]
 
 Description:
-  Summarize stream text logs to markdown using OpenAI.
+  Legacy R-based stream text summarizer using OpenAI.
   - Processes pending files by default (idempotent by prompt+model+file version)
   - Tracks runs in DuckDB table: stream_summaries
   - Writes markdown outputs into talent folder stream_summary/
+  - Requires an explicit --prompt-path
 
 Options:
   --talent-project NAME         Talent project folder (default: Leia Memoria【Variance Project】)
   --model NAME                  Model (default: gpt-4.1-mini)
-  --prompt-path PATH            Prompt markdown path
+  --prompt-path PATH            Prompt markdown path (required)
   --input-subdir NAME           Input subdir under talent project (default: text_playback)
   --output-subdir NAME          Output subdir under talent project (default: stream_summary)
   --one-stream VALUE            One stream only (full path, basename, or basename without .csv)
