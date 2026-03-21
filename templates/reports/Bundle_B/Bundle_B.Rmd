@@ -221,6 +221,39 @@ if (nrow(analytics) == 0 || nrow(monetary) == 0) {
 
 # Backward-compatible alias used by legacy chunks.
 df <- analytics
+
+bundle_b_interp_root <- {
+  out_dir <- params$render_output_dir
+  if (is.null(out_dir) || length(out_dir) == 0 || is.na(out_dir[[1]]) || !nzchar(trimws(as.character(out_dir[[1]])))) {
+    NULL
+  } else {
+    file.path(trimws(as.character(out_dir[[1]])), "interpretations")
+  }
+}
+
+bundle_b_read_interpretation <- function(rel_dir) {
+  if (is.null(bundle_b_interp_root) || !nzchar(bundle_b_interp_root)) {
+    return("")
+  }
+  interp_path <- file.path(bundle_b_interp_root, rel_dir, "output.md")
+  if (!file.exists(interp_path)) {
+    return("")
+  }
+  txt <- paste(readLines(interp_path, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  txt <- trimws(txt)
+  if (!nzchar(txt)) {
+    return("")
+  }
+  txt
+}
+
+bundle_b_emit_interpretation <- function(rel_dir) {
+  txt <- bundle_b_read_interpretation(rel_dir)
+  if (!nzchar(txt)) {
+    return(invisible(NULL))
+  }
+  cat(txt, "\n\n")
+}
 ```
 
 ```{r bundle-b-prep, include=FALSE}
@@ -316,9 +349,19 @@ Each primary section answers a practical planning question: where performance is
 - Where are performance strengths and weaknesses by category?
 - How do specific content attributes affect engagement?
 
+# Executive Summary
+
+```{r bundle-b-executive-summary, results='asis'}
+bundle_b_emit_interpretation("06_report_bookends/01_executive_summary")
+```
+
 ## Why Format-Level Retention Consistency Matters
 This section establishes a quality baseline before optimization.
 Retention-focused metrics are used first because they are less sensitive to posting volume than totals and help identify which formats consistently hold viewer attention.
+
+```{r bundle-b-section-01-synthesis, results='asis'}
+bundle_b_emit_interpretation("01_format_level_retention_consistency/00_section_synthesis")
+```
 
 ### Engagement Distribution by Content Type
 **What this plot does:**
@@ -337,6 +380,10 @@ bundle_b_ggplotly(
     y_as_percent = TRUE
   )
 )
+```
+
+```{r bundle-b-engagement-distribution-text, results='asis'}
+bundle_b_emit_interpretation("01_format_level_retention_consistency/01_engagement_distribution_by_content_type")
 ```
 
 ### Median Engagement by Content Type
@@ -376,9 +423,17 @@ DTSettings(
 )
 ```
 
+```{r bundle-b-median-engagement-text, results='asis'}
+bundle_b_emit_interpretation("01_format_level_retention_consistency/02_median_engagement_by_content_type")
+```
+
 ## Why Category Strengths and Weaknesses Matter for Prioritization
 This section translates performance into prioritization signals.
 Views, revenue, and engagement are analyzed together so recommendations are balanced across reach, monetization, and audience quality rather than driven by a single metric.
+
+```{r bundle-b-section-02-synthesis, results='asis'}
+bundle_b_emit_interpretation("02_category_strengths_and_weaknesses/00_section_synthesis")
+```
 
 ### Content-Type Position in Full Distribution
 **What this plot does:**
@@ -401,6 +456,10 @@ bundle_b_content_position_distribution_plotly(
   content_position,
   Talent
 )
+```
+
+```{r bundle-b-content-position-text, results='asis'}
+bundle_b_emit_interpretation("02_category_strengths_and_weaknesses/01_content_type_position_in_full_distribution")
 ```
 
 ```{r b2-priority-components-table}
@@ -447,6 +506,10 @@ bundle_b_attribute_opportunity_matrix_plotly(
 )
 ```
 
+```{r bundle-b-opportunity-matrix-text, results='asis'}
+bundle_b_emit_interpretation("02_category_strengths_and_weaknesses/02_combined_opportunity_matrix_content_types_tags_and_title_labels")
+```
+
 ### Combined Opportunity Matrix (Median Engagement vs Average Views)
 **What this plot does:**
 - Uses the same combined attribute set, but with `Average views per video` on Y for performance scale.
@@ -463,6 +526,10 @@ bundle_b_attribute_engagement_views_matrix_plotly(
 )
 ```
 
+```{r bundle-b-engagement-views-matrix-text, results='asis'}
+bundle_b_emit_interpretation("02_category_strengths_and_weaknesses/03_combined_opportunity_matrix_median_engagement_vs_average_views")
+```
+
 ### Combined Opportunity Matrix (Average Views vs Average Revenue)
 **What this plot does:**
 - Directly compares view scale to monetization scale across the same combined attributes.
@@ -477,6 +544,10 @@ bundle_b_attribute_views_revenue_matrix_plotly(
   attribute_opportunity,
   Talent
 )
+```
+
+```{r bundle-b-views-revenue-matrix-text, results='asis'}
+bundle_b_emit_interpretation("02_category_strengths_and_weaknesses/04_combined_opportunity_matrix_average_views_vs_average_revenue")
 ```
 
 ```{r b2-attribute-opportunity-table}
@@ -504,6 +575,10 @@ bundle_b_ggplotly(
     Talent
   )
 )
+```
+
+```{r bundle-b-revenue-efficiency-text, results='asis'}
+bundle_b_emit_interpretation("02_category_strengths_and_weaknesses/05_revenue_efficiency_by_content_type")
 ```
 
 ### Distribution-Based Strength/Weakness Summary by Content Type
@@ -537,9 +612,17 @@ DTSettings(
 )
 ```
 
+```{r bundle-b-strength-summary-text, results='asis'}
+bundle_b_emit_interpretation("02_category_strengths_and_weaknesses/06_distribution_based_strength_weakness_summary_by_content_type")
+```
+
 ## Why Content Attributes Matter for Engagement Outcomes
 This section moves from format-level performance to creative levers.
 By breaking performance down by collaboration, topic, and tag attributes, the report helps identify what to scale, what to refine, and what to test next.
+
+```{r bundle-b-section-03-synthesis, results='asis'}
+bundle_b_emit_interpretation("03_content_attributes_matter_for_engagement_outcomes/00_section_synthesis")
+```
 
 ### Collaboration Distribution vs Non-Collaborative Baseline
 
@@ -605,6 +688,10 @@ DTSettings(
 )
 ```
 
+```{r bundle-b-collaboration-text, results='asis'}
+bundle_b_emit_interpretation("03_content_attributes_matter_for_engagement_outcomes/01_collaboration_distribution_vs_non_collaborative_baseline")
+```
+
 ### Topic View Distribution
 **What this plot does:**
 - Shows the distribution of per-video views within top topics, rather than only topic totals.
@@ -629,6 +716,10 @@ bundle_b_ggplotly(
 
 ```{r b2-topic-view-distribution-table}
 DTSettings(topic_view_dist$summary, class = "display stripe hover", scroll_x = TRUE)
+```
+
+```{r bundle-b-topic-text, results='asis'}
+bundle_b_emit_interpretation("03_content_attributes_matter_for_engagement_outcomes/02_topic_view_distribution")
 ```
 
 ### Tag View Distribution
@@ -658,9 +749,17 @@ bundle_b_ggplotly(
 DTSettings(tag_view_dist$summary, class = "display stripe hover", scroll_x = TRUE)
 ```
 
+```{r bundle-b-tag-text, results='asis'}
+bundle_b_emit_interpretation("03_content_attributes_matter_for_engagement_outcomes/03_tag_view_distribution")
+```
+
 ## Why Scheduling Effects Matter for Publishing Decisions
 This section isolates timing effects so publishing cadence can be tuned with evidence.
 The goal is to show whether weekday patterns and weekend/weekday differences create meaningful upside or downside on a per-video basis.
+
+```{r bundle-b-section-04-synthesis, results='asis'}
+bundle_b_emit_interpretation("04_scheduling_effects_matter_for_publishing_decisions/00_section_synthesis")
+```
 
 ### Day-of-Week Deviation from Average
 **What this plot does:**
@@ -705,6 +804,10 @@ dow_deviation_display <- dow_deviation_table %>%
 DTSettings(dow_deviation_display, class = "display stripe hover", scroll_x = TRUE)
 ```
 
+```{r bundle-b-day-of-week-text, results='asis'}
+bundle_b_emit_interpretation("04_scheduling_effects_matter_for_publishing_decisions/01_day_of_week_deviation_from_average")
+```
+
 ### Weekend vs Weekday Summary
 **What this plot does:**
 - Shows per-video distributions for weekday vs weekend uploads (box + whisker + points).
@@ -737,6 +840,20 @@ wk_summary <- weekend_vs_weekday_prep(analytics, monetary)
 DTSettings(wk_summary, class = "display stripe hover", scroll_x = TRUE)
 ```
 
+```{r bundle-b-weekend-text, results='asis'}
+bundle_b_emit_interpretation("04_scheduling_effects_matter_for_publishing_decisions/02_weekend_vs_weekday_summary")
+```
+
 # How to Turn These Findings into Action
 
 Use the retention and strength/weakness sections to prioritize content types to scale, then use topic/tag/collaboration/scheduling sections to tune execution for higher engagement and monetization efficiency.
+
+```{r bundle-b-action-synthesis, results='asis'}
+bundle_b_emit_interpretation("05_turn_findings_into_action/00_section_synthesis")
+```
+
+# Wrap-up and Conclusion
+
+```{r bundle-b-conclusion, results='asis'}
+bundle_b_emit_interpretation("06_report_bookends/02_conclusion")
+```

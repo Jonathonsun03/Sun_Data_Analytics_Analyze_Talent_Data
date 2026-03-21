@@ -89,9 +89,16 @@ if (!file.exists(input_rmd)) {
   stop("Input Rmd not found: ", input_rmd)
 }
 
-output_dir <- rr_arg_value(args, "--output-dir", repo_path("reports", "bundle_A"))
-output_dir <- resolve_repo_or_abs(output_dir)
-dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+output_dir_flag <- rr_arg_value(args, "--output-dir", "")
+output_dir_supplied <- rr_has_flag(args, "--output-dir") && nzchar(trimws(output_dir_flag))
+output_dir <- if (output_dir_supplied) {
+  resolve_repo_or_abs(output_dir_flag)
+} else {
+  normalizePath(get_datalake_root(), winslash = "/", mustWork = FALSE)
+}
+if (output_dir_supplied) {
+  dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+}
 
 output_prefix <- rr_arg_value(args, "--output-prefix", "Bundle_A")
 quiet_render <- rr_has_flag(args, "--quiet")
@@ -161,7 +168,11 @@ if (length(talents) == 0) {
 
 cat("Bundle A render targets:", paste(talents, collapse = ", "), "\n")
 cat("Input Rmd:", input_rmd, "\n")
-cat("Output dir:", output_dir, "\n")
+if (output_dir_supplied) {
+  cat("Output dir:", output_dir, "\n")
+} else {
+  cat("Output routing: talent-specific Bundle A folders under ", output_dir, "\n", sep = "")
+}
 cat("Data source:", data_source, "\n")
 cat("Data root:", data_root, "\n")
 if (is.na(window_days)) {
@@ -184,9 +195,19 @@ if (is.na(window_days)) {
 result_df <- rr_render_for_talents(
   talents = talents,
   input_rmd = input_rmd,
-  output_dir = output_dir,
+  output_dir = if (output_dir_supplied) {
+    output_dir
+  } else {
+    function(talent, slug) {
+      normalizePath(
+        file.path(output_dir, talent, "reports", "bundle_A"),
+        winslash = "/",
+        mustWork = FALSE
+      )
+    }
+  },
   output_prefix = output_prefix,
-  params_builder = function(talent) {
+  params_builder = function(talent, render_dir) {
     list(
       talent = talent,
       data_source = data_source,
@@ -194,7 +215,7 @@ result_df <- rr_render_for_talents(
       render_generated_at = render_generated_at,
       included_date_range = included_date_range,
       render_cli = render_cli,
-      render_output_dir = output_dir,
+      render_output_dir = render_dir,
       render_output_prefix = output_prefix,
       window_days = if (is.na(window_days)) NULL else window_days,
       start_date = if (is.na(start_date)) NULL else start_date,

@@ -71,6 +71,22 @@ content_duration_metric_plot <- function(
     stop("No content-type trend rows available after sparse-content filtering.")
   }
 
+  plot_df <- plot_df %>%
+    dplyr::arrange(`Content Type`, publish_date) %>%
+    dplyr::group_by(`Content Type`) %>%
+    dplyr::mutate(
+      .trend_total = vapply(
+        seq_along(.data$Total),
+        function(i) {
+          lo <- max(1L, i - 1L)
+          hi <- min(length(.data$Total), i + 1L)
+          mean(.data$Total[lo:hi], na.rm = TRUE)
+        },
+        numeric(1)
+      )
+    ) %>%
+    dplyr::ungroup()
+
   start_date <- min(plot_df$publish_date, na.rm = TRUE)
   end_date <- max(plot_df$publish_date, na.rm = TRUE)
   subtitle_text <- paste0(
@@ -90,14 +106,16 @@ content_duration_metric_plot <- function(
       linewidth = raw_linewidth,
       alpha = 0.6
     ) +
-    geom_smooth(
-      method = "loess",
-      span = span,
-      se = show_ci,
+    geom_point(
+      aes(color = `Content Type`),
+      size = 1.4,
+      alpha = 0.8
+    ) +
+    geom_line(
+      aes(y = .data$.trend_total),
       color = sun_data_brand_colors()[["midnight"]],
-      fill = sun_data_brand_colors()[["cloud"]],
-      alpha = smooth_alpha,
-      linewidth = smooth_linewidth
+      linewidth = smooth_linewidth,
+      alpha = 0.95
     ) +
     facet_wrap(~`Content Type`, ncol = 1, scales = facet_scales) +
     scale_color_sun_data(variant = "brand") +
@@ -118,6 +136,9 @@ content_duration_metric_plot <- function(
     scale_x_date(
       date_breaks = "1 month",
       date_labels = "%b %Y"
+    ) +
+    coord_cartesian(
+      ylim = c(0, NA)
     )
 }
 

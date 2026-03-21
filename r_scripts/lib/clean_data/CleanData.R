@@ -33,5 +33,7 @@ source(file.path(clean_data_dir, "analytics_join.R"))
 source(file.path(clean_data_dir, "clean_columns.R"))
 source(file.path(clean_data_dir, "video_prep.R"))
 source(file.path(clean_data_dir, "title_classification_join.R"))
+source(file.path(clean_data_dir, "bundle_e_panel_prep.R"))
+source(file.path(clean_data_dir, "bundle_e_summary_metrics.R"))
 
 rm(.clean_data_dir, clean_data_dir, utils_dir, content_type_utils)

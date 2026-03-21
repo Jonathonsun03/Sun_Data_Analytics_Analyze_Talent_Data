@@ -5,7 +5,7 @@ theme_nyt <- function(base_size = 14, base_family = "serif") {
     theme(
       plot.background = element_rect(fill = "white", color = NA),
       panel.background = element_rect(fill = "white", color = NA),
-      panel.grid.major = element_line(color = "#DDDDDD", size = 0.3),
+      panel.grid.major = element_line(color = "#DDDDDD", linewidth = 0.3),
       panel.grid.minor = element_blank(),
       plot.title = element_text(
         family = base_family,
@@ -42,7 +42,7 @@ theme_nyt <- function(base_size = 14, base_family = "serif") {
         size = base_size * 0.9,
         color = "#333333"
       ),
-      axis.ticks = element_line(color = "#333333", size = 0.3),
+      axis.ticks = element_line(color = "#333333", linewidth = 0.3),
       legend.position = "right",
       legend.title = element_text(face = "bold", size = base_size * 0.9),
       legend.text = element_text(size = base_size * 0.85),

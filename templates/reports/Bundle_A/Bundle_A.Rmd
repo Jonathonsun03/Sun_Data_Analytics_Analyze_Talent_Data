@@ -217,7 +217,7 @@ bundle_a_ggplotly <- function(plot_obj, tooltip = NULL, rotate_y_axis_title = FA
         anns[[i]]$textangle <- -90
         anns[[i]]$xanchor <- "center"
         anns[[i]]$yanchor <- "middle"
-        anns[[i]]$xshift <- -55
+        anns[[i]]$xshift <- -28
       }
     }
     p$x$layout$annotations <- anns
@@ -227,9 +227,9 @@ bundle_a_ggplotly <- function(plot_obj, tooltip = NULL, rotate_y_axis_title = FA
   if (isTRUE(rotate_y_axis_title)) {
     current_left <- p$x$layout$margin$l
     if (is.null(current_left) || !is.finite(current_left)) {
-      current_left <- 120
+      current_left <- 80
     }
-    margin_cfg$l <- max(as.numeric(current_left), 140)
+    margin_cfg$l <- max(as.numeric(current_left), 92)
   }
 
   p %>%
@@ -411,121 +411,52 @@ demo_available <- nrow(demo) > 0
 
 # Backward-compatible alias used by some legacy chunks.
 df <- analytics
+
+bundle_a_interp_root <- {
+  out_dir <- params$render_output_dir
+  if (is.null(out_dir) || length(out_dir) == 0 || is.na(out_dir[[1]]) || !nzchar(trimws(as.character(out_dir[[1]])))) {
+    NULL
+  } else {
+    file.path(trimws(as.character(out_dir[[1]])), "interpretations")
+  }
+}
+
+bundle_a_read_interpretation <- function(rel_dir) {
+  if (is.null(bundle_a_interp_root) || !nzchar(bundle_a_interp_root)) {
+    return("")
+  }
+  interp_path <- file.path(bundle_a_interp_root, rel_dir, "output.md")
+  if (!file.exists(interp_path)) {
+    return("")
+  }
+  txt <- paste(readLines(interp_path, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  txt <- trimws(txt)
+  if (!nzchar(txt)) {
+    return("")
+  }
+  txt
+}
+
+bundle_a_emit_interpretation <- function(rel_dir) {
+  txt <- bundle_a_read_interpretation(rel_dir)
+  if (!nzchar(txt)) {
+    return(invisible(NULL))
+  }
+  cat(txt, "\n\n")
+}
 ```
 
-# Start Here: How To Use This Report
-This report is designed to support quick, practical decisions for managers and talent teams.  
-Use the floating table of contents to jump directly to the section that matches the decision you need to make now.
-
-## Quick Paths by Role
-1. **Manager fast scan (5-10 minutes):** Overall Performance Snapshot -> Trends Over Time -> Collaboration Effectiveness -> Wrap-up.
-2. **Talent optimization path:** Engagement Distribution -> Timing Effects -> Topic Performance -> Tag Performance.
-3. **Audience strategy path:** Audience Age + Gender Trends.
-
-## How to Interpret Responsibly
-- This report is **observational**, not causal. It shows patterns, not proof of cause-and-effect.
-- Tag and topic metrics can be influenced by timing, promotion, seasonality, and posting volume.
-- Tag totals are directional because tags can overlap across videos.
-
-## Standard vs Customized Content
-The structure and chart explanations are standardized for consistency across talents.  
-Use the **Wrap-up** section to add talent-specific narrative and recommendations.
-
-## Active Analysis Window
-```{r analysis-window-summary}
-pick_col <- function(df, candidates) {
-  hit <- intersect(candidates, names(df))
-  if (length(hit) == 0) return(NA_character_)
-  hit[[1]]
-}
-
-safe_unique_videos <- function(df) {
-  id_col <- pick_col(df, c("Video ID"))
-  if (is.na(id_col) || nrow(df) == 0) return(NA_integer_)
-  dplyr::n_distinct(df[[id_col]])
-}
-
-safe_date_span <- function(df) {
-  date_col <- pick_col(df, c("publish_date", "Published At", "date"))
-  if (is.na(date_col) || nrow(df) == 0) return("N/A")
-  d <- suppressWarnings(as.Date(df[[date_col]]))
-  d <- d[!is.na(d)]
-  if (length(d) == 0) return("N/A")
-  paste0(format(min(d), "%Y-%m-%d"), " to ", format(max(d), "%Y-%m-%d"))
-}
-
-window_setting <- if (window_mode == "explicit_range") {
-  "Explicit date range"
-} else if (window_mode == "days_back") {
-  paste0("Last ", window_days, " days")
-} else {
-  "All available dates"
-}
-
-included_range <- if (window_mode == "all_data") {
-  "All available dates"
-} else {
-  paste0(format(window_start_date, "%Y-%m-%d"), " to ", format(window_end_date, "%Y-%m-%d"))
-}
-
-demo_gender_col <- pick_col(demo, c("Gender", "gender"))
-demo_age_col <- pick_col(demo, c("Age", "age"))
-audience_segment_count <- if (!is.na(demo_gender_col) && !is.na(demo_age_col) && nrow(demo) > 0) {
-  demo %>%
-    dplyr::transmute(.seg = paste(.data[[demo_gender_col]], .data[[demo_age_col]], sep = " | ")) %>%
-    dplyr::filter(!is.na(.data$.seg), nzchar(.data$.seg)) %>%
-    dplyr::summarise(n = dplyr::n_distinct(.data$.seg)) %>%
-    dplyr::pull(.data$n)
-} else {
-  NA_integer_
-}
-
-import_summary <- tibble::tibble(
-  Metric = c(
-    "Window setting",
-    "Included date range",
-    "Analytics rows",
-    "Monetary rows",
-    "Audience demographic rows",
-    "Unique videos (analytics)",
-    "Unique videos (monetary)",
-    "Distinct audience segments (age x gender)",
-    "Analytics date span",
-    "Monetary date span",
-    "Demographics date span"
-  ),
-  Value = c(
-    window_setting,
-    included_range,
-    scales::comma(nrow(analytics)),
-    scales::comma(nrow(monetary)),
-    scales::comma(nrow(demo)),
-    ifelse(is.na(safe_unique_videos(analytics)), "N/A", scales::comma(safe_unique_videos(analytics))),
-    ifelse(is.na(safe_unique_videos(monetary)), "N/A", scales::comma(safe_unique_videos(monetary))),
-    ifelse(is.na(audience_segment_count), "N/A", scales::comma(audience_segment_count)),
-    safe_date_span(analytics),
-    safe_date_span(monetary),
-    safe_date_span(demo)
-  )
-)
-
-DT::datatable(
-  import_summary,
-  rownames = FALSE,
-  class = "compact stripe hover",
-  colnames = if (exists("dt_pretty_colnames", mode = "function")) dt_pretty_colnames(import_summary) else names(import_summary),
-  options = list(
-    dom = "t",
-    paging = FALSE,
-    ordering = FALSE,
-    searching = FALSE,
-    info = FALSE
-  )
-)
+# Executive Summary
+```{r interp-executive-summary, echo=FALSE, results='asis'}
+bundle_a_emit_interpretation("05_report_bookends/01_executive_summary")
 ```
 
 # Overall Performance Snapshot
 This section establishes a common baseline for current channel health. It combines total views (scale), average views per video (efficiency), revenue (monetization), and engagement distribution (retention quality and consistency) so decisions are based on both volume and quality, not just one metric.
+
+```{r interp-overall-performance-synthesis, echo=FALSE, results='asis'}
+bundle_a_emit_interpretation("01_overall_performance_snapshot/00_section_synthesis")
+```
 
 ## Views by Content Type (Total vs Average)
 **What this chart shows:** Total views and average views per video for each content type in one side-by-side view.  
@@ -537,6 +468,10 @@ bundle_a_ggplotly(
   theme_nyt()
 )
 
+```
+
+```{r interp-views-by-content, echo=FALSE, results='asis'}
+bundle_a_emit_interpretation("01_overall_performance_snapshot/01_views_by_content_type")
 ```
 
 ## Combined Performance Trends (Views + Revenue)
@@ -553,6 +488,10 @@ bundle_a_ggplotly(
     value_mode = "raw"
   )
 )
+```
+
+```{r interp-combined-performance, echo=FALSE, results='asis'}
+bundle_a_emit_interpretation("01_overall_performance_snapshot/02_combined_performance_trends")
 ```
 
 ## Total Revenue by content type 
@@ -601,6 +540,10 @@ DTSettings(
   class = "display stripe hover",
   scroll_x = TRUE
 )
+```
+
+```{r interp-total-revenue-by-content, echo=FALSE, results='asis'}
+bundle_a_emit_interpretation("01_overall_performance_snapshot/03_total_revenue_by_content_type")
 ```
 
 ## Engagement Distribution and Successful Videos by Content Type
@@ -689,8 +632,16 @@ UIdf<- df %>%
 DTSettings(UIdf)
 ```
 
+```{r interp-engagement-success, echo=FALSE, results='asis'}
+bundle_a_emit_interpretation("01_overall_performance_snapshot/04_engagement_distribution_successful_videos")
+```
+
 # Trends Over Time
 This section shows momentum: whether performance is improving, flattening, or declining over time. By tracking views and revenue together, it becomes easier to spot turning points early and separate audience demand shifts from monetization changes that a single-period snapshot might hide.
+
+```{r interp-trends-over-time-synthesis, echo=FALSE, results='asis'}
+bundle_a_emit_interpretation("02_trends_over_time/00_section_synthesis")
+```
 
 ## Revenue over time by content type
 **What this chart shows:** How estimated revenue changes over time for each content type.  
@@ -700,12 +651,15 @@ This section shows momentum: whether performance is improving, flattening, or de
 
 bundle_a_ggplotly(
   content_duration_metric(monetary, Talent, "Estimated Revenue") +
-  theme_nyt(),
-  rotate_y_axis_title = TRUE
+  theme_nyt()
 
 )
 
 
+```
+
+```{r interp-revenue-over-time, echo=FALSE, results='asis'}
+bundle_a_emit_interpretation("02_trends_over_time/01_revenue_over_time_by_content_type")
 ```
 
 ## Total Views over time by content type
@@ -720,14 +674,21 @@ bundle_a_ggplotly(
     metric_col = "views",
     metric_label = "Views"
   ) +
-    theme_nyt(),
-  rotate_y_axis_title = TRUE
+    theme_nyt()
 )
 
 ```
 
+```{r interp-total-views-over-time, echo=FALSE, results='asis'}
+bundle_a_emit_interpretation("02_trends_over_time/02_total_views_over_time_by_content_type")
+```
+
 # Audience Composition
 This section explains who is watching and how that audience is changing month to month. Age and gender share trends provide a stable baseline for creative positioning, partnership fit, and identifying where the audience is expanding or contracting.
+
+```{r interp-audience-composition-synthesis, echo=FALSE, results='asis'}
+bundle_a_emit_interpretation("03_audience_composition/00_section_synthesis")
+```
 
 ## Audience Age + Gender Trends
 **What this chart shows:** Audience share trends over time by age and gender segments.  
@@ -762,8 +723,16 @@ if (!isTRUE(demo_available)) {
 }
 ```
 
+```{r interp-audience-age-gender, echo=FALSE, results='asis'}
+bundle_a_emit_interpretation("03_audience_composition/01_audience_age_gender_trends")
+```
+
 # Content Strategy Deep Dive
 This section turns the performance signal into operating choices for upcoming uploads. Timing, collaboration, topic, and tag analyses focus on controllable levers so teams can prioritize high-impact experiments and make clearer trade-offs in the next publishing cycle.
+
+```{r interp-content-strategy-synthesis, echo=FALSE, results='asis'}
+bundle_a_emit_interpretation("04_content_strategy_deep_dive/00_section_synthesis")
+```
 
 ## Timing Effects: Weekend vs Weekday
 **What this chart shows:** Per-video distributions of views and revenue for weekend vs weekday uploads.  
@@ -781,6 +750,10 @@ bundle_a_ggplotly(
   tooltip = "text",
   rotate_y_axis_title = TRUE
 )
+```
+
+```{r interp-weekend-vs-weekday, echo=FALSE, results='asis'}
+bundle_a_emit_interpretation("04_content_strategy_deep_dive/01_weekend_vs_weekday")
 ```
 
 ```{r weekend-vs-weekday-table}
@@ -889,6 +862,10 @@ if (nrow(dow_summary) == 0) {
 
 ```{r day-of-week-table}
 DTSettings(dow_summary, class = "display stripe hover", scroll_x = TRUE)
+```
+
+```{r interp-day-of-week-distribution, echo=FALSE, results='asis'}
+bundle_a_emit_interpretation("04_content_strategy_deep_dive/02_day_of_week_distribution")
 ```
 
 ## Collaboration Effectiveness
@@ -1002,6 +979,10 @@ if (nrow(collab_summary) == 0) {
 }
 ```
 
+```{r interp-collaboration-effectiveness, echo=FALSE, results='asis'}
+bundle_a_emit_interpretation("04_content_strategy_deep_dive/03_collaboration_effectiveness")
+```
+
 ## Topic Performance (Views + Revenue)
 **What this chart shows:** Performance comparison by topic using both views and revenue.  
 **How to read it:** Higher values indicate topics that contribute more overall performance.
@@ -1037,6 +1018,10 @@ if (nrow(topic_summary) == 0) {
 }
 ```
 
+```{r interp-topic-performance, echo=FALSE, results='asis'}
+bundle_a_emit_interpretation("04_content_strategy_deep_dive/04_topic_performance")
+```
+
 ## Tag Performance (Top Tags by Views + Revenue)
 **What this chart shows:** Performance by top tags using views and revenue signals.  
 **How to read it:** Bigger values indicate higher-performing tags; tags can overlap across videos, so totals are directional rather than mutually exclusive.
@@ -1067,6 +1052,10 @@ if (nrow(tag_summary) == 0) {
     }
   )
 }
+```
+
+```{r interp-tag-performance, echo=FALSE, results='asis'}
+bundle_a_emit_interpretation("04_content_strategy_deep_dive/05_tag_performance")
 ```
 
 ## Average Views per Tag
@@ -1100,4 +1089,107 @@ if (nrow(tag_summary) == 0) {
 } else {
   DTSettings(tag_summary, class = "display stripe hover", scroll_x = TRUE)
 }
+```
+
+```{r interp-average-views-per-tag, echo=FALSE, results='asis'}
+bundle_a_emit_interpretation("04_content_strategy_deep_dive/06_average_views_per_tag")
+```
+
+# Wrap-up and Conclusion
+```{r interp-conclusion, echo=FALSE, results='asis'}
+bundle_a_emit_interpretation("05_report_bookends/02_conclusion")
+```
+
+
+## Active Analysis Window
+```{r analysis-window-summary}
+pick_col <- function(df, candidates) {
+  hit <- intersect(candidates, names(df))
+  if (length(hit) == 0) return(NA_character_)
+  hit[[1]]
+}
+
+safe_unique_videos <- function(df) {
+  id_col <- pick_col(df, c("Video ID"))
+  if (is.na(id_col) || nrow(df) == 0) return(NA_integer_)
+  dplyr::n_distinct(df[[id_col]])
+}
+
+safe_date_span <- function(df) {
+  date_col <- pick_col(df, c("publish_date", "Published At", "date"))
+  if (is.na(date_col) || nrow(df) == 0) return("N/A")
+  d <- suppressWarnings(as.Date(df[[date_col]]))
+  d <- d[!is.na(d)]
+  if (length(d) == 0) return("N/A")
+  paste0(format(min(d), "%Y-%m-%d"), " to ", format(max(d), "%Y-%m-%d"))
+}
+
+window_setting <- if (window_mode == "explicit_range") {
+  "Explicit date range"
+} else if (window_mode == "days_back") {
+  paste0("Last ", window_days, " days")
+} else {
+  "All available dates"
+}
+
+included_range <- if (window_mode == "all_data") {
+  "All available dates"
+} else {
+  paste0(format(window_start_date, "%Y-%m-%d"), " to ", format(window_end_date, "%Y-%m-%d"))
+}
+
+demo_gender_col <- pick_col(demo, c("Gender", "gender"))
+demo_age_col <- pick_col(demo, c("Age", "age"))
+audience_segment_count <- if (!is.na(demo_gender_col) && !is.na(demo_age_col) && nrow(demo) > 0) {
+  demo %>%
+    dplyr::transmute(.seg = paste(.data[[demo_gender_col]], .data[[demo_age_col]], sep = " | ")) %>%
+    dplyr::filter(!is.na(.data$.seg), nzchar(.data$.seg)) %>%
+    dplyr::summarise(n = dplyr::n_distinct(.data$.seg)) %>%
+    dplyr::pull(.data$n)
+} else {
+  NA_integer_
+}
+
+import_summary <- tibble::tibble(
+  Metric = c(
+    "Window setting",
+    "Included date range",
+    "Analytics rows",
+    "Monetary rows",
+    "Audience demographic rows",
+    "Unique videos (analytics)",
+    "Unique videos (monetary)",
+    "Distinct audience segments (age x gender)",
+    "Analytics date span",
+    "Monetary date span",
+    "Demographics date span"
+  ),
+  Value = c(
+    window_setting,
+    included_range,
+    scales::comma(nrow(analytics)),
+    scales::comma(nrow(monetary)),
+    scales::comma(nrow(demo)),
+    ifelse(is.na(safe_unique_videos(analytics)), "N/A", scales::comma(safe_unique_videos(analytics))),
+    ifelse(is.na(safe_unique_videos(monetary)), "N/A", scales::comma(safe_unique_videos(monetary))),
+    ifelse(is.na(audience_segment_count), "N/A", scales::comma(audience_segment_count)),
+    safe_date_span(analytics),
+    safe_date_span(monetary),
+    safe_date_span(demo)
+  )
+)
+
+DT::datatable(
+  import_summary,
+  rownames = FALSE,
+  class = "compact stripe hover",
+  colnames = if (exists("dt_pretty_colnames", mode = "function")) dt_pretty_colnames(import_summary) else names(import_summary),
+  options = list(
+    dom = "t",
+    paging = FALSE,
+    ordering = FALSE,
+    searching = FALSE,
+    info = FALSE
+  )
+)
 ```

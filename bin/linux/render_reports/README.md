@@ -8,24 +8,63 @@ This folder contains Linux wrapper scripts that standardize how Bundle reports a
 
 These wrappers call the R render scripts, resolve roots, resolve talent folder names, and route outputs into the datalake structure.
 
+Bundle A-specific scripts now live in:
+
+- `bin/linux/render_reports/bundle_A/`
+
+Bundle B-specific scripts now live in:
+
+- `bin/linux/render_reports/bundle_B/`
+
+The only top-level Bundle A wrapper intentionally kept is:
+
+- `run_bundle_A_report.sh`
+
+Bundle A output layout is kept together per talent under one folder:
+
+- `<datalake_root>/<talent>/reports/bundle_A/`
+- final HTML report lives in that folder
+- generated evidence files live in `artifacts/`
+- generated interpretation text lives in `interpretations/`
+- editorial rewrite work files also live under `interpretations/06_editorial_review/`
+
 ## What `run_bundle_A_report.sh` does
 
 Path: `bin/linux/render_reports/run_bundle_A_report.sh`
 
-It wraps:
+It now serves as the main Bundle A entrypoint and wraps:
 
-- `r_scripts/run/bundle_A/render_bundle_A.R`
+- `bin/linux/render_reports/bundle_A/run_bundle_A_full_pipeline.sh`
 
 Primary behavior:
 
-1. Resolves repo root and datalake root.
-2. Resolves talent(s) from `--talent`, `--talents`, `--talents-file`, or `--all`.
-3. Resolves each talent to an output folder name under datalake.
-4. Builds output path:
-   - `<datalake_root>/<talent>/<report_subdir>/<bundle_name>/`
-5. Builds output filename prefix:
-   - `<output_prefix>_<window_segment>`
-6. Calls the R script once per talent with the resolved args.
+1. Builds Bundle A artifacts.
+2. Runs Bundle A interpretation generation.
+3. Runs Bundle A editorial rewrite over the generated report text.
+4. Renders the final Bundle A HTML report.
+
+If you need the render-only step without artifacts or interpretations, use:
+
+- `bin/linux/render_reports/bundle_A/run_bundle_A_render_only.sh`
+
+## What `run_bundle_B_report.sh` does
+
+Path: `bin/linux/render_reports/run_bundle_B_report.sh`
+
+It now serves as the main Bundle B entrypoint and wraps:
+
+- `bin/linux/render_reports/bundle_B/run_bundle_B_full_pipeline.sh`
+
+Primary behavior:
+
+1. Builds Bundle B artifacts.
+2. Runs Bundle B interpretation generation.
+3. Runs Bundle B editorial rewrite over the generated report text.
+4. Renders the final Bundle B HTML report.
+
+If you need the render-only step without artifacts or interpretations, use:
+
+- `bin/linux/render_reports/bundle_B/run_bundle_B_render_only.sh`
 
 ## Defaults (Bundle A)
 
@@ -68,7 +107,7 @@ Dry run (print commands only):
 bin/linux/render_reports/run_bundle_A_report.sh --talent "Katya Sable 【Variance Project】" --window-days 90 --dry-run
 ```
 
-Pass extra args directly to `render_bundle_A.R`:
+Pass extra args through the wrapper stack:
 
 ```bash
 bin/linux/render_reports/run_bundle_A_report.sh --talent "Avaritia Hawthorne 【Variance Project】" --window-days 90 -- --quiet
@@ -97,6 +136,8 @@ Window segment is used in output prefix:
 Final output file naming is controlled by the R script, but uses the wrapper-provided prefix, usually resulting in names like:
 
 - `Bundle_A_window_90d_<talent_slug>.html`
+
+Whether you use the wrapper or run `render_bundle_A.R` directly, the default Bundle A behavior is to keep each talent's Bundle A HTML, artifacts, and interpretations in that same `reports/bundle_A` folder tree unless you explicitly override `--output-dir`.
 
 ## Important options
 
@@ -129,16 +170,173 @@ Render script not found:
 - Verify path to `--render-script`
 - Or run from repo root with defaults
 
-## Bundle B note
+## Defaults (Bundle B)
 
-`run_bundle_B_report.sh` follows the same wrapper pattern, and defaults to:
-
+- Main wrapper: `bin/linux/render_reports/run_bundle_B_report.sh`
+- Full pipeline wrapper: `bin/linux/render_reports/bundle_B/run_bundle_B_full_pipeline.sh`
 - Render script: `r_scripts/run/bundle_B/render_bundle_B.R`
 - Bundle name: `bundle_B`
 - Output prefix: `Bundle_B`
+- Report subdir: `reports`
 - Input source: `datalake`
 
+Bundle B output layout is kept together per talent under one folder:
+
+- `<datalake_root>/<talent>/reports/bundle_B/`
+- final HTML report lives in that folder
+- generated evidence files live in `artifacts/`
+- generated interpretation text lives in `interpretations/`
+
 Use `--help` on either wrapper for full flag details.
+
+## Bundle A Artifact + Pipeline Wrappers
+
+Artifact builder:
+
+- Path: `bin/linux/render_reports/bundle_A/run_bundle_A_artifacts.sh`
+- Calls: `r_scripts/run/bundle_A/import_data.r`
+- Writes:
+  - `<datalake_root>/<talent>/reports/bundle_A/artifacts/figures/`
+  - `<datalake_root>/<talent>/reports/bundle_A/artifacts/tables/`
+  - `bundle_a_ai_inputs.json`
+  - `bundle_a_artifact_manifest.json`
+
+Interpretation-stage scaffold:
+
+- Path: `bin/linux/render_reports/bundle_A/run_bundle_A_interpretations.sh`
+- Current role:
+  - validates that Bundle A artifacts exist
+  - builds one `input.md` per prompt under the datalake `interpretations/` tree
+  - runs `codex exec` for each selected prompt
+  - writes one `output.md` interpretation per prompt
+- Test controls:
+  - `--prompt-filter TEXT`
+  - `--max-prompts N`
+
+Editorial rewrite stage:
+
+- Path: `bin/linux/render_reports/bundle_A/run_bundle_A_editorial_rewrite.sh`
+- Role:
+  - reads all client-facing Bundle A paragraphs
+  - performs one full-report editorial rewrite pass with `codex exec`
+  - overwrites the generated `output.md` files before final render
+  - leaves internal QA outputs under `06_editorial_review/`
+
+Full pipeline wrapper:
+
+- Path: `bin/linux/render_reports/bundle_A/run_bundle_A_full_pipeline.sh`
+- Stage order:
+  1. `run_bundle_A_artifacts.sh`
+  2. `run_bundle_A_interpretations.sh`
+  3. `run_bundle_A_editorial_rewrite.sh`
+  4. `run_bundle_A_render_only.sh`
+
+Example:
+
+```bash
+bin/linux/render_reports/run_bundle_A_report.sh \
+  --talent "Leia Memoria【Variance Project】" \
+  --window-days 90 \
+  --input-source datalake
+```
+
+Single-prompt Codex test:
+
+```bash
+bin/linux/render_reports/bundle_A/run_bundle_A_interpretations.sh \
+  --talent "Leia Memoria【Variance Project】" \
+  --prompt-filter "01_views_by_content_type" \
+  --max-prompts 1
+```
+
+Skip the interpretation-stage scaffold:
+
+```bash
+bin/linux/render_reports/run_bundle_A_report.sh \
+  --talent "Leia Memoria【Variance Project】" \
+  --window-days 90 \
+  --input-source datalake \
+  --skip-interpretation
+```
+
+## Bundle B Artifact + Pipeline Wrappers
+
+Artifact builder:
+
+- Path: `bin/linux/render_reports/bundle_B/run_bundle_B_artifacts.sh`
+- Calls: `r_scripts/run/bundle_B/import_data.r`
+- Writes:
+  - `<datalake_root>/<talent>/reports/bundle_B/artifacts/figures/`
+  - `<datalake_root>/<talent>/reports/bundle_B/artifacts/tables/`
+  - `bundle_b_ai_inputs.json`
+  - `bundle_b_artifact_manifest.json`
+
+Interpretation generation:
+
+- Path: `bin/linux/render_reports/bundle_B/run_bundle_B_interpretations.sh`
+- Current role:
+  - validates that Bundle B artifacts exist
+  - builds one `input.md` per prompt under the datalake `interpretations/` tree
+  - runs `codex exec` for each selected prompt
+  - writes one `output.md` interpretation per prompt
+  - includes section/chart prompts plus report bookends
+- Test controls:
+  - `--prompt-filter TEXT`
+  - `--max-prompts N`
+  - `--dry-run`
+
+Editorial rewrite:
+
+- Path: `bin/linux/render_reports/bundle_B/run_bundle_B_editorial_rewrite.sh`
+- Reads the generated client-facing Bundle B interpretation markdown
+- Runs one full-report rewrite prompt with `codex exec`
+- Overwrites the existing report-facing `output.md` files before render
+- Supports:
+  - `--prompt-filter TEXT`
+  - `--dry-run`
+
+Render-only step:
+
+- Path: `bin/linux/render_reports/bundle_B/run_bundle_B_render_only.sh`
+- Calls: `r_scripts/run/bundle_B/render_bundle_B.R`
+- Writes final HTML into the same talent `reports/bundle_B` folder used by artifacts and interpretations
+
+Full pipeline wrapper:
+
+- Path: `bin/linux/render_reports/bundle_B/run_bundle_B_full_pipeline.sh`
+- Stage order:
+  1. `run_bundle_B_artifacts.sh`
+  2. `run_bundle_B_interpretations.sh`
+  3. `run_bundle_B_editorial_rewrite.sh`
+  4. `run_bundle_B_render_only.sh`
+
+Example:
+
+```bash
+bin/linux/render_reports/run_bundle_B_report.sh \
+  --talent "Avaritia Hawthorne 【Variance Project】" \
+  --window-days 90 \
+  --input-source datalake
+```
+
+Single-prompt Codex test:
+
+```bash
+bin/linux/render_reports/bundle_B/run_bundle_B_interpretations.sh \
+  --talent "Avaritia Hawthorne 【Variance Project】" \
+  --prompt-filter "01_engagement_distribution_by_content_type" \
+  --max-prompts 1
+```
+
+Skip interpretation and render from fresh artifacts:
+
+```bash
+bin/linux/render_reports/run_bundle_B_report.sh \
+  --talent "Avaritia Hawthorne 【Variance Project】" \
+  --window-days 90 \
+  --input-source datalake \
+  --skip-interpretation
+```
 
 ## Monthly Run (Bundle A + Bundle B, 90 days, all talents)
 

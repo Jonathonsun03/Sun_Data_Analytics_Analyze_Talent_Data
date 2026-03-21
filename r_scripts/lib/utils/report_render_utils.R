@@ -99,12 +99,30 @@ rr_render_for_talents <- function(
     stop("Package `rmarkdown` is required.")
   }
 
+  resolve_output_dir <- function(talent, slug) {
+    if (is.function(output_dir)) {
+      out <- output_dir(talent, slug)
+    } else {
+      out <- output_dir
+    }
+    normalizePath(out, winslash = "/", mustWork = FALSE)
+  }
+
+  build_params <- function(talent, render_dir) {
+    if (length(formals(params_builder)) >= 2) {
+      return(params_builder(talent, render_dir))
+    }
+    params_builder(talent)
+  }
+
   results <- vector("list", length(talents))
 
   for (i in seq_along(talents)) {
     talent <- talents[[i]]
     slug <- slugify_fn(talent)
     output_file <- paste0(output_prefix, "_", slug, ".html")
+    render_dir <- resolve_output_dir(talent, slug)
+    dir.create(render_dir, recursive = TRUE, showWarnings = FALSE)
 
     cat("\n[", i, "/", length(talents), "] ", label, ": ", talent, "\n", sep = "")
     ok <- TRUE
@@ -115,8 +133,8 @@ rr_render_for_talents <- function(
         rmarkdown::render(
           input = input_rmd,
           output_file = output_file,
-          output_dir = output_dir,
-          params = params_builder(talent),
+          output_dir = render_dir,
+          params = build_params(talent, render_dir),
           envir = new.env(parent = globalenv()),
           quiet = quiet_render
         )
@@ -128,13 +146,14 @@ rr_render_for_talents <- function(
     )
 
     if (ok) {
-      cat("Rendered:", file.path(output_dir, output_file), "\n")
+      cat("Rendered:", file.path(render_dir, output_file), "\n")
     } else {
       cat("Failed:", talent, " -> ", err_msg, "\n", sep = "")
     }
 
     results[[i]] <- data.frame(
       talent = talent,
+      output_dir = render_dir,
       output_file = output_file,
       success = ok,
       error = if (ok) NA_character_ else err_msg,

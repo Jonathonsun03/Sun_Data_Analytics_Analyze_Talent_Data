@@ -2,6 +2,12 @@
 
 ## Current Notes
 
+- `2026-03-18_bundle_a_custom_text_pipeline.md`
+  - documents how customized interpretation text was added to Bundle A
+  - covers prompts, artifact export, codex-based interpretation generation, report inclusion, output routing, and testing
+- `2026-03-20_bundle_b_custom_text_pipeline.md`
+  - documents how the Bundle B customized-text pipeline was aligned to Bundle A
+  - covers prompts, artifact/export routing, codex-based bookends and editorial rewrite, report inclusion, and validation
 - `2026-03-17_personality_pipeline_and_qualitative_code_log.md`
   - documents the current personality-analysis pipeline, prompt/runners, output paths, and the qualitative code log design
   - includes the shared baseline, unique-features, and qualitative-code-log decisions made on 2026-03-17
