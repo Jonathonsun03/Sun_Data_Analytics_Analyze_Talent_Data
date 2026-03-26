@@ -417,6 +417,11 @@ for talent_query in "${TALENTS[@]}"; do
     continue
   fi
 
+  audience_demographics_available="false"
+  if rg -q '"audience_demographics_available"[[:space:]]*:[[:space:]]*true' "${ai_inputs_json}"; then
+    audience_demographics_available="true"
+  fi
+
   mkdir -p "${interpret_root}"
 
   prompts_run=0
@@ -443,6 +448,9 @@ for talent_query in "${TALENTS[@]}"; do
       continue
     fi
     if [[ -z "${PROMPT_FILTER}" && "${parent_prompt_dir}" == "06_editorial_review" ]]; then
+      continue
+    fi
+    if [[ "${audience_demographics_available}" != "true" && "${parent_prompt_dir}" == "03_audience_composition" ]]; then
       continue
     fi
     if [[ -n "${MAX_PROMPTS}" && ${prompts_run} -ge ${MAX_PROMPTS} ]]; then

@@ -79,9 +79,10 @@ library_growth_snapshot <- build_bundle_e_library_growth_snapshot(panel_window)
 back_catalog_contribution <- build_bundle_e_back_catalog_contribution(panel_window)
 panel_coverage_summary <- build_bundle_e_panel_coverage_summary(video_summary)
 publish_cohort_performance <- build_bundle_e_publish_cohort_performance(video_summary)
-content_type_longevity <- build_bundle_e_attribute_summary(video_summary, "Content Type")
+video_type_longevity <- build_bundle_e_attribute_summary(video_summary, "Content Type")
 topic_longevity <- build_bundle_e_attribute_summary(video_summary, "topic")
 tag_longevity <- build_bundle_e_tag_longevity(video_summary)
+video_type_detail_tables <- build_bundle_e_video_type_detail_tables(video_summary)
 leaders <- build_bundle_e_leaders(video_summary)
 
 bundle_e_plots <- build_bundle_e_plot_set(
@@ -89,7 +90,7 @@ bundle_e_plots <- build_bundle_e_plot_set(
   back_catalog_contribution = back_catalog_contribution,
   video_summary = video_summary,
   publish_cohort_performance = publish_cohort_performance,
-  content_type_longevity = content_type_longevity,
+  video_type_longevity = video_type_longevity,
   talent = Talent
 )
 
@@ -107,9 +108,12 @@ bundle_e_tables <- list(
     dplyr::arrange(.data$`Video ID`, .data$snapshot_date) %>%
     dplyr::slice_head(n = 500),
   publish_cohort_performance = publish_cohort_performance,
+  video_type_longevity = video_type_longevity,
+  video_type_highest_overall_performing = video_type_detail_tables$video_type_highest_overall_performing,
+  video_type_newest_five_videos = video_type_detail_tables$video_type_newest_five_videos,
+  video_type_top_performing_videos = video_type_detail_tables$video_type_top_performing_videos,
   evergreen_video_leaders = leaders$evergreen_video_leaders,
   sleeper_reacceleration_candidates = leaders$sleeper_reacceleration_candidates,
-  content_type_longevity = content_type_longevity,
   topic_longevity = topic_longevity,
   tag_longevity = tag_longevity,
   metadata = tibble::tibble(

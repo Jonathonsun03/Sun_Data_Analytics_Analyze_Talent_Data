@@ -59,9 +59,60 @@ load_bundle_a_titles <- function(
     "classification_export_gpt-5-mini_from_duckdb.csv"
   )
 ) {
+  override <- trimws(Sys.getenv("BUNDLE_A_TITLE_CLASSIFICATIONS_PATH", unset = ""))
+  if (!nzchar(override)) {
+    override <- trimws(Sys.getenv("TITLE_CLASSIFICATIONS_PATH", unset = ""))
+  }
+  if (nzchar(override)) {
+    titles_path <- override
+  }
+
   load_title_classifications(
     path = titles_path,
     talent = talent
+  )
+}
+
+build_bundle_a_audience_trends_artifact <- function(
+  demo_df,
+  talent,
+  freq = "month"
+) {
+  unavailable <- list(
+    available = FALSE,
+    reason = "Audience demographics were not available for this talent.",
+    data = NULL,
+    plot = NULL
+  )
+
+  if (!is.data.frame(demo_df) || nrow(demo_df) == 0) {
+    return(unavailable)
+  }
+
+  prepared <- tryCatch(
+    audience_age_gender_trends_prep(
+      demo_df = demo_df,
+      freq = freq
+    ),
+    error = function(e) {
+      unavailable$reason <<- conditionMessage(e)
+      NULL
+    }
+  )
+
+  if (is.null(prepared) || nrow(prepared) == 0) {
+    unavailable$reason <- "Audience demographics export only contained no-data age/gender rows."
+    return(unavailable)
+  }
+
+  list(
+    available = TRUE,
+    reason = NA_character_,
+    data = prepared,
+    plot = audience_age_gender_trends_plot(
+      plot_df = prepared,
+      talent = talent
+    )
   )
 }
 
@@ -187,10 +238,18 @@ build_bundle_a_plot_set <- function(
   monetary,
   demo,
   talent,
-  deep_dive = NULL
+  deep_dive = NULL,
+  audience_trends = NULL
 ) {
   if (is.null(deep_dive)) {
     deep_dive <- build_bundle_a_deep_dive(analytics, monetary)
+  }
+  if (is.null(audience_trends)) {
+    audience_trends <- build_bundle_a_audience_trends_artifact(
+      demo_df = demo,
+      talent = talent,
+      freq = "month"
+    )
   }
 
   views_content <- views_content_type_comparison_with_data(analytics, talent)
@@ -224,21 +283,14 @@ build_bundle_a_plot_set <- function(
     metric_col = "views",
     metric_label = "Views"
   )
-  audience_trends <- audience_age_gender_trends_with_data(
-    demo_df = demo,
-    talent = talent,
-    freq = "month"
-  )
   weekend_dist <- weekend_vs_weekday_distribution_prep(analytics, monetary)
-
-  list(
+  plots <- list(
     views_by_content_type = views_content$plot,
     combined_performance_trends = perf_overview$plot,
     total_revenue_by_content_type = revenue_content$plot,
     engagement_distribution_successful_videos = engagement_success$plot,
     revenue_over_time_by_content_type = revenue_over_time$plot,
     total_views_over_time_by_content_type = views_over_time$plot,
-    audience_age_gender_trends = audience_trends$plot,
     weekend_vs_weekday = weekend_vs_weekday_distribution_plot(weekend_dist, talent),
     day_of_week_distribution = day_of_week_performance_plot(deep_dive$day_of_week_summary, talent, as_share = TRUE),
     collaboration_effectiveness = collaboration_effectiveness_plot(deep_dive$collab_summary, talent),
@@ -246,6 +298,12 @@ build_bundle_a_plot_set <- function(
     tag_performance = tag_performance_plot(deep_dive$tag_summary, talent),
     average_views_per_tag = tag_average_views_plot(deep_dive$tag_summary, talent)
   )
+
+  if (isTRUE(audience_trends$available) && inherits(audience_trends$plot, "ggplot")) {
+    plots$audience_age_gender_trends <- audience_trends$plot
+  }
+
+  plots
 }
 
 print_bundle_a_preview <- function(preps) {
@@ -469,6 +527,11 @@ print_bundle_a_preview(preps)
 
 # Deep-dive summary tables for downstream analysis / API interpretation.
 deep_dive <- build_bundle_a_deep_dive(analytics, monetary)
+audience_trends <- build_bundle_a_audience_trends_artifact(
+  demo_df = demo,
+  talent = Talent,
+  freq = "month"
+)
 weekend_summary <- deep_dive$weekend_summary
 day_of_week_summary <- deep_dive$day_of_week_summary
 collab_summary <- deep_dive$collab_summary
@@ -508,11 +571,27 @@ views_over_time <- content_duration_metric_with_data(
   metric_col = "views",
   metric_label = "Views"
 )
-audience_trends <- audience_age_gender_trends_with_data(
-  demo_df = demo,
-  talent = Talent,
-  freq = "month"
+
+key_tables <- list(
+  views_by_content_type = views_content_comparison$data,
+  combined_performance_trends = performance_overview$data,
+  total_revenue_by_content_type = revenue_content_with_data$data,
+  engagement_distribution_successful_videos = engagement_success$data,
+  revenue_over_time_by_content_type = revenue_over_time$data,
+  total_views_over_time_by_content_type = views_over_time$data,
+  weekend_vs_weekday = weekend_summary,
+  day_of_week_distribution = day_of_week_summary,
+  collaboration_effectiveness = collab_summary,
+  topic_performance = topic_summary,
+  topic_view_distribution = topic_view_distribution$summary,
+  tag_performance = tag_summary,
+  tag_view_distribution = tag_view_distribution$summary,
+  average_views_per_tag = tag_summary %>%
+    dplyr::select(dplyr::any_of(c("tag_group", "AverageViewsPerVideo", "VideoCountViews", "VideoCount")))
 )
+if (isTRUE(audience_trends$available) && is.data.frame(audience_trends$data)) {
+  key_tables$audience_age_gender_trends <- audience_trends$data
+}
 
 # Bundle A raw tables packaged for OpenAI prompt input or export.
 bundle_a_ai_inputs <- list(
@@ -523,31 +602,16 @@ bundle_a_ai_inputs <- list(
     data_root = normalizePath(root, winslash = "/", mustWork = FALSE),
     window_mode = window_mode,
     window_start_date = if (is.na(window_start_date)) NA_character_ else as.character(window_start_date),
-    window_end_date = if (is.na(window_end_date)) NA_character_ else as.character(window_end_date)
+    window_end_date = if (is.na(window_end_date)) NA_character_ else as.character(window_end_date),
+    audience_demographics_available = isTRUE(audience_trends$available),
+    audience_demographics_reason = audience_trends$reason
   ),
   dataset_sizes = tibble::tibble(
     dataset = c("analytics", "monetary", "demo", "geo"),
     rows = c(nrow(analytics), nrow(monetary), nrow(demo), nrow(geo)),
     cols = c(ncol(analytics), ncol(monetary), ncol(demo), ncol(geo))
   ),
-  key_tables = list(
-    views_by_content_type = views_content_comparison$data,
-    combined_performance_trends = performance_overview$data,
-    total_revenue_by_content_type = revenue_content_with_data$data,
-    engagement_distribution_successful_videos = engagement_success$data,
-    revenue_over_time_by_content_type = revenue_over_time$data,
-    total_views_over_time_by_content_type = views_over_time$data,
-    audience_age_gender_trends = audience_trends$data,
-    weekend_vs_weekday = weekend_summary,
-    day_of_week_distribution = day_of_week_summary,
-    collaboration_effectiveness = collab_summary,
-    topic_performance = topic_summary,
-    topic_view_distribution = topic_view_distribution$summary,
-    tag_performance = tag_summary,
-    tag_view_distribution = tag_view_distribution$summary,
-    average_views_per_tag = tag_summary %>%
-      dplyr::select(dplyr::any_of(c("tag_group", "AverageViewsPerVideo", "VideoCountViews", "VideoCount")))
-  )
+  key_tables = key_tables
 )
 
 # Plot objects loaded here for quick visual checks.
@@ -556,7 +620,8 @@ bundle_a_plots <- build_bundle_a_plot_set(
   monetary = monetary,
   demo = demo,
   talent = Talent,
-  deep_dive = deep_dive
+  deep_dive = deep_dive,
+  audience_trends = audience_trends
 )
 
 # Backward-compatible plot variables used in existing scripts.

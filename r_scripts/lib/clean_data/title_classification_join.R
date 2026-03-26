@@ -10,6 +10,22 @@ load_title_classifications <- function(
     stop("Package `readr` is required.")
   }
 
+  override <- trimws(Sys.getenv("TITLE_CLASSIFICATIONS_PATH", unset = ""))
+  if (!nzchar(override)) {
+    bundle_overrides <- c(
+      trimws(Sys.getenv("BUNDLE_A_TITLE_CLASSIFICATIONS_PATH", unset = "")),
+      trimws(Sys.getenv("BUNDLE_B_TITLE_CLASSIFICATIONS_PATH", unset = "")),
+      trimws(Sys.getenv("BUNDLE_E_TITLE_CLASSIFICATIONS_PATH", unset = ""))
+    )
+    bundle_overrides <- bundle_overrides[nzchar(bundle_overrides)]
+    if (length(bundle_overrides) > 0) {
+      override <- bundle_overrides[[1]]
+    }
+  }
+  if (nzchar(override)) {
+    path <- override
+  }
+
   titles <- readr::read_csv(path, show_col_types = FALSE, progress = FALSE)
 
   required <- c("video_id", "talent_name")

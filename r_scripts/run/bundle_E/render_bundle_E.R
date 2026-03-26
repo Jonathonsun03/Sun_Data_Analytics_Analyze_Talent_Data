@@ -83,7 +83,7 @@ args <- commandArgs(trailingOnly = TRUE)
 render_generated_at <- format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")
 render_cli <- paste(args, collapse = " ")
 
-input_rmd <- rr_arg_value(args, "--input", repo_path("templates", "reports", "Bundle_B", "Bundle_B.Rmd"))
+input_rmd <- rr_arg_value(args, "--input", repo_path("templates", "reports", "Bundle_E", "Bundle_E.Rmd"))
 input_rmd <- resolve_repo_or_abs(input_rmd)
 if (!file.exists(input_rmd)) {
   stop("Input Rmd not found: ", input_rmd)
@@ -100,7 +100,14 @@ if (output_dir_supplied) {
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
 }
 
-output_prefix <- rr_arg_value(args, "--output-prefix", "Bundle_B")
+artifact_root_arg <- trimws(rr_arg_value(args, "--artifact-root", ""))
+artifact_root <- if (nzchar(artifact_root_arg)) {
+  resolve_repo_or_abs(artifact_root_arg)
+} else {
+  ""
+}
+
+output_prefix <- rr_arg_value(args, "--output-prefix", "Bundle_E")
 quiet_render <- rr_has_flag(args, "--quiet")
 data_source <- tolower(trimws(rr_arg_value(args, "--data-source", "datalake")))
 if (!(data_source %in% c("staging", "datalake"))) {
@@ -116,22 +123,6 @@ data_root <- if (nzchar(data_root_arg)) {
 }
 if (!dir.exists(data_root)) {
   stop("Data root does not exist: ", data_root)
-}
-titles_path_arg <- trimws(rr_arg_value(args, "--titles-path", ""))
-if (nzchar(titles_path_arg)) {
-  titles_path <- resolve_repo_or_abs(titles_path_arg)
-  if (!file.exists(titles_path)) {
-    stop("Titles path does not exist: ", titles_path)
-  }
-  Sys.setenv(
-    TITLE_CLASSIFICATIONS_PATH = titles_path,
-    BUNDLE_B_TITLE_CLASSIFICATIONS_PATH = titles_path
-  )
-} else {
-  titles_path <- trimws(Sys.getenv("BUNDLE_B_TITLE_CLASSIFICATIONS_PATH", unset = ""))
-  if (!nzchar(titles_path)) {
-    titles_path <- trimws(Sys.getenv("TITLE_CLASSIFICATIONS_PATH", unset = ""))
-  }
 }
 window_days <- rr_parse_optional_positive_int(
   rr_arg_value(args, "--window-days", ""),
@@ -182,17 +173,17 @@ if (length(talents) == 0) {
   talents <- "Ava"
 }
 
-cat("Bundle B render targets:", paste(talents, collapse = ", "), "\n")
+cat("Bundle E render targets:", paste(talents, collapse = ", "), "\n")
 cat("Input Rmd:", input_rmd, "\n")
 if (output_dir_supplied) {
   cat("Output dir:", output_dir, "\n")
 } else {
-  cat("Output routing: talent-specific Bundle B folders under ", output_dir, "\n", sep = "")
+  cat("Output routing: talent-specific Bundle E folders under ", output_dir, "\n", sep = "")
 }
 cat("Data source:", data_source, "\n")
 cat("Data root:", data_root, "\n")
-if (nzchar(titles_path)) {
-  cat("Title classifications:", titles_path, "\n")
+if (nzchar(artifact_root)) {
+  cat("Artifact root override:", artifact_root, "\n")
 }
 if (is.na(window_days)) {
   if (!is.na(start_date) || !is.na(end_date)) {
@@ -219,7 +210,7 @@ result_df <- rr_render_for_talents(
   } else {
     function(talent, slug) {
       normalizePath(
-        file.path(output_dir, talent, "reports", "bundle_B"),
+        file.path(output_dir, talent, "reports", "bundle_E"),
         winslash = "/",
         mustWork = FALSE
       )
@@ -231,6 +222,7 @@ result_df <- rr_render_for_talents(
       talent = talent,
       data_source = data_source,
       data_root = data_root,
+      artifact_root = if (nzchar(artifact_root)) artifact_root else NULL,
       render_generated_at = render_generated_at,
       included_date_range = included_date_range,
       render_cli = render_cli,

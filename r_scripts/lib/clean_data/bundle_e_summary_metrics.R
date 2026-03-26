@@ -399,6 +399,80 @@ build_bundle_e_tag_longevity <- function(video_summary) {
     dplyr::arrange(dplyr::desc(.data$median_recent_30d_avg_views_per_day), dplyr::desc(.data$video_count))
 }
 
+build_bundle_e_video_type_detail_tables <- function(
+  video_summary,
+  newest_n = 5,
+  top_n = 10
+) {
+  if (nrow(video_summary) == 0 || !"Content Type" %in% names(video_summary)) {
+    return(list(
+      video_type_highest_overall_performing = tibble::tibble(),
+      video_type_newest_five_videos = tibble::tibble(),
+      video_type_top_performing_videos = tibble::tibble()
+    ))
+  }
+
+  base <- video_summary %>%
+    dplyr::filter(!is.na(.data$`Content Type`), nzchar(trimws(.data$`Content Type`))) %>%
+    dplyr::mutate(`Content Type` = tolower(trimws(as.character(.data$`Content Type`))))
+
+  select_cols <- c(
+    "Content Type",
+    "Video ID",
+    "Title",
+    "publish_date",
+    "latest_snapshot_date",
+    "latest_views",
+    "latest_revenue",
+    "latest_age_days",
+    "lifetime_avg_views_per_day",
+    "recent_30d_avg_views_per_day",
+    "recent_30d_views_gain",
+    "launch_capture_lag_days",
+    "evergreen_flag",
+    "front_loaded_flag",
+    "sleeper_flag",
+    "reacceleration_flag"
+  )
+
+  highest_overall <- base %>%
+    dplyr::group_by(.data$`Content Type`) %>%
+    dplyr::arrange(
+      dplyr::desc(.data$latest_views),
+      dplyr::desc(.data$recent_30d_avg_views_per_day),
+      .by_group = TRUE
+    ) %>%
+    dplyr::slice_head(n = 1) %>%
+    dplyr::ungroup() %>%
+    dplyr::select(dplyr::any_of(select_cols))
+
+  newest_videos <- base %>%
+    dplyr::group_by(.data$`Content Type`) %>%
+    dplyr::arrange(dplyr::desc(.data$publish_date), dplyr::desc(.data$latest_views), .by_group = TRUE) %>%
+    dplyr::mutate(rank_within_type = dplyr::row_number()) %>%
+    dplyr::slice_head(n = newest_n) %>%
+    dplyr::ungroup() %>%
+    dplyr::select("rank_within_type", dplyr::any_of(select_cols))
+
+  top_performing <- base %>%
+    dplyr::group_by(.data$`Content Type`) %>%
+    dplyr::arrange(
+      dplyr::desc(.data$latest_views),
+      dplyr::desc(.data$recent_30d_avg_views_per_day),
+      .by_group = TRUE
+    ) %>%
+    dplyr::mutate(rank_within_type = dplyr::row_number()) %>%
+    dplyr::slice_head(n = top_n) %>%
+    dplyr::ungroup() %>%
+    dplyr::select("rank_within_type", dplyr::any_of(select_cols))
+
+  list(
+    video_type_highest_overall_performing = highest_overall,
+    video_type_newest_five_videos = newest_videos,
+    video_type_top_performing_videos = top_performing
+  )
+}
+
 build_bundle_e_leaders <- function(video_summary) {
   evergreen <- video_summary %>%
     dplyr::arrange(dplyr::desc(.data$recent_30d_avg_views_per_day), dplyr::desc(.data$latest_views)) %>%

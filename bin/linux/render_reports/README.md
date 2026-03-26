@@ -11,6 +11,7 @@ These wrappers call the R render scripts, resolve roots, resolve talent folder n
 Bundle A-specific scripts now live in:
 
 - `bin/linux/render_reports/bundle_A/`
+- `bin/linux/render_reports/bundle_A/README.md`
 
 Bundle B-specific scripts now live in:
 
@@ -19,6 +20,12 @@ Bundle B-specific scripts now live in:
 The only top-level Bundle A wrapper intentionally kept is:
 
 - `run_bundle_A_report.sh`
+
+If you want the final client-facing Bundle A HTML with freshly generated interpretations and the editorial rewrite applied, use:
+
+- `bin/linux/render_reports/run_bundle_A_report.sh`
+
+Do not use `bin/linux/render_reports/bundle_A/run_bundle_A_artifacts.sh` for that purpose. The artifacts wrapper only exports figures and tables and does not render the final report.
 
 Bundle A output layout is kept together per talent under one folder:
 
@@ -75,9 +82,7 @@ If you need the render-only step without artifacts or interpretations, use:
 - Input source: `datalake`
 - R binary: `Rscript`
 
-If no talent selector is provided, the wrapper defaults to:
-
-- `Ava`
+For the full Bundle A pipeline, always pass an explicit talent selector such as `--talent`, `--talents`, `--talents-file`, or `--all`.
 
 Note: talent folder resolution is exact by default and is checked against datalake folders.
 
@@ -87,6 +92,15 @@ Single talent:
 
 ```bash
 bin/linux/render_reports/run_bundle_A_report.sh --talent "Leia Memoria【Variance Project】" --window-days 90 --input-source datalake
+```
+
+Full report with rewritten text:
+
+```bash
+bin/linux/render_reports/run_bundle_A_report.sh \
+  --talent "Terberri Solaris Ch" \
+  --window-days 90 \
+  --input-source datalake
 ```
 
 Batch from file:
@@ -112,6 +126,46 @@ Pass extra args through the wrapper stack:
 ```bash
 bin/linux/render_reports/run_bundle_A_report.sh --talent "Avaritia Hawthorne 【Variance Project】" --window-days 90 -- --quiet
 ```
+
+## Synthetic Demo Talent Workflow
+
+When you want a client-safe sample report, generate a synthetic talent folder and keep its title classifications separate from the production export.
+
+Generator entrypoint:
+
+```bash
+python3 py_scripts/run/demo_data/generate_demo_talent_dataset.py --talent-name "Northstar Story Lab Demo"
+```
+
+That generator creates:
+
+- `<datalake_root>/<talent>/raw_data/video_analytics/video_analytics_<snapshot>.csv`
+- `<datalake_root>/<talent>/raw_data/video_monetary/video_monetary_<snapshot>.csv`
+- `<datalake_root>/<talent>/raw_data/video_demographics/video_demographics_<snapshot>.csv`
+- `<datalake_root>/<talent>/raw_data/video_geography/video_geography_<snapshot>.csv`
+- `<datalake_root>/<talent>/reports/demo_inputs/demo_title_classifications.csv`
+
+For synthetic/demo talents, render Bundles A and B directly with the R render scripts and pass the isolated title CSV through `--titles-path`:
+
+```bash
+Rscript r_scripts/run/bundle_A/render_bundle_A.R \
+  --talent "Northstar Story Lab Demo" \
+  --data-source datalake \
+  --titles-path "/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Northstar Story Lab Demo/reports/demo_inputs/demo_title_classifications.csv"
+```
+
+```bash
+Rscript r_scripts/run/bundle_B/render_bundle_B.R \
+  --talent "Northstar Story Lab Demo" \
+  --data-source datalake \
+  --titles-path "/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Northstar Story Lab Demo/reports/demo_inputs/demo_title_classifications.csv"
+```
+
+Notes:
+
+- `--titles-path` keeps demo classifications out of the production `classification/output/title_classifications/` exports.
+- The render scripts now accept `--titles-path` directly and forward that file into the Bundle A/B title join step.
+- Generated demo HTML reports are written to the normal per-talent report folders under `<datalake_root>/<talent>/reports/bundle_A/` and `<datalake_root>/<talent>/reports/bundle_B/`.
 
 ## Talent resolution rules
 
@@ -164,6 +218,7 @@ Wrong root/source:
 
 - Verify `--input-source`
 - Verify `--input-root`, `--datalake-root`, and `--staging-root`
+- For synthetic/demo talents, verify `--titles-path` points to the demo-only classification CSV
 
 Render script not found:
 
@@ -201,7 +256,7 @@ Artifact builder:
   - `bundle_a_ai_inputs.json`
   - `bundle_a_artifact_manifest.json`
 
-Interpretation-stage scaffold:
+Interpretation generation:
 
 - Path: `bin/linux/render_reports/bundle_A/run_bundle_A_interpretations.sh`
 - Current role:
@@ -209,6 +264,7 @@ Interpretation-stage scaffold:
   - builds one `input.md` per prompt under the datalake `interpretations/` tree
   - runs `codex exec` for each selected prompt
   - writes one `output.md` interpretation per prompt
+  - includes section/chart prompts plus report bookends
 - Test controls:
   - `--prompt-filter TEXT`
   - `--max-prompts N`
@@ -239,6 +295,13 @@ bin/linux/render_reports/run_bundle_A_report.sh \
   --window-days 90 \
   --input-source datalake
 ```
+
+This command is the full Bundle A pipeline:
+
+1. exports artifacts
+2. generates interpretations
+3. runs the editorial rewrite
+4. renders the final HTML
 
 Single-prompt Codex test:
 

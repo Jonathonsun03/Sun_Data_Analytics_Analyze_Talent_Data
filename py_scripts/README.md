@@ -19,6 +19,13 @@ This directory contains the maintained Python code for the repository.
 - `run/stream_summaries/personality/build_shared_behavior_baseline.py`
 - `run/stream_summaries/personality/build_unique_personality_profiles.py`
 
+## Other maintained entrypoints
+
+- `run/demo_data/generate_demo_talent_dataset.py`
+  - creates a synthetic talent folder in the datalake
+  - writes realistic-looking analytics, monetary, demographic, geography, and isolated title-classification CSVs
+  - intended for client-safe sample Bundle A/B reports without using real talent data
+
 ## Notes
 
 - `tasks/` was a temporary holding area and is no longer the canonical location.

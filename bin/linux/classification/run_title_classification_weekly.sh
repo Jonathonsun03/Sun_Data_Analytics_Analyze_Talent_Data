@@ -62,8 +62,8 @@ echo "[weekly-title] Stage 1/2: classification"
 "${CLASSIFY_RUNNER}" "$@"
 
 MODEL="${OPENAI_MODEL:-gpt-5-mini}"
-PROMPT_VERSION="$(Rscript -e "x <- jsonlite::fromJSON('${CONFIG_JSON}'); cat(x[['prompt_version']])")"
-TAXONOMY_VERSION="$(Rscript -e "x <- jsonlite::fromJSON('${CONFIG_JSON}'); cat(x[['taxonomy_version']])")"
+PROMPT_VERSION="$(Rscript -e "x <- jsonlite::fromJSON('${CONFIG_JSON}'); cat(x[['prompt_version']])" | tail -n 1 | tr -d '\r')"
+TAXONOMY_VERSION="$(Rscript -e "x <- jsonlite::fromJSON('${CONFIG_JSON}'); cat(x[['taxonomy_version']])" | tail -n 1 | tr -d '\r')"
 STAMP="$(date -u +"%Y%m%d_%H%M%S")"
 OUT_CSV="${EXPORT_DIR}/classification_export_${MODEL}_${PROMPT_VERSION}_${TAXONOMY_VERSION}_${STAMP}.csv"
 

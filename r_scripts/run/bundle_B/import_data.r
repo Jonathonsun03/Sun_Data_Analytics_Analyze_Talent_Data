@@ -66,6 +66,14 @@ load_bundle_b_titles <- function(
     "classification_export_gpt-5-mini_from_duckdb.csv"
   )
 ) {
+  override <- trimws(Sys.getenv("BUNDLE_B_TITLE_CLASSIFICATIONS_PATH", unset = ""))
+  if (!nzchar(override)) {
+    override <- trimws(Sys.getenv("TITLE_CLASSIFICATIONS_PATH", unset = ""))
+  }
+  if (nzchar(override)) {
+    titles_path <- override
+  }
+
   load_title_classifications(
     path = titles_path,
     talent = talent

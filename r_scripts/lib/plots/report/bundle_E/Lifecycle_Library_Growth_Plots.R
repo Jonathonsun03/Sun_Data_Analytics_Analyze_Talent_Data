@@ -143,12 +143,12 @@ plot_bundle_e_publish_cohort <- function(cohort_df, talent) {
     ggplot2::scale_y_continuous(labels = scales::label_comma())
 }
 
-plot_bundle_e_content_type_longevity <- function(content_type_df, talent) {
-  if (nrow(content_type_df) == 0) {
-    return(bundle_e_empty_plot("Content Type Longevity", talent))
+plot_bundle_e_video_type_longevity <- function(video_type_df, talent) {
+  if (nrow(video_type_df) == 0) {
+    return(bundle_e_empty_plot("Video Type Longevity", talent))
   }
 
-  plot_df <- content_type_df %>%
+  plot_df <- video_type_df %>%
     dplyr::slice_head(n = 10) %>%
     dplyr::mutate(group_value = factor(.data$group_value, levels = rev(.data$group_value), ordered = TRUE))
 
@@ -166,9 +166,9 @@ plot_bundle_e_content_type_longevity <- function(content_type_df, talent) {
     ggplot2::coord_flip() +
     theme_nyt() +
     ggplot2::labs(
-      title = bundle_e_title_text("Content Type Longevity"),
-      subtitle = bundle_e_subtitle(talent, "Median recent 30-day pace by content type."),
-      x = "Content type",
+      title = bundle_e_title_text("Video Type Longevity"),
+      subtitle = bundle_e_subtitle(talent, "Median recent 30-day pace by live, video, and short uploads."),
+      x = "Video type",
       y = "Median recent 30-day avg views/day"
     ) +
     ggplot2::scale_y_continuous(labels = scales::label_comma())
@@ -179,7 +179,7 @@ build_bundle_e_plot_set <- function(
   back_catalog_contribution,
   video_summary,
   publish_cohort_performance,
-  content_type_longevity,
+  video_type_longevity,
   talent
 ) {
   list(
@@ -188,6 +188,6 @@ build_bundle_e_plot_set <- function(
     latest_views_vs_video_age = plot_bundle_e_latest_views_vs_age(video_summary, talent),
     recent_momentum_vs_lifetime_rate = plot_bundle_e_recent_vs_lifetime_rate(video_summary, talent),
     publish_cohort_performance = plot_bundle_e_publish_cohort(publish_cohort_performance, talent),
-    content_type_longevity = plot_bundle_e_content_type_longevity(content_type_longevity, talent)
+    video_type_longevity = plot_bundle_e_video_type_longevity(video_type_longevity, talent)
   )
 }

@@ -69,36 +69,54 @@ This avoids duplicating full prompts while still honoring talent-specific title 
 ## Notes
 `run_classification.r` now only points you to the two entry scripts.
 
-## Add New Talent Quickly
-Use the R profile builder to generate a talent description JSON from titles.
+## Add A New Talent
+Use the profile builder when a new talent needs a classification overlay and matcher entry.
 
-Command:
-`Rscript r_scripts/run/Title_classification/talent_profile/build_talent_profile.R --csv <path/to/titles.csv> --talent "<Talent Name>" --talent-col talent --title-col title --content-type-col content_type --write-overlay --update-master-config`
+Recommended workflow:
+
+1. Prepare a titles CSV.
+   - Required columns are equivalent to: talent, title, and content type.
+   - A publish date column is helpful and should be included when available.
+2. Run the profile builder for one talent:
+   - `Rscript r_scripts/run/Title_classification/talent_profile/build_talent_profile.R --csv <path/to/titles.csv> --talent "<Talent Name>" --talent-col talent --title-col title --content-type-col content_type --write-overlay --update-master-config`
+3. Review the generated profile assets:
+   - `classification/config/talents/<talent_slug>.json`
+   - `classification/prompts/talents/<talent_slug>/overlay.txt`
+   - `classification/config/talent_profiles.json`
+4. If prompt folders were changed manually or you want to rebuild the matcher file from disk, run:
+   - `Rscript r_scripts/run/Title_classification/talent_profile/sync_talent_profiles.R`
+5. Run the local self-test before classifying production rows:
+   - `Rscript r_scripts/run/Title_classification/title_classification/03_self_test_classification.R`
 
 All talents in one pass:
-`Rscript r_scripts/run/Title_classification/talent_profile/build_talent_profile.R --csv notes/titles.csv --all-talents --talent-col talent --title-col "Title" --content-type-col "Content Type" --write-overlay --update-master-config`
+- `Rscript r_scripts/run/Title_classification/talent_profile/build_talent_profile.R --csv notes/titles.csv --all-talents --talent-col talent --title-col "Title" --content-type-col "Content Type" --write-overlay --update-master-config`
 
 Optional canonical-name mapping file:
-`--talent-map notes/talent_name_map.csv`
-with columns: `source_talent,canonical_talent`
+- `--talent-map notes/talent_name_map.csv`
+- Expected columns: `source_talent,canonical_talent`
 
-GPT-assisted discovery (optional, richer profile inference):
-`Rscript r_scripts/run/Title_classification/talent_profile/build_talent_profile.R --csv <path/to/titles.csv> --talent "<Talent Name>" --talent-col talent --title-col title --content-type-col content_type --write-overlay --update-master-config --use-gpt --sample-size 250 --model gpt-5-mini`
-
-What it generates:
-- `classification/config/talents/<talent_slug>.json`
-- `classification/prompts/talents/<talent_slug>/overlay.txt`
-- Appends matcher/profile entry to `classification/config/talent_profiles.json`
+GPT-assisted discovery is optional when you want a richer first-pass overlay:
+- `Rscript r_scripts/run/Title_classification/talent_profile/build_talent_profile.R --csv <path/to/titles.csv> --talent "<Talent Name>" --talent-col talent --title-col title --content-type-col content_type --write-overlay --update-master-config --use-gpt --sample-size 250 --model gpt-5-mini`
 
 GPT discovery prompt assets:
 - `classification/prompts/discovery/system.txt`
 - `classification/prompts/discovery/user_template.txt`
 - `classification/prompts/discovery/schema.json`
 
-Sync `talent_profiles.json` from current prompt folders:
-`Rscript r_scripts/run/Title_classification/talent_profile/sync_talent_profiles.R`
+After the profile exists, the normal pipeline is:
+1. Ingest titles into DuckDB.
+2. Run pending-title classification.
+3. Export refreshed classification CSVs for downstream joins and reports.
 
-Run non-recursive local self-test:
-`Rscript r_scripts/run/Title_classification/title_classification/03_self_test_classification.R`
+## Demo Or Synthetic Talents
+If you are building a demo talent for client-facing sample reports, do not append those rows to the production title-classification export by default.
+
+Preferred approach:
+- Keep the synthetic talent's title classifications in a separate CSV.
+- Point Bundle report renders at that isolated file with `--titles-path`.
+- This keeps demo-only labels out of `classification/output/title_classifications/*.csv`.
+
+The current synthetic demo dataset generator writes its isolated classification file to:
+- `<datalake_root>/<demo_talent>/reports/demo_inputs/demo_title_classifications.csv`
 
 There is no active `classification/python/` runtime scaffold anymore. The maintained prompt-bundle loader lives in `r_scripts/lib/stream_classification/`.

@@ -1,7 +1,11 @@
 library(dplyr)
 library(stringr)
 
-EXCLUDED_TALENT_FOLDERS <- c("VarianceProject", "subtitle_analysis")
+EXCLUDED_TALENT_FOLDERS <- c(
+  "VarianceProject",
+  "subtitle_analysis",
+  "Northstar Story Lab Demo"
+)
 
 normalize_talent_path <- function(x) {
   decode_placeholders <- function(val) {
@@ -74,7 +78,7 @@ clean_talent_name <- function(x, underscores = FALSE) {
   x
 }
 
-list_talents <- function(root = get_staging_root()) {
+list_talents <- function(root = get_staging_root(), include_excluded = FALSE) {
   has_use_bytes <- "useBytes" %in% names(formals(list.dirs))
   paths <- if (has_use_bytes) {
     list.dirs(root, full.names = TRUE, recursive = FALSE, useBytes = TRUE)
@@ -84,20 +88,27 @@ list_talents <- function(root = get_staging_root()) {
   
   paths <- normalize_talent_path(paths)
   
-  tibble(
+  talents <- tibble(
     name = safe_basename(paths),
     path = paths
-  ) %>%
-    filter(!(name %in% EXCLUDED_TALENT_FOLDERS)) %>%
+  )
+
+  if (!isTRUE(include_excluded)) {
+    talents <- talents %>%
+      filter(!(name %in% EXCLUDED_TALENT_FOLDERS))
+  }
+
+  talents %>%
     arrange(name)
 }
 
 select_talent <- function(query, root = get_staging_root(), ignore_case = TRUE) {
-  talents <- list_talents(root)
-
   if (is.character(query) && length(query) == 1 && str_to_lower(query) %in% c("all", "*")) {
+    talents <- list_talents(root, include_excluded = FALSE)
     return(talents$path)
   }
+
+  talents <- list_talents(root, include_excluded = TRUE)
   
   if (is.numeric(query)) {
     if (length(query) != 1 || query < 1 || query > nrow(talents)) {

@@ -1,44 +1,46 @@
-library(tidyverse)
 library(dplyr)
 library(here)
 library(purrr)
 
-source("r_scripts/lib/utils/staging_root.R")
+args <- commandArgs(trailingOnly = TRUE)
+arg_value <- function(flag, default = NULL) {
+  idx <- which(args == flag)
+  if (length(idx) == 0) {
+    return(default)
+  }
+  pos <- idx[[1]] + 1L
+  if (pos > length(args)) {
+    return(default)
+  }
+  args[[pos]]
+}
 
-list.files(here("r_scripts","lib","plots","report","bundle_A"), full.names = TRUE) %>%
-    walk(source)
-list.files(here("r_scripts","lib","utils"), full.names = TRUE) %>%
-    walk(source)
+out_csv <- arg_value("--out", here("notes", "titles.csv"))
+
+source("r_scripts/lib/utils/staging_root.R")
+list.files(here("r_scripts", "lib", "utils"), full.names = TRUE) %>%
+  walk(source)
 list.files(here("r_scripts", "lib", "import_data"), pattern = "[rR]$", full.names = TRUE) %>%
   walk(source)
-list.files(here("r_scripts", "lib", "report_tables"), pattern = "[rR]$", full.names = TRUE) %>%
-  walk(source)
-source(here("r_scripts","lib","plots","PlottingThemes.R"))
-source(here::here("r_scripts","lib","clean_data","CleanData.R"))
+source(here::here("r_scripts", "lib", "clean_data", "CleanData.R"))
 
 root <- get_staging_root()
 talent_root <- select_talent("all", root = root)
 
-talent_path <- talent_root[4]
-files <- TalentFiles(talent_path)
-analytics <- video_analytics_prep(files, talent = basename(talent_path))
-glimpse(analytics)
-
 titles <- lapply(talent_root, function(talent_path) {
-  Talent <- basename(talent_path)
+  talent_name <- basename(talent_path)
   files <- TalentFiles(talent_path)
 
-  analytics <- video_analytics_prep(files, talent = Talent)
+  analytics <- video_analytics_prep(files, talent = talent_name)
   analytics %>%
-    select(`Video ID`, Title, `Content Type`) %>%
+    select(`Video ID`, Title, `Content Type`, `Published At`) %>%
     distinct() %>%
-    filter(!is.na(Title)) %>%
-    mutate(talent = Talent)
+    filter(!is.na(Title), nzchar(trimws(as.character(Title)))) %>%
+    mutate(talent = talent_name, .before = `Video ID`)
 }) %>%
   bind_rows() %>%
-  distinct(talent, `Video ID`, Title, `Content Type`) %>%
+  distinct(talent, `Video ID`, Title, `Content Type`, `Published At`) %>%
   mutate(talent = clean_talent_name(talent, underscores = TRUE))
 
-glimpse(titles)
-View(titles)
-write.csv(titles, here("notes", "titles.csv"), row.names = FALSE)
+write.csv(titles, out_csv, row.names = FALSE, quote = TRUE, fileEncoding = "UTF-8")
+cat("Exported", nrow(titles), "title rows to", normalizePath(out_csv, winslash = "/", mustWork = FALSE), "\n")

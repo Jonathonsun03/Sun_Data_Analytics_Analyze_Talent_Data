@@ -9,6 +9,7 @@
 - Is the channel's performance increasingly driven by the back catalog, recent uploads, or a healthy mix of both?
 - Which videos show evergreen behavior versus short-lived spike behavior?
 - How quickly do videos accumulate views over key age windows such as first 7, 30, 60, and 90 days?
+- How do `live`, `video`, and `short` uploads differ in longevity, growth pace, and overall performance?
 - Which content types, topics, tags, or collaboration patterns are associated with better long-tail growth?
 - Are there videos or content cohorts that re-accelerate after their initial release?
 - Is the library becoming more durable over time, with more videos continuing to contribute meaningful views after launch?
@@ -23,8 +24,9 @@ Manager fast path (5-10 minutes):
 Talent/creator optimization path:
 1. Video Lifecycle Curves
 2. Early Velocity vs Long-Tail Winners
-3. Content Type / Topic / Tag Longevity
-4. Re-Acceleration and Sleeper Videos
+3. Video Type Deep Dive
+4. Topic / Tag Longevity
+5. Re-Acceleration and Sleeper Videos
 
 Library strategy path:
 1. Cohort Performance by Publish Period
@@ -38,7 +40,8 @@ Library strategy path:
 - How do videos behave across their life cycle? -> Video Lifecycle Curves by Video Age
 - Which uploads started slow but kept growing? -> Sleeper / Re-Acceleration Table
 - Which upload cohorts were strongest? -> Publish Cohort Performance
-- What kinds of content last longest? -> Content Type / Topic / Tag Longevity
+- How do live, video, and short uploads differ? -> Video Type Longevity + Video Type Deep Dive
+- What kinds of content last longest? -> Topic / Tag Longevity
 - Is performance concentrated in a few videos or broadly distributed? -> Contribution Concentration and Library Depth
 
 ### 5) Included analyses (full scope)
@@ -50,9 +53,11 @@ Per-video growth curves, age-normalized view accumulation, early velocity vs lat
 Performance by publish month or publish period, comparing how groups of videos age and accumulate views over similar life stages.
 4. Evergreen analysis:
 Ranking of videos by long-tail contribution, sustained growth rate, and consistency of contribution after initial release windows.
-5. Content pattern analysis:
+5. Video type deep dive:
+Separate analysis for `live`, `video`, and `short` uploads, including the highest overall-performing video in each type, the newest five videos in each type and their current performance, and the top-performing videos within each type.
+6. Content pattern analysis:
 Longitudinal performance by content type, topic, tag, and collaboration status to identify which creative patterns hold value over time.
-6. Opportunity scan:
+7. Opportunity scan:
 Sleeper videos, resurging videos, and videos with unusually strong late-stage growth that may warrant repromotion or follow-up content.
 
 ### 6) Strategic use

@@ -408,6 +408,21 @@ if (nrow(analytics) == 0 || nrow(monetary) == 0) {
 }
 
 demo_available <- nrow(demo) > 0
+audience_demographics_reason <- ""
+audience_plot_df <- tryCatch(
+  audience_age_gender_trends_prep(
+    demo_df = demo,
+    freq = "month"
+  ),
+  error = function(e) {
+    audience_demographics_reason <<- conditionMessage(e)
+    tibble::tibble()
+  }
+)
+audience_demographics_available <- nrow(audience_plot_df) > 0
+if (!isTRUE(audience_demographics_available) && !nzchar(audience_demographics_reason)) {
+  audience_demographics_reason <- "Audience demographics were unavailable or only contained no-data rows."
+}
 
 # Backward-compatible alias used by some legacy chunks.
 df <- analytics
@@ -683,48 +698,33 @@ bundle_a_ggplotly(
 bundle_a_emit_interpretation("02_trends_over_time/02_total_views_over_time_by_content_type")
 ```
 
-# Audience Composition
-This section explains who is watching and how that audience is changing month to month. Age and gender share trends provide a stable baseline for creative positioning, partnership fit, and identifying where the audience is expanding or contracting.
-
-```{r interp-audience-composition-synthesis, echo=FALSE, results='asis'}
-bundle_a_emit_interpretation("03_audience_composition/00_section_synthesis")
+```{r audience-composition-section, echo=FALSE, results='asis'}
+if (isTRUE(audience_demographics_available)) {
+  cat("# Audience Composition\n")
+  cat("This section explains who is watching and how that audience is changing month to month. Age and gender share trends provide a stable baseline for creative positioning, partnership fit, and identifying where the audience is expanding or contracting.\n\n")
+  bundle_a_emit_interpretation("03_audience_composition/00_section_synthesis")
+  cat("## Audience Age + Gender Trends\n")
+  cat("**What this chart shows:** Audience share trends over time by age and gender segments.  \n")
+  cat("**How to read it:** Track which segments are growing, shrinking, or staying stable month to month.\n\n")
+}
 ```
 
-## Audience Age + Gender Trends
-**What this chart shows:** Audience share trends over time by age and gender segments.  
-**How to read it:** Track which segments are growing, shrinking, or staying stable month to month.
-
 ```{r audience age and gender trends, fig.width=plot_w_facet, fig.height=plot_h_facet}
-if (!isTRUE(demo_available)) {
-  cat("No audience demographics data available in the selected window.")
-} else {
-  tryCatch(
-    {
-      plot_df <- audience_age_gender_trends_prep(
-        demo_df = demo,
-        freq = "month"
-      )
-      if (nrow(plot_df) == 0) {
-        cat("No audience trend rows available in the selected window.")
-      } else {
-        bundle_a_ggplotly(
-          audience_age_gender_trends_plot(
-            plot_df = plot_df,
-            talent = Talent
-          ),
-          rotate_y_axis_title = TRUE
-        )
-      }
-    },
-    error = function(e) {
-      cat("Audience trend section unavailable for the selected window:", conditionMessage(e))
-    }
+if (isTRUE(audience_demographics_available)) {
+  bundle_a_ggplotly(
+    audience_age_gender_trends_plot(
+      plot_df = audience_plot_df,
+      talent = Talent
+    ),
+    rotate_y_axis_title = TRUE
   )
 }
 ```
 
 ```{r interp-audience-age-gender, echo=FALSE, results='asis'}
-bundle_a_emit_interpretation("03_audience_composition/01_audience_age_gender_trends")
+if (isTRUE(audience_demographics_available)) {
+  bundle_a_emit_interpretation("03_audience_composition/01_audience_age_gender_trends")
+}
 ```
 
 # Content Strategy Deep Dive

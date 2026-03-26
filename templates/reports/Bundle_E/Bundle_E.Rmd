@@ -1,0 +1,734 @@
+---
+title: "`r { t <- params$talent; if (!(length(t) == 1 && !is.na(t) && nzchar(trimws(as.character(t))))) t <- 'Talent'; t <- trimws(as.character(t)); t_clean <- trimws(gsub('\\s*[\\[【].*$', '', t)); paste0('Video Lifecycle and Library Growth Report: ', t_clean) }`"
+subtitle: "`r { r <- params$included_date_range; if (!(length(r) == 1 && !is.na(r) && nzchar(trimws(as.character(r))))) r <- 'All available dates'; paste0('Data Range: ', as.character(r)) }`"
+author: "Author: Zhuni Excel & Jonathon Sun"
+date: "`r { x <- params$render_generated_at; if (length(x) == 1 && !is.na(x) && nzchar(trimws(as.character(x)))) { x <- trimws(as.character(x)); x_date <- sub('^([0-9]{4}-[0-9]{2}-[0-9]{2}).*$', '\\\\1', x); if (grepl('^[0-9]{4}-[0-9]{2}-[0-9]{2}$', x_date)) paste0('Report Date: ', x_date) else paste0('Report Date: ', format(Sys.Date(), '%Y-%m-%d')) } else paste0('Report Date: ', format(Sys.Date(), '%Y-%m-%d')) }`"
+output:
+  html_document:
+    self_contained: true
+    toc: true
+    toc_float: true
+    toc_depth: 3
+params:
+  talent: "Ava"
+  data_source: "datalake"
+  data_root: null
+  artifact_root: null
+  render_generated_at: null
+  included_date_range: null
+  render_cli: null
+  render_output_dir: null
+  render_output_prefix: null
+  window_days: null
+  start_date: null
+  end_date: null
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center"
+)
+
+plot_w_std <- 10
+plot_h_std <- 6
+plot_w_facet <- 11
+plot_h_facet <- 8
+
+knitr::opts_knit$set(root.dir = here::here())
+
+if (knitr::is_latex_output()) {
+  knitr::opts_chunk$set(
+    fig.width = 14,
+    fig.height = 8,
+    out.width = "0.8\\linewidth"
+  )
+} else {
+  knitr::opts_chunk$set(
+    fig.width = plot_w_std,
+    fig.height = plot_h_std,
+    out.width = "100%"
+  )
+}
+```
+
+```{r libraries, include=FALSE}
+library(tidyverse)
+library(purrr)
+library(here)
+library(ggplot2)
+library(DT)
+library(plotly)
+```
+
+```{r report_layout_style, echo=FALSE, results='asis'}
+cat(
+  "<style>
+  .main-container {
+    max-width: 1200px !important;
+  }
+  .section.level1,
+  .section.level2,
+  .section.level3 {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  .html-widget,
+  .plotly.html-widget,
+  .js-plotly-plot,
+  .plot-container,
+  .svg-container {
+    max-width: 100% !important;
+  }
+  .plotly.html-widget {
+    width: 100% !important;
+  }
+  .dataTables_wrapper {
+    width: 100%;
+    max-width: 100%;
+  }
+  .dataTables_wrapper .dataTables_scroll {
+    overflow-x: auto;
+  }
+  table.dataTable {
+    width: 100% !important;
+  }
+  .dataTables_wrapper table.dataTable thead th,
+  .dataTables_wrapper table.dataTable thead td {
+    white-space: normal !important;
+    line-height: 1.2;
+    vertical-align: bottom;
+  }
+  </style>"
+)
+```
+
+```{r plotly_helpers, include=FALSE}
+bundle_e_ggplotly <- function(plot_obj, tooltip = NULL, rotate_y_axis_title = FALSE) {
+  p <- if (is.null(tooltip)) {
+    plotly::ggplotly(plot_obj)
+  } else {
+    plotly::ggplotly(plot_obj, tooltip = tooltip)
+  }
+
+  if (!inherits(plot_obj, "ggplot")) {
+    return(p)
+  }
+
+  title_txt <- plot_obj$labels$title
+  subtitle_txt <- plot_obj$labels$subtitle
+
+  wrap_for_plotly <- function(x, width = 80) {
+    txt <- trimws(as.character(x))
+    if (!nzchar(txt)) {
+      return("")
+    }
+    txt <- gsub("\\s+", " ", txt)
+    paste(strwrap(txt, width = width), collapse = "\n")
+  }
+
+  title_txt <- if (is.null(title_txt) || !nzchar(trimws(as.character(title_txt)))) {
+    ""
+  } else {
+    as.character(title_txt[[1]])
+  }
+  subtitle_txt <- if (is.null(subtitle_txt) || !nzchar(trimws(as.character(subtitle_txt)))) {
+    ""
+  } else {
+    as.character(subtitle_txt[[1]])
+  }
+
+  title_plain <- wrap_for_plotly(title_txt, width = 54)
+  subtitle_plain <- wrap_for_plotly(subtitle_txt, width = 88)
+
+  title_txt <- gsub("\n", "<br>", htmltools::htmlEscape(title_plain), fixed = TRUE)
+  subtitle_txt <- gsub("\n", "<br>", htmltools::htmlEscape(subtitle_plain), fixed = TRUE)
+
+  title_lines <- max(1L, length(strsplit(title_plain, "\n", fixed = TRUE)[[1]]))
+  subtitle_lines <- if (nzchar(subtitle_plain)) {
+    length(strsplit(subtitle_plain, "\n", fixed = TRUE)[[1]])
+  } else {
+    0L
+  }
+
+  current_top <- p$x$layout$margin$t
+  if (is.null(current_top) || !is.finite(current_top)) {
+    current_top <- 60
+  }
+  needed_top <- 58 + (title_lines * 24) + (subtitle_lines * 18) + 16
+  top_margin <- max(as.numeric(current_top), as.numeric(needed_top))
+
+  combined_title <- if (nzchar(subtitle_txt)) {
+    paste0(
+      "<b>", title_txt, "</b>",
+      "<br><span style='font-size:0.78em;'>", subtitle_txt, "</span>"
+    )
+  } else {
+    paste0("<b>", title_txt, "</b>")
+  }
+
+  if (isTRUE(rotate_y_axis_title) && length(p$x$layout$annotations) > 0) {
+    anns <- p$x$layout$annotations
+    for (i in seq_along(anns)) {
+      ann <- anns[[i]]
+      ann_x <- if (is.null(ann$x)) NA_real_ else suppressWarnings(as.numeric(ann$x))
+      ann_y <- if (is.null(ann$y)) NA_real_ else suppressWarnings(as.numeric(ann$y))
+      is_axis_annot <- identical(ann$annotationType, "axis")
+      is_y_axis_title <- isTRUE(is_axis_annot) &&
+        is.finite(ann_x) && is.finite(ann_y) &&
+        abs(ann_x - 0) < 1e-9 &&
+        abs(ann_y - 0.5) < 1e-9
+
+      if (is_y_axis_title) {
+        anns[[i]]$textangle <- -90
+        anns[[i]]$xanchor <- "center"
+        anns[[i]]$yanchor <- "middle"
+        anns[[i]]$xshift <- -28
+      }
+    }
+    p$x$layout$annotations <- anns
+  }
+
+  margin_cfg <- list(t = top_margin)
+  if (isTRUE(rotate_y_axis_title)) {
+    current_left <- p$x$layout$margin$l
+    if (is.null(current_left) || !is.finite(current_left)) {
+      current_left <- 80
+    }
+    margin_cfg$l <- max(as.numeric(current_left), 92)
+  }
+
+  p %>%
+    plotly::layout(
+      title = list(
+        text = combined_title,
+        x = 0,
+        xanchor = "left",
+        y = 0.96,
+        yanchor = "top",
+        pad = list(t = 10, b = 8)
+      ),
+      margin = margin_cfg,
+      autosize = TRUE
+    ) %>%
+    plotly::config(responsive = TRUE)
+}
+```
+
+```{r modules, include=FALSE}
+source("r_scripts/lib/utils/staging_root.R")
+source("r_scripts/lib/utils/datalake_root.r")
+
+bundle_e_plot_dir <- here("r_scripts", "lib", "plots", "report", "bundle_E")
+if (dir.exists(bundle_e_plot_dir)) {
+  list.files(bundle_e_plot_dir, full.names = TRUE) %>%
+    walk(source)
+}
+
+list.files(here("r_scripts", "lib", "plots", "report", "bundle_A"), full.names = TRUE) %>%
+  walk(source)
+list.files(here("r_scripts", "lib", "utils"), full.names = TRUE) %>%
+  walk(source)
+source(here("r_scripts", "lib", "plots", "PlottingThemes.R"))
+```
+
+```{r load_data, include=FALSE}
+data_source <- tolower(trimws(as.character(params$data_source)))
+if (!nzchar(data_source)) {
+  data_source <- "datalake"
+}
+if (!(data_source %in% c("staging", "datalake"))) {
+  stop("`params$data_source` must be one of: 'staging', 'datalake'.")
+}
+
+Talent <- as.character(params$talent)
+if (length(Talent) != 1 || is.na(Talent) || !nzchar(trimws(Talent))) {
+  stop("`params$talent` must be a single non-empty talent name.")
+}
+Talent <- trimws(Talent)
+
+artifact_root_param <- if (is.null(params$artifact_root) || (length(params$artifact_root) == 1 && is.na(params$artifact_root))) {
+  ""
+} else {
+  trimws(as.character(params$artifact_root[[1]]))
+}
+
+artifact_root <- if (nzchar(artifact_root_param)) {
+  normalizePath(artifact_root_param, winslash = "/", mustWork = FALSE)
+} else {
+  artifact_talent_root <- select_talent(Talent, root = get_datalake_root())
+  normalizePath(
+    file.path(get_datalake_root(), basename(artifact_talent_root), "reports", "bundle_E", "artifacts"),
+    winslash = "/",
+    mustWork = FALSE
+  )
+}
+
+tables_dir <- file.path(artifact_root, "tables")
+if (!dir.exists(tables_dir)) {
+  stop(
+    "Bundle E artifact tables not found: ", tables_dir, ". ",
+    "Run `r_scripts/run/bundle_E/import_data.r` first."
+  )
+}
+
+bundle_e_read_table <- function(name) {
+  path <- file.path(tables_dir, paste0(name, ".csv"))
+  if (!file.exists(path)) {
+    return(tibble::tibble())
+  }
+  readr::read_csv(path, show_col_types = FALSE, progress = FALSE)
+}
+
+dataset_sizes <- bundle_e_read_table("dataset_sizes")
+metadata_tbl <- bundle_e_read_table("metadata")
+panel_coverage_summary <- bundle_e_read_table("panel_coverage_summary")
+library_growth_snapshot <- bundle_e_read_table("library_growth_snapshot")
+back_catalog_vs_recent_contribution <- bundle_e_read_table("back_catalog_vs_recent_contribution")
+video_lifecycle_summary <- bundle_e_read_table("video_lifecycle_summary")
+publish_cohort_performance <- bundle_e_read_table("publish_cohort_performance")
+video_type_longevity <- bundle_e_read_table("video_type_longevity")
+video_type_highest_overall_performing <- bundle_e_read_table("video_type_highest_overall_performing")
+video_type_newest_five_videos <- bundle_e_read_table("video_type_newest_five_videos")
+video_type_top_performing_videos <- bundle_e_read_table("video_type_top_performing_videos")
+evergreen_video_leaders <- bundle_e_read_table("evergreen_video_leaders")
+sleeper_reacceleration_candidates <- bundle_e_read_table("sleeper_reacceleration_candidates")
+topic_longevity <- bundle_e_read_table("topic_longevity")
+tag_longevity <- bundle_e_read_table("tag_longevity")
+
+bundle_e_interp_root <- {
+  out_dir <- params$render_output_dir
+  if (is.null(out_dir) || length(out_dir) == 0 || is.na(out_dir[[1]]) || !nzchar(trimws(as.character(out_dir[[1]])))) {
+    NULL
+  } else {
+    file.path(trimws(as.character(out_dir[[1]])), "interpretations")
+  }
+}
+
+bundle_e_read_interpretation <- function(rel_dir) {
+  if (is.null(bundle_e_interp_root) || !nzchar(bundle_e_interp_root)) {
+    return("")
+  }
+  interp_path <- file.path(bundle_e_interp_root, rel_dir, "output.md")
+  if (!file.exists(interp_path)) {
+    return("")
+  }
+  txt <- paste(readLines(interp_path, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  txt <- trimws(txt)
+  if (!nzchar(txt)) {
+    return("")
+  }
+  txt
+}
+
+bundle_e_emit_interpretation <- function(rel_dir) {
+  txt <- bundle_e_read_interpretation(rel_dir)
+  if (!nzchar(txt)) {
+    return(invisible(NULL))
+  }
+  cat(txt, "\n\n")
+}
+```
+
+```{r bundle-e-prep, include=FALSE}
+bundle_e_title_case <- function(x) {
+  out <- trimws(as.character(x))
+  out[!nzchar(out)] <- NA_character_
+  stringr::str_to_title(out)
+}
+
+bundle_e_metric_value <- function(key) {
+  hit <- metadata_tbl %>%
+    dplyr::filter(.data$key == key) %>%
+    dplyr::pull(.data$value)
+  if (length(hit) == 0) {
+    return(NA_character_)
+  }
+  hit[[1]]
+}
+
+bundle_e_first_non_missing <- function(x) {
+  x <- x[!is.na(x)]
+  if (length(x) == 0) {
+    return(NA)
+  }
+  x[[1]]
+}
+
+bundle_e_type_slice <- function(df, type_name, column = "Content Type") {
+  if (nrow(df) == 0 || !(column %in% names(df))) {
+    return(df[0, , drop = FALSE])
+  }
+  df %>%
+    dplyr::filter(tolower(trimws(as.character(.data[[column]]))) == tolower(type_name))
+}
+
+bundle_e_render_note <- function(text) {
+  cat(paste0("**Note:** ", text, "\n\n"))
+}
+
+bundle_e_type_table <- function(df, empty_text = "No data available for this video type yet.") {
+  if (nrow(df) == 0) {
+    bundle_e_render_note(empty_text)
+    return(invisible(NULL))
+  }
+  DTSettings(df, class = "display stripe hover", scroll_x = TRUE)
+}
+
+latest_library_row <- library_growth_snapshot %>%
+  dplyr::arrange(dplyr::desc(.data$snapshot_date)) %>%
+  dplyr::slice_head(n = 1)
+
+overall_summary <- tibble::tibble(
+  Metric = c(
+    "Included date range",
+    "Latest snapshot date",
+    "Observed snapshots",
+    "Unique videos in lifecycle summary",
+    "Latest observed library views",
+    "Panel rows in window"
+  ),
+  Value = c(
+    if (is.null(params$included_date_range) || is.na(params$included_date_range)) "All available dates" else as.character(params$included_date_range),
+    if (nrow(latest_library_row) == 0) NA_character_ else as.character(latest_library_row$snapshot_date[[1]]),
+    nrow(library_growth_snapshot),
+    if (nrow(video_lifecycle_summary) == 0) 0 else dplyr::n_distinct(video_lifecycle_summary$`Video ID`),
+    if (nrow(latest_library_row) == 0) NA_character_ else scales::comma(bundle_e_first_non_missing(latest_library_row$total_library_views)),
+    if (nrow(dataset_sizes) == 0) NA_character_ else as.character(bundle_e_first_non_missing(dataset_sizes$rows[dataset_sizes$dataset == "panel_window"]))
+  )
+)
+
+video_type_longevity_display <- video_type_longevity %>%
+  dplyr::mutate(group_value = bundle_e_title_case(.data$group_value))
+```
+
+# How This Report Supports Video Lifecycle Decisions
+
+This report is the longitudinal view of the library. It focuses on how videos compound over time, whether the library is increasingly driven by fresh uploads or the back catalog, and how growth patterns differ across `live`, `video`, and `short` uploads.
+
+```{r bundle-e-intro-synthesis, results='asis'}
+bundle_e_emit_interpretation("00_how_this_report_supports_video_lifecycle_decisions/00_section_synthesis")
+```
+
+# Executive Summary
+
+```{r bundle-e-executive-summary, results='asis'}
+bundle_e_emit_interpretation("05_report_bookends/01_executive_summary")
+```
+
+# Overall Library Snapshot
+
+This section establishes the overall state of the library before breaking performance out by video type.
+
+```{r bundle-e-overall-synthesis, results='asis'}
+bundle_e_emit_interpretation("01_overall_library_snapshot/00_section_synthesis")
+```
+
+## Overall Summary Table
+
+```{r bundle-e-overall-summary-table}
+DTSettings(overall_summary, class = "display stripe hover", scroll_x = TRUE, filter = "none")
+```
+
+## Library Growth Snapshot
+
+**What this chart shows:** Total observed library views across all snapshots in the analysis window.  
+**How to read it:** A steadily rising line suggests the library continues to compound, while flattening periods suggest slower overall library growth.
+
+```{r bundle-e-library-growth}
+bundle_e_ggplotly(
+  plot_bundle_e_library_growth(library_growth_snapshot, Talent),
+  tooltip = c("x", "y")
+)
+```
+
+```{r bundle-e-library-growth-text, results='asis'}
+bundle_e_emit_interpretation("01_overall_library_snapshot/01_library_growth_snapshot")
+```
+
+## Back Catalog vs Recent Contribution
+
+**What this chart shows:** Share of library views coming from newer versus older videos.  
+**How to read it:** If older age buckets carry a large share, the library is durable; if very recent buckets dominate, performance is more launch-dependent.
+
+```{r bundle-e-back-catalog-share}
+bundle_e_ggplotly(
+  plot_bundle_e_back_catalog_share(back_catalog_vs_recent_contribution, Talent),
+  tooltip = c("x", "y", "fill")
+)
+```
+
+```{r bundle-e-back-catalog-text, results='asis'}
+bundle_e_emit_interpretation("01_overall_library_snapshot/02_back_catalog_vs_recent_contribution")
+```
+
+## Publish Cohort Performance
+
+**What this chart shows:** Median recent 30-day pace by publish cohort.  
+**How to read it:** This is useful for asking whether more recent waves of uploads are aging well or whether older cohorts still carry more momentum.
+
+```{r bundle-e-publish-cohort}
+bundle_e_ggplotly(
+  plot_bundle_e_publish_cohort(publish_cohort_performance, Talent),
+  tooltip = c("x", "y")
+)
+```
+
+```{r bundle-e-publish-cohort-text, results='asis'}
+bundle_e_emit_interpretation("01_overall_library_snapshot/03_publish_cohort_performance")
+```
+
+# Video Lifecycle Behavior
+
+This section looks at video-level patterns rather than library totals, with attention to durability, momentum, and sleeper behavior.
+
+```{r bundle-e-lifecycle-synthesis, results='asis'}
+bundle_e_emit_interpretation("02_video_lifecycle_behavior/00_section_synthesis")
+```
+
+## Latest Views vs Video Age
+
+**What this chart shows:** Current observed views plotted against video age, colored by video type.  
+**How to read it:** This helps separate "older because it had more time" from "older and still exceptional."
+
+```{r bundle-e-latest-views-vs-age}
+bundle_e_ggplotly(
+  plot_bundle_e_latest_views_vs_age(video_lifecycle_summary, Talent),
+  tooltip = c("x", "y", "colour")
+)
+```
+
+```{r bundle-e-latest-views-vs-age-text, results='asis'}
+bundle_e_emit_interpretation("02_video_lifecycle_behavior/01_latest_views_vs_video_age")
+```
+
+## Recent Momentum vs Lifetime Rate
+
+**What this chart shows:** Recent 30-day pace compared with each video's lifetime average pace.  
+**How to read it:** Videos above their long-run pace are still showing momentum; videos below it are likely cooling.
+
+```{r bundle-e-recent-vs-lifetime}
+bundle_e_ggplotly(
+  plot_bundle_e_recent_vs_lifetime_rate(video_lifecycle_summary, Talent),
+  tooltip = c("x", "y", "colour", "size")
+)
+```
+
+```{r bundle-e-recent-vs-lifetime-text, results='asis'}
+bundle_e_emit_interpretation("02_video_lifecycle_behavior/02_recent_momentum_vs_lifetime_rate")
+```
+
+## Evergreen Leaders
+
+```{r bundle-e-evergreen-leaders}
+bundle_e_type_table(
+  evergreen_video_leaders,
+  empty_text = "No evergreen leader table was exported for the current filters."
+)
+```
+
+## Sleeper and Re-Acceleration Candidates
+
+```{r bundle-e-sleeper-leaders}
+bundle_e_type_table(
+  sleeper_reacceleration_candidates,
+  empty_text = "No sleeper or re-acceleration candidates were exported for the current filters."
+)
+```
+
+# Video Type Deep Dive
+
+This section is where Bundle E becomes intentionally different from Bundles A and B. It separates `live`, `video`, and `short` uploads because each type can have very different longevity, launch shape, and library contribution patterns.
+
+```{r bundle-e-video-type-synthesis, results='asis'}
+bundle_e_emit_interpretation("03_video_type_deep_dive/00_section_synthesis")
+```
+
+## Video Type Longevity
+
+**What this chart shows:** Median recent 30-day pace by video type.  
+**How to read it:** Use this as the bridge between the overall library view and the detailed type-by-type sections that follow.
+
+```{r bundle-e-video-type-longevity}
+bundle_e_ggplotly(
+  plot_bundle_e_video_type_longevity(video_type_longevity, Talent),
+  tooltip = c("x", "y")
+)
+```
+
+```{r bundle-e-video-type-longevity-table}
+bundle_e_type_table(
+  video_type_longevity_display,
+  empty_text = "No video type longevity table was exported for the current filters."
+)
+```
+
+## Live Uploads
+
+```{r bundle-e-live-text, results='asis'}
+bundle_e_emit_interpretation("03_video_type_deep_dive/01_live_uploads")
+```
+
+### Highest Overall-Performing Live Upload
+
+```{r bundle-e-live-highest}
+bundle_e_type_table(
+  bundle_e_type_slice(video_type_highest_overall_performing, "live"),
+  empty_text = "No live uploads were found in the highest-overall-performing table."
+)
+```
+
+### Newest Five Live Uploads
+
+```{r bundle-e-live-newest}
+bundle_e_type_table(
+  bundle_e_type_slice(video_type_newest_five_videos, "live"),
+  empty_text = "No recent live uploads were exported for the current filters."
+)
+```
+
+### Top-Performing Live Uploads
+
+```{r bundle-e-live-top}
+bundle_e_type_table(
+  bundle_e_type_slice(video_type_top_performing_videos, "live"),
+  empty_text = "No top-performing live uploads were exported for the current filters."
+)
+```
+
+## Video Uploads
+
+```{r bundle-e-video-text, results='asis'}
+bundle_e_emit_interpretation("03_video_type_deep_dive/02_video_uploads")
+```
+
+### Highest Overall-Performing Video Upload
+
+```{r bundle-e-video-highest}
+bundle_e_type_table(
+  bundle_e_type_slice(video_type_highest_overall_performing, "video"),
+  empty_text = "No video uploads were found in the highest-overall-performing table."
+)
+```
+
+### Newest Five Video Uploads
+
+```{r bundle-e-video-newest}
+bundle_e_type_table(
+  bundle_e_type_slice(video_type_newest_five_videos, "video"),
+  empty_text = "No recent video uploads were exported for the current filters."
+)
+```
+
+### Top-Performing Video Uploads
+
+```{r bundle-e-video-top}
+bundle_e_type_table(
+  bundle_e_type_slice(video_type_top_performing_videos, "video"),
+  empty_text = "No top-performing video uploads were exported for the current filters."
+)
+```
+
+## Shorts
+
+```{r bundle-e-short-text, results='asis'}
+bundle_e_emit_interpretation("03_video_type_deep_dive/03_shorts")
+```
+
+### Highest Overall-Performing Short
+
+```{r bundle-e-short-highest}
+bundle_e_type_table(
+  bundle_e_type_slice(video_type_highest_overall_performing, "short"),
+  empty_text = "No shorts were found in the highest-overall-performing table."
+)
+```
+
+### Newest Five Shorts
+
+```{r bundle-e-short-newest}
+bundle_e_type_table(
+  bundle_e_type_slice(video_type_newest_five_videos, "short"),
+  empty_text = "No recent shorts were exported for the current filters."
+)
+```
+
+### Top-Performing Shorts
+
+```{r bundle-e-short-top}
+bundle_e_type_table(
+  bundle_e_type_slice(video_type_top_performing_videos, "short"),
+  empty_text = "No top-performing shorts were exported for the current filters."
+)
+```
+
+# Topic and Tag Longevity
+
+This section keeps the classifier-enriched view in Bundle E, but frames it through a longitudinal lens rather than a one-period performance lens.
+
+```{r bundle-e-attribute-synthesis, results='asis'}
+bundle_e_emit_interpretation("04_topic_and_tag_longevity/00_section_synthesis")
+```
+
+## Topic Longevity
+
+```{r bundle-e-topic-longevity}
+bundle_e_type_table(
+  topic_longevity,
+  empty_text = "No topic longevity table was exported for the current filters."
+)
+```
+
+## Tag Longevity
+
+```{r bundle-e-tag-longevity}
+bundle_e_type_table(
+  tag_longevity,
+  empty_text = "No tag longevity table was exported for the current filters."
+)
+```
+
+# Wrap-up and Conclusion
+
+```{r bundle-e-conclusion, results='asis'}
+bundle_e_emit_interpretation("05_report_bookends/02_conclusion")
+```
+
+## Active Analysis Window
+
+```{r bundle-e-analysis-window-summary}
+window_setting <- dplyr::case_when(
+  !is.null(params$start_date) || !is.null(params$end_date) ~ "Explicit date range",
+  !is.null(params$window_days) ~ paste0("Last ", params$window_days, " days"),
+  TRUE ~ "All available dates"
+)
+
+window_summary <- tibble::tibble(
+  Metric = c(
+    "Window setting",
+    "Included date range",
+    "Artifact root",
+    "Latest snapshot date",
+    "Snapshot count",
+    "Unique videos",
+    "Median observations per video"
+  ),
+  Value = c(
+    window_setting,
+    if (is.null(params$included_date_range) || is.na(params$included_date_range)) "All available dates" else as.character(params$included_date_range),
+    artifact_root,
+    if (nrow(latest_library_row) == 0) NA_character_ else as.character(latest_library_row$snapshot_date[[1]]),
+    nrow(library_growth_snapshot),
+    if (nrow(video_lifecycle_summary) == 0) 0 else dplyr::n_distinct(video_lifecycle_summary$`Video ID`),
+    if (nrow(panel_coverage_summary) == 0 || !("median_observations_per_video" %in% names(panel_coverage_summary))) {
+      NA_character_
+    } else {
+      as.character(bundle_e_first_non_missing(panel_coverage_summary$median_observations_per_video))
+    }
+  )
+)
+
+DTSettings(window_summary, class = "display stripe hover", scroll_x = TRUE, filter = "none")
+```

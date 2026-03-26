@@ -117,6 +117,22 @@ data_root <- if (nzchar(data_root_arg)) {
 if (!dir.exists(data_root)) {
   stop("Data root does not exist: ", data_root)
 }
+titles_path_arg <- trimws(rr_arg_value(args, "--titles-path", ""))
+if (nzchar(titles_path_arg)) {
+  titles_path <- resolve_repo_or_abs(titles_path_arg)
+  if (!file.exists(titles_path)) {
+    stop("Titles path does not exist: ", titles_path)
+  }
+  Sys.setenv(
+    TITLE_CLASSIFICATIONS_PATH = titles_path,
+    BUNDLE_A_TITLE_CLASSIFICATIONS_PATH = titles_path
+  )
+} else {
+  titles_path <- trimws(Sys.getenv("BUNDLE_A_TITLE_CLASSIFICATIONS_PATH", unset = ""))
+  if (!nzchar(titles_path)) {
+    titles_path <- trimws(Sys.getenv("TITLE_CLASSIFICATIONS_PATH", unset = ""))
+  }
+}
 window_days <- rr_parse_optional_positive_int(
   rr_arg_value(args, "--window-days", ""),
   flag_name = "--window-days"
@@ -175,6 +191,9 @@ if (output_dir_supplied) {
 }
 cat("Data source:", data_source, "\n")
 cat("Data root:", data_root, "\n")
+if (nzchar(titles_path)) {
+  cat("Title classifications:", titles_path, "\n")
+}
 if (is.na(window_days)) {
   if (!is.na(start_date) || !is.na(end_date)) {
     cat(

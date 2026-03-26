@@ -65,6 +65,34 @@ Current shared runtime/export helpers added:
 - `r_scripts/lib/utils/report_runtime_utils.R`
 - `r_scripts/lib/utils/report_artifact_utils.R`
 
+### 6. Video type is now a first-class Bundle E reporting dimension
+
+Bundle E now explicitly distinguishes between:
+
+- `live`
+- `video`
+- `short`
+
+This distinction is important because the longevity, growth pattern, and overall scale of performance can differ materially by video type.
+
+The Bundle E artifact layer now includes first-pass exports for:
+
+- `video_type_longevity.csv`
+- `video_type_highest_overall_performing.csv`
+- `video_type_newest_five_videos.csv`
+- `video_type_top_performing_videos.csv`
+
+The intended report structure is now:
+
+1. overall Bundle E statistics and library-level longitudinal analysis first
+2. then a dedicated video-type deep-dive section
+
+Within each video type section, the future report should include:
+
+- highest overall-performing video
+- newest five videos and their current overall performance
+- top-performing videos within that type
+
 ### 5. Theme alignment improved
 
 Bundle E was adjusted so Bundle A is treated as the source of truth for layout conventions where practical.
@@ -107,6 +135,7 @@ Current plots are useful as a first pass, but they do **not** do justice to the 
 - early winners vs long-tail winners
 - re-acceleration / sleeper behavior
 - library durability over time
+- how `live`, `video`, and `short` differ in overall performance and longevity
 
 ### 3. New Bundle E plots still need to be designed
 
@@ -122,6 +151,13 @@ Next session should prioritize stronger Bundle E-native visuals, likely includin
 
 These should be designed directly against the Bundle E description, not just adapted from Bundle A/B habits.
 
+Video-type-specific visuals should likely become part of this next round, including:
+
+- side-by-side lifecycle comparisons for `live`, `video`, and `short`
+- per-type leaderboard views
+- newest-five performance snapshots within each type
+- per-type top-performer comparisons that balance scale and durability
+
 ## Recommended Next Step
 
 When resuming, start by reviewing:
@@ -133,9 +169,10 @@ When resuming, start by reviewing:
 Then do this in order:
 
 1. decide the next set of Bundle E visuals that better answer the Bundle E report questions
-2. factor Bundle E modules a bit further where needed
-3. update the artifact set to match the stronger Bundle E narrative
-4. only after that, move toward the Bundle E Rmd/report layer
+2. ensure the video-type deep-dive becomes a stable report section in the Bundle E narrative
+3. factor Bundle E modules a bit further where needed
+4. update the artifact set to match the stronger Bundle E narrative
+5. only after that, move toward the Bundle E Rmd/report layer
 
 ## Short Summary
 
