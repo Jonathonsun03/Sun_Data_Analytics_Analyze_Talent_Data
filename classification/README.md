@@ -108,6 +108,65 @@ After the profile exists, the normal pipeline is:
 2. Run pending-title classification.
 3. Export refreshed classification CSVs for downstream joins and reports.
 
+### New talent already in datalake, but not staging
+
+Some new talents may exist in the datalake before they exist in the staging
+title export source. In that case, the older `notes/titles.csv` path can be
+different from a routine run:
+
+- `notes/titles.csv` is only a prepared classifier input file. It must already
+  contain the new talent's rows before `run_talent_profile_builder.sh` can
+  generate a profile.
+- `r_scripts/run/Title_analysis/Export_titles.r` reads from the staging root
+  via `get_staging_root()`. If staging has partial or older talent folders, the
+  export can fail before it reaches the new datalake talent.
+- Bundle report wrappers use the datalake folder name, for example
+  `Nova Aokami Ch`.
+- The classification pipeline usually uses the normalized classifier talent
+  value from the titles CSV, for example `Nova_Aokami_Ch`.
+
+For a datalake-only talent, create a temporary classifier input CSV from the
+datalake analytics export instead of relying on the staging-wide title export:
+
+```bash
+Rscript -e "x <- read.csv('/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Nova Aokami Ch/raw_data/video_analytics/video_analytics_2026-04-17.csv', check.names = FALSE, stringsAsFactors = FALSE); x <- unique(x[!is.na(x[['Title']]) & nzchar(trimws(x[['Title']])), c('Video ID', 'Title', 'Content Type', 'Published At')]); out <- data.frame(talent = 'Nova_Aokami_Ch', x, check.names = FALSE); write.csv(out, '/tmp/nova_titles.csv', row.names = FALSE, quote = TRUE, fileEncoding = 'UTF-8'); cat('Wrote', nrow(out), 'rows to /tmp/nova_titles.csv\n')"
+```
+
+Then build the profile and run classification against that CSV:
+
+```bash
+bin/linux/classification/run_talent_profile_builder.sh \
+  --csv /tmp/nova_titles.csv \
+  --talent "Nova_Aokami_Ch" \
+  --talent-col talent \
+  --title-col "Title" \
+  --content-type-col "Content Type" \
+  --write-overlay \
+  --update-master-config
+
+bin/linux/classification/run_title_classification_weekly.sh \
+  --csv /tmp/nova_titles.csv \
+  --talent "Nova_Aokami_Ch" \
+  --talent-col talent \
+  --title-col "Title" \
+  --content-type-col "Content Type" \
+  --published-at-col "Published At"
+```
+
+If an OpenAI batch times out, rerun the same `run_title_classification_weekly.sh`
+command without `--force-reclassify`. The classifier is idempotent by default
+and only processes pending rows for the same model, taxonomy version, and prompt
+version.
+
+The weekly wrapper writes a timestamped export under
+`classification/output/title_classifications/`. Bundle report wrappers can use
+that specific export by setting `BUNDLE_A_TITLE_CLASSIFICATIONS_PATH`:
+
+```bash
+BUNDLE_A_TITLE_CLASSIFICATIONS_PATH="classification/output/title_classifications/<export-file>.csv" \
+bin/linux/render_reports/bundle_A/run_bundle_A_artifacts.sh --talent "Nova Aokami Ch"
+```
+
 ## Demo Or Synthetic Talents
 If you are building a demo talent for client-facing sample reports, do not append those rows to the production title-classification export by default.
 

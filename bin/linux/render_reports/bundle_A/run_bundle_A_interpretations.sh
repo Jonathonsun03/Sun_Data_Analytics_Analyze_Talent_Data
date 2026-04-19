@@ -418,7 +418,7 @@ for talent_query in "${TALENTS[@]}"; do
   fi
 
   audience_demographics_available="false"
-  if rg -q '"audience_demographics_available"[[:space:]]*:[[:space:]]*true' "${ai_inputs_json}"; then
+  if grep -Eq '"audience_demographics_available"[[:space:]]*:[[:space:]]*true' "${ai_inputs_json}"; then
     audience_demographics_available="true"
   fi
 

@@ -78,6 +78,28 @@ bundle_b_plotly_layout <- function(
     }
   }
 
+  if (length(plot_obj$x$layout$annotations) > 0) {
+    anns <- plot_obj$x$layout$annotations
+    for (i in seq_along(anns)) {
+      ann <- anns[[i]]
+      ann_x <- if (is.null(ann$x)) NA_real_ else suppressWarnings(as.numeric(ann$x))
+      ann_y <- if (is.null(ann$y)) NA_real_ else suppressWarnings(as.numeric(ann$y))
+      is_axis_annot <- identical(ann$annotationType, "axis")
+      is_y_axis_title <- isTRUE(is_axis_annot) &&
+        is.finite(ann_x) && is.finite(ann_y) &&
+        abs(ann_x - 0) < 1e-9 &&
+        abs(ann_y - 0.5) < 1e-9
+
+      if (is_y_axis_title) {
+        anns[[i]]$textangle <- -90
+        anns[[i]]$xanchor <- "center"
+        anns[[i]]$yanchor <- "middle"
+        anns[[i]]$xshift <- -54
+      }
+    }
+    plot_obj$x$layout$annotations <- anns
+  }
+
   plot_obj
 }
 

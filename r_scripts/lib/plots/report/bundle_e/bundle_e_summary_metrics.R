@@ -349,6 +349,32 @@ build_bundle_e_publish_cohort_performance <- function(video_summary) {
     dplyr::arrange(.data$publish_cohort)
 }
 
+build_bundle_e_publish_cohort_performance_by_type <- function(video_summary) {
+  if (nrow(video_summary) == 0 || !"content_type" %in% names(video_summary)) {
+    return(tibble::tibble())
+  }
+
+  video_summary %>%
+    dplyr::filter(!is.na(.data$publish_cohort)) %>%
+    dplyr::filter(!is.na(.data$content_type), nzchar(trimws(as.character(.data$content_type)))) %>%
+    dplyr::mutate(
+      content_type = tolower(trimws(as.character(.data$content_type))),
+      content_type_label = dplyr::case_when(
+        .data$content_type == "short" ~ "Short",
+        .data$content_type == "video" ~ "Video",
+        .data$content_type == "live" ~ "Stream",
+        TRUE ~ tools::toTitleCase(.data$content_type)
+      )
+    ) %>%
+    dplyr::group_by(.data$publish_cohort, .data$content_type, .data$content_type_label) %>%
+    dplyr::summarise(
+      video_count = dplyr::n(),
+      median_recent_30d_avg_views_per_day = stats::median(.data$recent_30d_avg_views_per_day, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    dplyr::arrange(.data$content_type, .data$publish_cohort)
+}
+
 build_bundle_e_attribute_summary <- function(video_summary, group_col) {
   if (nrow(video_summary) == 0 || !group_col %in% names(video_summary)) {
     return(tibble::tibble())
@@ -402,7 +428,9 @@ build_bundle_e_tag_longevity <- function(video_summary) {
 build_bundle_e_video_type_detail_tables <- function(
   video_summary,
   newest_n = 5,
-  top_n = 10
+  top_n = NULL,
+  top_prop = 0.10,
+  min_top_n = 5
 ) {
   if (nrow(video_summary) == 0 || !"Content Type" %in% names(video_summary)) {
     return(list(
@@ -462,7 +490,14 @@ build_bundle_e_video_type_detail_tables <- function(
       .by_group = TRUE
     ) %>%
     dplyr::mutate(rank_within_type = dplyr::row_number()) %>%
-    dplyr::slice_head(n = top_n) %>%
+    {
+      if (is.null(top_n)) {
+        dplyr::mutate(., top_cutoff = pmax(min_top_n, ceiling(dplyr::n() * top_prop)))
+      } else {
+        dplyr::mutate(., top_cutoff = top_n)
+      }
+    } %>%
+    dplyr::filter(.data$rank_within_type <= .data$top_cutoff) %>%
     dplyr::ungroup() %>%
     dplyr::select("rank_within_type", dplyr::any_of(select_cols))
 
@@ -471,6 +506,86 @@ build_bundle_e_video_type_detail_tables <- function(
     video_type_newest_five_videos = newest_videos,
     video_type_top_performing_videos = top_performing
   )
+}
+
+build_bundle_e_type_age_curve_comparison <- function(
+  panel_df,
+  comparison_df,
+  newest_df,
+  content_type = "live",
+  comparison_label = "Top-performing uploads",
+  newest_label = "Newest uploads",
+  overlap_label = "Top-performing + newest uploads"
+) {
+  if (nrow(panel_df) == 0) {
+    return(tibble::tibble())
+  }
+
+  type_key <- tolower(trimws(as.character(content_type)))
+  comparison_sel <- comparison_df %>%
+    dplyr::filter(tolower(trimws(as.character(.data$`Content Type`))) == type_key) %>%
+    dplyr::transmute(
+      `Video ID` = .data$`Video ID`,
+      Title = .data$Title,
+      publish_date = .data$publish_date,
+      comparison_role = comparison_label
+    )
+
+  newest_sel <- newest_df %>%
+    dplyr::filter(tolower(trimws(as.character(.data$`Content Type`))) == type_key) %>%
+    dplyr::transmute(
+      `Video ID` = .data$`Video ID`,
+      Title = .data$Title,
+      publish_date = .data$publish_date,
+      comparison_role = newest_label
+    )
+
+  selected <- dplyr::bind_rows(comparison_sel, newest_sel) %>%
+    dplyr::group_by(.data$`Video ID`) %>%
+    dplyr::summarise(
+      Title = dplyr::first(.data$Title),
+      publish_date = dplyr::first(.data$publish_date),
+      comparison_role = dplyr::case_when(
+        any(.data$comparison_role == comparison_label) & any(.data$comparison_role == newest_label) ~ overlap_label,
+        any(.data$comparison_role == comparison_label) ~ comparison_label,
+        any(.data$comparison_role == newest_label) ~ newest_label,
+        TRUE ~ dplyr::first(.data$comparison_role)
+      ),
+      .groups = "drop"
+    )
+
+  if (nrow(selected) == 0) {
+    return(tibble::tibble())
+  }
+
+  panel_df %>%
+    dplyr::filter(.data$`Video ID` %in% selected$`Video ID`) %>%
+    dplyr::filter(!is.na(.data$video_age_days), .data$video_age_days >= 0) %>%
+    dplyr::filter(!is.na(.data$views_cumulative), is.finite(.data$views_cumulative)) %>%
+    dplyr::left_join(selected, by = "Video ID", suffix = c("", "_selected")) %>%
+    dplyr::mutate(
+      Title = dplyr::coalesce(.data$Title_selected, .data$Title),
+      publish_date = dplyr::coalesce(.data$publish_date_selected, .data$publish_date),
+      comparison_role = factor(
+        .data$comparison_role,
+        levels = c(
+          comparison_label,
+          newest_label,
+          overlap_label
+        ),
+        ordered = TRUE
+      )
+    ) %>%
+    dplyr::arrange(.data$`Video ID`, .data$video_age_days, .data$snapshot_date) %>%
+    dplyr::select(
+      "Video ID",
+      "Title",
+      "publish_date",
+      "snapshot_date",
+      "video_age_days",
+      "views_cumulative",
+      "comparison_role"
+    )
 }
 
 build_bundle_e_leaders <- function(video_summary) {

@@ -83,7 +83,7 @@ args <- commandArgs(trailingOnly = TRUE)
 render_generated_at <- format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")
 render_cli <- paste(args, collapse = " ")
 
-input_rmd <- rr_arg_value(args, "--input", repo_path("templates", "reports", "Bundle_E", "Bundle_E.Rmd"))
+input_rmd <- rr_arg_value(args, "--input", repo_path("templates", "reports", "bundle_e", "bundle_e.Rmd"))
 input_rmd <- resolve_repo_or_abs(input_rmd)
 if (!file.exists(input_rmd)) {
   stop("Input Rmd not found: ", input_rmd)
@@ -107,7 +107,7 @@ artifact_root <- if (nzchar(artifact_root_arg)) {
   ""
 }
 
-output_prefix <- rr_arg_value(args, "--output-prefix", "Bundle_E")
+output_prefix <- rr_arg_value(args, "--output-prefix", "bundle_e")
 quiet_render <- rr_has_flag(args, "--quiet")
 data_source <- tolower(trimws(rr_arg_value(args, "--data-source", "datalake")))
 if (!(data_source %in% c("staging", "datalake"))) {
@@ -170,7 +170,7 @@ talents <- unique(trimws(talents))
 talents <- talents[nzchar(talents)]
 
 if (length(talents) == 0) {
-  talents <- "Ava"
+  talents <- "Leia Memoria【Variance Project】"
 }
 
 cat("Bundle E render targets:", paste(talents, collapse = ", "), "\n")
@@ -210,7 +210,7 @@ result_df <- rr_render_for_talents(
   } else {
     function(talent, slug) {
       normalizePath(
-        file.path(output_dir, talent, "reports", "bundle_E"),
+        file.path(output_dir, talent, "reports", "bundle_e"),
         winslash = "/",
         mustWork = FALSE
       )

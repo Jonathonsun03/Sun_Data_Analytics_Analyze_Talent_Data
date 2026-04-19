@@ -7,6 +7,8 @@ theme_nyt <- function(base_size = 14, base_family = "serif") {
       panel.background = element_rect(fill = "white", color = NA),
       panel.grid.major = element_line(color = "#DDDDDD", linewidth = 0.3),
       panel.grid.minor = element_blank(),
+      panel.spacing.x = grid::unit(26, "pt"),
+      panel.spacing.y = grid::unit(34, "pt"),
       plot.title = element_text(
         family = base_family,
         face = "bold",
@@ -30,11 +32,13 @@ theme_nyt <- function(base_size = 14, base_family = "serif") {
       axis.title.x = element_text(
         family = base_family,
         size = base_size * 1.0,
-        margin = margin(t = 8)
+        margin = margin(t = 14)
       ),
       axis.title.y = element_text(
         family = base_family,
         size = base_size * 1.0,
+        angle = 90,
+        vjust = 0.5,
         margin = margin(r = 8)
       ),
       axis.text = element_text(
@@ -50,7 +54,8 @@ theme_nyt <- function(base_size = 14, base_family = "serif") {
       strip.text = element_text(
         family = base_family,
         face = "bold",
-        size = base_size * 0.9
+        size = base_size * 0.9,
+        margin = margin(t = 6, r = 6, b = 6, l = 6)
       )
     )
 }

@@ -6,7 +6,7 @@ library(purrr)
 source("r_scripts/lib/utils/staging_root.R")
 source("r_scripts/lib/utils/datalake_root.r")
 
-bundle_e_plot_dir <- here("r_scripts", "lib", "plots", "report", "bundle_E")
+bundle_e_plot_dir <- here("r_scripts", "lib", "plots", "report", "bundle_e")
 if (dir.exists(bundle_e_plot_dir)) {
   list.files(bundle_e_plot_dir, full.names = TRUE) %>%
     walk(source)
@@ -79,18 +79,50 @@ library_growth_snapshot <- build_bundle_e_library_growth_snapshot(panel_window)
 back_catalog_contribution <- build_bundle_e_back_catalog_contribution(panel_window)
 panel_coverage_summary <- build_bundle_e_panel_coverage_summary(video_summary)
 publish_cohort_performance <- build_bundle_e_publish_cohort_performance(video_summary)
+publish_cohort_performance_by_type <- build_bundle_e_publish_cohort_performance_by_type(video_summary)
 video_type_longevity <- build_bundle_e_attribute_summary(video_summary, "Content Type")
 topic_longevity <- build_bundle_e_attribute_summary(video_summary, "topic")
 tag_longevity <- build_bundle_e_tag_longevity(video_summary)
 video_type_detail_tables <- build_bundle_e_video_type_detail_tables(video_summary)
+live_top_vs_newest_age_curve_comparison <- build_bundle_e_type_age_curve_comparison(
+  panel_window,
+  video_type_detail_tables$video_type_top_performing_videos,
+  video_type_detail_tables$video_type_newest_five_videos,
+  content_type = "live",
+  comparison_label = "Top-performing live uploads",
+  newest_label = "Newest live uploads",
+  overlap_label = "Top-performing + newest live uploads"
+)
+video_highest_vs_newest_age_curve_comparison <- build_bundle_e_type_age_curve_comparison(
+  panel_window,
+  video_type_detail_tables$video_type_top_performing_videos,
+  video_type_detail_tables$video_type_newest_five_videos,
+  content_type = "video",
+  comparison_label = "Top-performing video uploads",
+  newest_label = "Newest video uploads",
+  overlap_label = "Top-performing + newest video uploads"
+)
+short_highest_vs_newest_age_curve_comparison <- build_bundle_e_type_age_curve_comparison(
+  panel_window,
+  video_type_detail_tables$video_type_top_performing_videos,
+  video_type_detail_tables$video_type_newest_five_videos,
+  content_type = "short",
+  comparison_label = "Top-performing shorts",
+  newest_label = "Newest shorts",
+  overlap_label = "Top-performing + newest shorts"
+)
 leaders <- build_bundle_e_leaders(video_summary)
+short_window_analysis <- build_bundle_e_short_window_analysis(panel_full)
 
 bundle_e_plots <- build_bundle_e_plot_set(
   library_growth_snapshot = library_growth_snapshot,
   back_catalog_contribution = back_catalog_contribution,
   video_summary = video_summary,
   publish_cohort_performance = publish_cohort_performance,
+  publish_cohort_performance_by_type = publish_cohort_performance_by_type,
   video_type_longevity = video_type_longevity,
+  short_window_diagnostics = short_window_analysis$window_diagnostics,
+  short_window_video_scores = short_window_analysis$video_scores,
   talent = Talent
 )
 
@@ -108,10 +140,17 @@ bundle_e_tables <- list(
     dplyr::arrange(.data$`Video ID`, .data$snapshot_date) %>%
     dplyr::slice_head(n = 500),
   publish_cohort_performance = publish_cohort_performance,
+  publish_cohort_performance_by_type = publish_cohort_performance_by_type,
   video_type_longevity = video_type_longevity,
+  short_window_diagnostics = short_window_analysis$window_diagnostics,
+  short_window_selection = short_window_analysis$selected_window,
+  short_window_video_scores = short_window_analysis$video_scores,
   video_type_highest_overall_performing = video_type_detail_tables$video_type_highest_overall_performing,
   video_type_newest_five_videos = video_type_detail_tables$video_type_newest_five_videos,
   video_type_top_performing_videos = video_type_detail_tables$video_type_top_performing_videos,
+  live_top_vs_newest_age_curve_comparison = live_top_vs_newest_age_curve_comparison,
+  video_highest_vs_newest_age_curve_comparison = video_highest_vs_newest_age_curve_comparison,
+  short_highest_vs_newest_age_curve_comparison = short_highest_vs_newest_age_curve_comparison,
   evergreen_video_leaders = leaders$evergreen_video_leaders,
   sleeper_reacceleration_candidates = leaders$sleeper_reacceleration_candidates,
   topic_longevity = topic_longevity,
@@ -155,7 +194,7 @@ bundle_e_ai_inputs <- list(
 
 bundle_e_artifact_root <- report_resolve_artifact_root(
   talent_root = talent_root,
-  bundle_name = "bundle_E",
+  bundle_name = "bundle_e",
   report_subdir = "reports",
   artifact_subdir = "artifacts",
   env_var = "BUNDLE_E_ARTIFACT_ROOT"

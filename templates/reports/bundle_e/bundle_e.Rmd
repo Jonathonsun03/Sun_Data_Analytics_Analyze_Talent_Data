@@ -10,7 +10,7 @@ output:
     toc_float: true
     toc_depth: 3
 params:
-  talent: "Ava"
+  talent: "Leia Memoria【Variance Project】"
   data_source: "datalake"
   data_root: null
   artifact_root: null
@@ -106,7 +106,7 @@ cat(
 ```
 
 ```{r plotly_helpers, include=FALSE}
-bundle_e_ggplotly <- function(plot_obj, tooltip = NULL, rotate_y_axis_title = FALSE) {
+bundle_e_ggplotly <- function(plot_obj, tooltip = NULL, rotate_y_axis_title = TRUE, height = NULL) {
   p <- if (is.null(tooltip)) {
     plotly::ggplotly(plot_obj)
   } else {
@@ -157,8 +157,12 @@ bundle_e_ggplotly <- function(plot_obj, tooltip = NULL, rotate_y_axis_title = FA
   if (is.null(current_top) || !is.finite(current_top)) {
     current_top <- 60
   }
-  needed_top <- 58 + (title_lines * 24) + (subtitle_lines * 18) + 16
+  needed_top <- 68 + (title_lines * 24) + (subtitle_lines * 20) + 14
   top_margin <- max(as.numeric(current_top), as.numeric(needed_top))
+  attr_height <- attr(plot_obj, "bundle_e_plotly_height", exact = TRUE)
+  if (is.null(height) && !is.null(attr_height) && is.finite(attr_height)) {
+    height <- as.numeric(attr_height)
+  }
 
   combined_title <- if (nzchar(subtitle_txt)) {
     paste0(
@@ -185,34 +189,56 @@ bundle_e_ggplotly <- function(plot_obj, tooltip = NULL, rotate_y_axis_title = FA
         anns[[i]]$textangle <- -90
         anns[[i]]$xanchor <- "center"
         anns[[i]]$yanchor <- "middle"
-        anns[[i]]$xshift <- -28
+        anns[[i]]$xshift <- -58
       }
     }
     p$x$layout$annotations <- anns
   }
 
-  margin_cfg <- list(t = top_margin)
+  current_bottom <- p$x$layout$margin$b
+  if (is.null(current_bottom) || !is.finite(current_bottom)) {
+    current_bottom <- 60
+  }
+  attr_margin_l <- attr(plot_obj, "bundle_e_plotly_margin_l", exact = TRUE)
+  attr_margin_b <- attr(plot_obj, "bundle_e_plotly_margin_b", exact = TRUE)
+  margin_cfg <- list(
+    t = top_margin,
+    b = max(
+      as.numeric(current_bottom),
+      96,
+      if (is.null(attr_margin_b) || !is.finite(attr_margin_b)) 0 else as.numeric(attr_margin_b)
+    )
+  )
   if (isTRUE(rotate_y_axis_title)) {
     current_left <- p$x$layout$margin$l
     if (is.null(current_left) || !is.finite(current_left)) {
       current_left <- 80
     }
-    margin_cfg$l <- max(as.numeric(current_left), 92)
+    margin_cfg$l <- max(
+      as.numeric(current_left),
+      132,
+      if (is.null(attr_margin_l) || !is.finite(attr_margin_l)) 0 else as.numeric(attr_margin_l)
+    )
+  }
+
+  layout_args <- list(
+    title = list(
+      text = combined_title,
+      x = 0,
+      xanchor = "left",
+      y = 0.98,
+      yanchor = "top",
+      pad = list(t = 10, b = 12)
+    ),
+    margin = margin_cfg,
+    autosize = TRUE
+  )
+  if (!is.null(height) && is.finite(height)) {
+    layout_args$height <- as.numeric(height)
   }
 
   p %>%
-    plotly::layout(
-      title = list(
-        text = combined_title,
-        x = 0,
-        xanchor = "left",
-        y = 0.96,
-        yanchor = "top",
-        pad = list(t = 10, b = 8)
-      ),
-      margin = margin_cfg,
-      autosize = TRUE
-    ) %>%
+    do.call(plotly::layout, c(list(.), layout_args)) %>%
     plotly::config(responsive = TRUE)
 }
 ```
@@ -221,7 +247,7 @@ bundle_e_ggplotly <- function(plot_obj, tooltip = NULL, rotate_y_axis_title = FA
 source("r_scripts/lib/utils/staging_root.R")
 source("r_scripts/lib/utils/datalake_root.r")
 
-bundle_e_plot_dir <- here("r_scripts", "lib", "plots", "report", "bundle_E")
+bundle_e_plot_dir <- here("r_scripts", "lib", "plots", "report", "bundle_e")
 if (dir.exists(bundle_e_plot_dir)) {
   list.files(bundle_e_plot_dir, full.names = TRUE) %>%
     walk(source)
@@ -260,7 +286,7 @@ artifact_root <- if (nzchar(artifact_root_param)) {
 } else {
   artifact_talent_root <- select_talent(Talent, root = get_datalake_root())
   normalizePath(
-    file.path(get_datalake_root(), basename(artifact_talent_root), "reports", "bundle_E", "artifacts"),
+    file.path(get_datalake_root(), basename(artifact_talent_root), "reports", "bundle_e", "artifacts"),
     winslash = "/",
     mustWork = FALSE
   )
@@ -270,7 +296,7 @@ tables_dir <- file.path(artifact_root, "tables")
 if (!dir.exists(tables_dir)) {
   stop(
     "Bundle E artifact tables not found: ", tables_dir, ". ",
-    "Run `r_scripts/run/bundle_E/import_data.r` first."
+    "Run `r_scripts/run/bundle_e/import_data.R` first."
   )
 }
 
@@ -289,10 +315,17 @@ library_growth_snapshot <- bundle_e_read_table("library_growth_snapshot")
 back_catalog_vs_recent_contribution <- bundle_e_read_table("back_catalog_vs_recent_contribution")
 video_lifecycle_summary <- bundle_e_read_table("video_lifecycle_summary")
 publish_cohort_performance <- bundle_e_read_table("publish_cohort_performance")
+publish_cohort_performance_by_type <- bundle_e_read_table("publish_cohort_performance_by_type")
 video_type_longevity <- bundle_e_read_table("video_type_longevity")
+short_window_diagnostics <- bundle_e_read_table("short_window_diagnostics")
+short_window_selection <- bundle_e_read_table("short_window_selection")
+short_window_video_scores <- bundle_e_read_table("short_window_video_scores")
 video_type_highest_overall_performing <- bundle_e_read_table("video_type_highest_overall_performing")
 video_type_newest_five_videos <- bundle_e_read_table("video_type_newest_five_videos")
 video_type_top_performing_videos <- bundle_e_read_table("video_type_top_performing_videos")
+live_top_vs_newest_age_curve_comparison <- bundle_e_read_table("live_top_vs_newest_age_curve_comparison")
+video_highest_vs_newest_age_curve_comparison <- bundle_e_read_table("video_highest_vs_newest_age_curve_comparison")
+short_highest_vs_newest_age_curve_comparison <- bundle_e_read_table("short_highest_vs_newest_age_curve_comparison")
 evergreen_video_leaders <- bundle_e_read_table("evergreen_video_leaders")
 sleeper_reacceleration_candidates <- bundle_e_read_table("sleeper_reacceleration_candidates")
 topic_longevity <- bundle_e_read_table("topic_longevity")
@@ -374,8 +407,153 @@ bundle_e_type_table <- function(df, empty_text = "No data available for this vid
     bundle_e_render_note(empty_text)
     return(invisible(NULL))
   }
-  DTSettings(df, class = "display stripe hover", scroll_x = TRUE)
+
+  display_df <- df %>%
+    dplyr::select(
+      -dplyr::any_of(c(
+        "evergreen_flag",
+        "front_loaded_flag",
+        "sleeper_flag",
+        "reacceleration_flag"
+      ))
+    )
+
+  DTSettings(display_df, class = "display stripe hover", scroll_x = TRUE)
 }
+
+bundle_e_age_curve_comparison_table <- function(curve_df) {
+  if (nrow(curve_df) == 0) {
+    return(curve_df)
+  }
+
+  curve_df %>%
+    dplyr::group_by(.data$`Video ID`) %>%
+    dplyr::slice_max(order_by = .data$video_age_days, n = 1, with_ties = FALSE) %>%
+    dplyr::ungroup() %>%
+    dplyr::transmute(
+      `Comparison Group` = .data$comparison_role,
+      Title = .data$Title,
+      `Publish Date` = .data$publish_date,
+      `Latest Age Days` = .data$video_age_days,
+      `Latest Views` = .data$views_cumulative
+    ) %>%
+    dplyr::arrange(.data$`Comparison Group`, dplyr::desc(.data$`Latest Views`), .data$Title)
+}
+
+bundle_e_attribute_summary_table <- function(df, group_col, group_label, top_n = 12) {
+  if (nrow(df) == 0 || !(group_col %in% names(df))) {
+    return(df[0, , drop = FALSE])
+  }
+
+  df %>%
+    dplyr::slice_head(n = top_n) %>%
+    dplyr::transmute(
+      !!group_label := .data[[group_col]],
+      `Video Count` = .data$video_count,
+      `Median Latest Views` = .data$median_latest_views,
+      `Median Lifetime Avg Views/Day` = .data$median_lifetime_avg_views_per_day,
+      `Median Recent 30-Day Avg Views/Day` = .data$median_recent_30d_avg_views_per_day
+    )
+}
+
+bundle_e_topic_video_type_table <- function(video_summary, top_n = 12, min_videos = 2) {
+  if (nrow(video_summary) == 0 || !"topic" %in% names(video_summary)) {
+    return(tibble::tibble())
+  }
+
+  out <- video_summary %>%
+    dplyr::mutate(
+      Topic = trimws(as.character(.data$topic)),
+      `Content Type` = dplyr::case_when(
+        .data$`Content Type` == "live" ~ "Stream",
+        .data$`Content Type` == "short" ~ "Short",
+        .data$`Content Type` == "video" ~ "Video",
+        TRUE ~ bundle_e_title_case(.data$`Content Type`)
+      )
+    ) %>%
+    dplyr::filter(
+      !is.na(.data$Topic),
+      nzchar(.data$Topic),
+      !is.na(.data$recent_30d_avg_views_per_day),
+      is.finite(.data$recent_30d_avg_views_per_day)
+    ) %>%
+    dplyr::group_by(.data$Topic, .data$`Content Type`) %>%
+    dplyr::summarise(
+      `Video Count` = dplyr::n_distinct(.data$`Video ID`),
+      `Median Recent 30-Day Avg Views/Day` = stats::median(.data$recent_30d_avg_views_per_day, na.rm = TRUE),
+      `Median Latest Views` = stats::median(.data$latest_views, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    dplyr::filter(.data$`Video Count` >= min_videos) %>%
+    dplyr::arrange(dplyr::desc(.data$`Median Recent 30-Day Avg Views/Day`), dplyr::desc(.data$`Video Count`))
+
+  out %>%
+    dplyr::slice_head(n = top_n)
+}
+
+bundle_e_abbrev_leader_table <- function(df, classification) {
+  if (nrow(df) == 0) {
+    return(df)
+  }
+
+  if (identical(classification, "evergreen")) {
+    out <- df %>%
+      dplyr::transmute(
+        Title = .data$Title,
+        `Publish Date` = .data$publish_date,
+        `Content Type` = bundle_e_title_case(.data$`Content Type`),
+        Classification = "Evergreen"
+      )
+    return(out)
+  }
+
+  df %>%
+    dplyr::transmute(
+      Title = .data$Title,
+      `Publish Date` = .data$publish_date,
+      `Content Type` = bundle_e_title_case(.data$`Content Type`),
+      Classification = dplyr::case_when(
+        .data$sleeper_flag & .data$reacceleration_flag ~ "Sleeper + Re-accelerating",
+        .data$reacceleration_flag ~ "Re-accelerating",
+        .data$sleeper_flag ~ "Sleeper",
+        TRUE ~ "Other"
+      )
+    )
+}
+
+bundle_e_combined_leader_table <- function(evergreen_df, sleeper_df) {
+  evergreen_tbl <- bundle_e_abbrev_leader_table(evergreen_df, "evergreen")
+  sleeper_tbl <- bundle_e_abbrev_leader_table(sleeper_df, "sleeper")
+
+  combined <- dplyr::bind_rows(evergreen_tbl, sleeper_tbl) %>%
+    dplyr::arrange(.data$Classification, dplyr::desc(.data$`Publish Date`), .data$Title)
+
+  combined
+}
+
+bundle_e_classification_guide <- tibble::tibble(
+  Classification = c(
+    "Evergreen",
+    "Front-loaded",
+    "Re-accelerating",
+    "Sleeper",
+    "Sleeper + Re-accelerating"
+  ),
+  `Plain-language meaning` = c(
+    "The video is still pulling a meaningful amount of views well after release.",
+    "The video got most of its traction early and has cooled off a lot since launch.",
+    "The video is gaining momentum again after an earlier slower period.",
+    "The video did not stand out early, but is now showing stronger recent performance.",
+    "The video started quietly and is now picking up again in a noticeable way."
+  ),
+  `What it usually suggests` = c(
+    "This content has longer-tail value and may keep contributing to the library over time.",
+    "This content depended more on launch energy than on long-run durability.",
+    "Something may have renewed interest, such as search, recommendations, clips, or a new audience fit.",
+    "The video may have hidden long-tail potential that was not obvious at launch.",
+    "This is a stronger late-bloomer signal and is often worth a closer look for repeatable patterns."
+  )
+)
 
 latest_library_row <- library_growth_snapshot %>%
   dplyr::arrange(dplyr::desc(.data$snapshot_date)) %>%
@@ -432,31 +610,16 @@ bundle_e_emit_interpretation("01_overall_library_snapshot/00_section_synthesis")
 DTSettings(overall_summary, class = "display stripe hover", scroll_x = TRUE, filter = "none")
 ```
 
-## Library Growth Snapshot
-
-**What this chart shows:** Total observed library views across all snapshots in the analysis window.  
-**How to read it:** A steadily rising line suggests the library continues to compound, while flattening periods suggest slower overall library growth.
-
-```{r bundle-e-library-growth}
-bundle_e_ggplotly(
-  plot_bundle_e_library_growth(library_growth_snapshot, Talent),
-  tooltip = c("x", "y")
-)
-```
-
-```{r bundle-e-library-growth-text, results='asis'}
-bundle_e_emit_interpretation("01_overall_library_snapshot/01_library_growth_snapshot")
-```
-
 ## Back Catalog vs Recent Contribution
 
-**What this chart shows:** Share of library views coming from newer versus older videos.  
-**How to read it:** If older age buckets carry a large share, the library is durable; if very recent buckets dominate, performance is more launch-dependent.
+**What this chart shows:** At each snapshot date, this compares how much of total library views came from recent videos (`0-30 days old`) versus older videos in the back catalog (`31+ days old`).  
+**Why it matters:** This helps show whether overall performance is being driven mostly by new releases or by older videos continuing to pull views over time.  
+**How to read it:** If the back-catalog panel is higher, older videos are driving more of total library views. If the recent panel is higher, newer uploads are contributing more of the total.
 
 ```{r bundle-e-back-catalog-share}
 bundle_e_ggplotly(
   plot_bundle_e_back_catalog_share(back_catalog_vs_recent_contribution, Talent),
-  tooltip = c("x", "y", "fill")
+  tooltip = "text"
 )
 ```
 
@@ -466,13 +629,27 @@ bundle_e_emit_interpretation("01_overall_library_snapshot/02_back_catalog_vs_rec
 
 ## Publish Cohort Performance
 
-**What this chart shows:** Median recent 30-day pace by publish cohort.  
-**How to read it:** This is useful for asking whether more recent waves of uploads are aging well or whether older cohorts still carry more momentum.
+**What this chart shows:** Publish cohorts group videos by the month they were released. This chart compares the overall recent viewing pace of those monthly upload waves.  
+**Why it matters:** It helps show whether stronger current performance is concentrated in newer or older upload waves at the overall library level.  
+**How to read it:** Higher bars mean that cohort is driving a stronger recent viewing pace overall. Use this as the combined picture first, then compare it with the video-type breakout below.
 
 ```{r bundle-e-publish-cohort}
 bundle_e_ggplotly(
   plot_bundle_e_publish_cohort(publish_cohort_performance, Talent),
-  tooltip = c("x", "y")
+  tooltip = "text"
+)
+```
+
+## Publish Cohort Performance by Video Type
+
+**What this chart shows:** The same publish-cohort view, broken out separately for Shorts, Videos, and Streams.  
+**Why it matters:** This helps show whether the overall cohort pattern is being driven by one format more than the others.  
+**How to read it:** Compare cohorts within each video type first, then compare across panels to see whether Shorts, Videos, or Streams are shaping the overall result.
+
+```{r bundle-e-publish-cohort-by-type}
+bundle_e_ggplotly(
+  plot_bundle_e_publish_cohort_by_type(publish_cohort_performance_by_type, Talent),
+  tooltip = "text"
 )
 ```
 
@@ -490,13 +667,13 @@ bundle_e_emit_interpretation("02_video_lifecycle_behavior/00_section_synthesis")
 
 ## Latest Views vs Video Age
 
-**What this chart shows:** Current observed views plotted against video age, colored by video type.  
-**How to read it:** This helps separate "older because it had more time" from "older and still exceptional."
+**What this chart shows:** Current observed views plotted against video age, split by video type so each format can be read on its own scale. A simple trend line is included in each panel to show the average direction.  
+**How to read it:** Use the points to see individual videos and the trend line to see the typical pattern within each format. This helps separate “older because it had more time” from “older and still exceptional” without forcing all formats onto one shared scale.
 
 ```{r bundle-e-latest-views-vs-age}
 bundle_e_ggplotly(
   plot_bundle_e_latest_views_vs_age(video_lifecycle_summary, Talent),
-  tooltip = c("x", "y", "colour")
+  tooltip = "text"
 )
 ```
 
@@ -507,12 +684,24 @@ bundle_e_emit_interpretation("02_video_lifecycle_behavior/01_latest_views_vs_vid
 ## Recent Momentum vs Lifetime Rate
 
 **What this chart shows:** Recent 30-day pace compared with each video's lifetime average pace.  
-**How to read it:** Videos above their long-run pace are still showing momentum; videos below it are likely cooling.
+**How to read it:** Each facet shows one lifecycle profile. Videos above their long-run pace are still showing momentum; videos below it are likely cooling.
+
+**Classification guide:** Use the quick reference below before reading the chart and table.
+
+```{r bundle-e-classification-guide}
+DTSettings(
+  bundle_e_classification_guide,
+  class = "display stripe hover",
+  scroll_x = TRUE,
+  filter = "none",
+  options = list(dom = "t", paging = FALSE)
+)
+```
 
 ```{r bundle-e-recent-vs-lifetime}
 bundle_e_ggplotly(
   plot_bundle_e_recent_vs_lifetime_rate(video_lifecycle_summary, Talent),
-  tooltip = c("x", "y", "colour", "size")
+  tooltip = "text"
 )
 ```
 
@@ -520,21 +709,13 @@ bundle_e_ggplotly(
 bundle_e_emit_interpretation("02_video_lifecycle_behavior/02_recent_momentum_vs_lifetime_rate")
 ```
 
-## Evergreen Leaders
-
-```{r bundle-e-evergreen-leaders}
+```{r bundle-e-classification-leaders}
 bundle_e_type_table(
-  evergreen_video_leaders,
-  empty_text = "No evergreen leader table was exported for the current filters."
-)
-```
-
-## Sleeper and Re-Acceleration Candidates
-
-```{r bundle-e-sleeper-leaders}
-bundle_e_type_table(
-  sleeper_reacceleration_candidates,
-  empty_text = "No sleeper or re-acceleration candidates were exported for the current filters."
+  bundle_e_combined_leader_table(
+    evergreen_video_leaders,
+    sleeper_reacceleration_candidates
+  ),
+  empty_text = "No lifecycle classification leaders were exported for the current filters."
 )
 ```
 
@@ -546,22 +727,22 @@ This section is where Bundle E becomes intentionally different from Bundles A an
 bundle_e_emit_interpretation("03_video_type_deep_dive/00_section_synthesis")
 ```
 
-## Video Type Longevity
+## Topic Longevity by Video Type
 
-**What this chart shows:** Median recent 30-day pace by video type.  
-**How to read it:** Use this as the bridge between the overall library view and the detailed type-by-type sections that follow.
+**What this chart shows:** Median recent 30-day pace by topic, split by Shorts, Videos, and Streams.  
+**How to read it:** Use this to see which topics still have current momentum, and whether that momentum is coming more from Shorts, Videos, or Streams.
 
 ```{r bundle-e-video-type-longevity}
 bundle_e_ggplotly(
-  plot_bundle_e_video_type_longevity(video_type_longevity, Talent),
-  tooltip = c("x", "y")
+  plot_bundle_e_topic_video_type_longevity(video_lifecycle_summary, Talent),
+  tooltip = "text"
 )
 ```
 
 ```{r bundle-e-video-type-longevity-table}
 bundle_e_type_table(
-  video_type_longevity_display,
-  empty_text = "No video type longevity table was exported for the current filters."
+  bundle_e_topic_video_type_table(video_lifecycle_summary),
+  empty_text = "No topic by video-type longevity table was exported for the current filters."
 )
 ```
 
@@ -571,30 +752,28 @@ bundle_e_type_table(
 bundle_e_emit_interpretation("03_video_type_deep_dive/01_live_uploads")
 ```
 
-### Highest Overall-Performing Live Upload
+### Age-Normalized Live Comparison
 
-```{r bundle-e-live-highest}
-bundle_e_type_table(
-  bundle_e_type_slice(video_type_highest_overall_performing, "live"),
-  empty_text = "No live uploads were found in the highest-overall-performing table."
+**What this chart shows:** Top-performing live uploads, defined as the top 10% within the format with at least five where available, plotted against the newest live uploads on the same age-normalized timeline.  
+**How to read it:** Use the top-performing benchmark group to see the pace stronger live uploads tend to follow, then compare whether the newest uploads are tracking above, near, or below that pace at the same stage of life.
+
+```{r bundle-e-live-age-curve}
+bundle_e_ggplotly(
+  plot_bundle_e_type_age_curve_comparison(
+    live_top_vs_newest_age_curve_comparison,
+    Talent,
+    content_type_label = "Live uploads"
+  ),
+  tooltip = "text"
 )
 ```
 
-### Newest Five Live Uploads
-
-```{r bundle-e-live-newest}
-bundle_e_type_table(
-  bundle_e_type_slice(video_type_newest_five_videos, "live"),
-  empty_text = "No recent live uploads were exported for the current filters."
-)
-```
-
-### Top-Performing Live Uploads
+### Live Uploads Included in Comparison
 
 ```{r bundle-e-live-top}
 bundle_e_type_table(
-  bundle_e_type_slice(video_type_top_performing_videos, "live"),
-  empty_text = "No top-performing live uploads were exported for the current filters."
+  bundle_e_age_curve_comparison_table(live_top_vs_newest_age_curve_comparison),
+  empty_text = "No live uploads were exported for the current comparison."
 )
 ```
 
@@ -604,30 +783,28 @@ bundle_e_type_table(
 bundle_e_emit_interpretation("03_video_type_deep_dive/02_video_uploads")
 ```
 
-### Highest Overall-Performing Video Upload
+### Age-Normalized Video Comparison
 
-```{r bundle-e-video-highest}
-bundle_e_type_table(
-  bundle_e_type_slice(video_type_highest_overall_performing, "video"),
-  empty_text = "No video uploads were found in the highest-overall-performing table."
+**What this chart shows:** Top-performing video uploads, defined as the top 10% within the format with at least five where available, plotted against the newest video uploads on the same age-normalized timeline.  
+**How to read it:** Use the top-performing benchmark group to see the pace stronger videos tend to follow, then compare whether the newest uploads are tracking above, near, or below that pace at the same stage of life.
+
+```{r bundle-e-video-age-curve}
+bundle_e_ggplotly(
+  plot_bundle_e_type_age_curve_comparison(
+    video_highest_vs_newest_age_curve_comparison,
+    Talent,
+    content_type_label = "Video uploads"
+  ),
+  tooltip = "text"
 )
 ```
 
-### Newest Five Video Uploads
-
-```{r bundle-e-video-newest}
-bundle_e_type_table(
-  bundle_e_type_slice(video_type_newest_five_videos, "video"),
-  empty_text = "No recent video uploads were exported for the current filters."
-)
-```
-
-### Top-Performing Video Uploads
+### Video Uploads Included in Comparison
 
 ```{r bundle-e-video-top}
 bundle_e_type_table(
-  bundle_e_type_slice(video_type_top_performing_videos, "video"),
-  empty_text = "No top-performing video uploads were exported for the current filters."
+  bundle_e_age_curve_comparison_table(video_highest_vs_newest_age_curve_comparison),
+  empty_text = "No video uploads were exported for the current comparison."
 )
 ```
 
@@ -637,30 +814,67 @@ bundle_e_type_table(
 bundle_e_emit_interpretation("03_video_type_deep_dive/03_shorts")
 ```
 
-### Highest Overall-Performing Short
+### Age-Normalized Short Comparison
 
-```{r bundle-e-short-highest}
-bundle_e_type_table(
-  bundle_e_type_slice(video_type_highest_overall_performing, "short"),
-  empty_text = "No shorts were found in the highest-overall-performing table."
+**What this chart shows:** Top-performing Shorts, defined as the top 10% within the format with at least five where available, plotted against the newest Shorts on the same age-normalized timeline.  
+**How to read it:** Use the top-performing benchmark group to see the pace stronger Shorts tend to follow, then compare whether the newest shorts are tracking above, near, or below that pace at the same stage of life.
+
+```{r bundle-e-short-age-curve}
+bundle_e_ggplotly(
+  plot_bundle_e_type_age_curve_comparison(
+    short_highest_vs_newest_age_curve_comparison,
+    Talent,
+    content_type_label = "Short uploads"
+  ),
+  tooltip = "text"
 )
 ```
 
-### Newest Five Shorts
-
-```{r bundle-e-short-newest}
-bundle_e_type_table(
-  bundle_e_type_slice(video_type_newest_five_videos, "short"),
-  empty_text = "No recent shorts were exported for the current filters."
-)
-```
-
-### Top-Performing Shorts
+### Shorts Included in Comparison
 
 ```{r bundle-e-short-top}
 bundle_e_type_table(
-  bundle_e_type_slice(video_type_top_performing_videos, "short"),
-  empty_text = "No top-performing shorts were exported for the current filters."
+  bundle_e_age_curve_comparison_table(short_highest_vs_newest_age_curve_comparison),
+  empty_text = "No shorts were exported for the current comparison."
+)
+```
+
+### Short Stability Window
+
+**What this chart shows:** Candidate early-read windows for Shorts, evaluated by how much view share is typically still left after that day.  
+**How to read it:** Lower is better. The first day where both lines have settled enough is the most practical talent-specific Shorts window.
+
+```{r bundle-e-short-window-plot}
+bundle_e_ggplotly(
+  plot_bundle_e_short_window_diagnostics(short_window_diagnostics, Talent),
+  tooltip = c("x", "y", "colour")
+)
+```
+
+### Top Shorts Within Selected Window
+
+**What this chart shows:** The highest-performing Shorts measured at the selected early-read window rather than at full lifetime.  
+**How to read it:** This is the apples-to-apples launch leaderboard for Shorts at the talent-specific window selected above.
+
+```{r bundle-e-short-window-leaders}
+bundle_e_ggplotly(
+  plot_bundle_e_short_window_leaders(short_window_video_scores, Talent),
+  tooltip = "text"
+)
+```
+
+```{r bundle-e-short-window-leaders-table}
+bundle_e_type_table(
+  short_window_video_scores %>%
+    dplyr::select(
+      Title,
+      window_days,
+      views_at_window,
+      views_at_window_percentile,
+      early_performance_bucket,
+      standout_within_window
+    ),
+  empty_text = "No short-window leader table was exported for the current filters."
 )
 ```
 
@@ -674,18 +888,50 @@ bundle_e_emit_interpretation("04_topic_and_tag_longevity/00_section_synthesis")
 
 ## Topic Longevity
 
+**What this chart shows:** Each panel is a topic. Each point is one video, comparing its long-run average pace with its recent 30-day pace.  
+**How to read it:** Higher points have stronger recent momentum; points farther right have stronger long-run pace. Shape and color show whether the point is a Short, Video, or Stream. Hover over a point to see its observed date window and view gain.
+
+```{r bundle-e-topic-momentum-by-type, fig.width=12, fig.height=10}
+bundle_e_ggplotly(
+  plot_bundle_e_attribute_momentum_by_type(
+    video_lifecycle_summary,
+    Talent,
+    attribute = "topic",
+    top_n = 6,
+    min_videos = 3
+  ),
+  tooltip = "text"
+)
+```
+
 ```{r bundle-e-topic-longevity}
 bundle_e_type_table(
-  topic_longevity,
+  bundle_e_attribute_summary_table(topic_longevity, "group_value", "Topic"),
   empty_text = "No topic longevity table was exported for the current filters."
 )
 ```
 
 ## Tag Longevity
 
+**What this chart shows:** Each panel is a tag. Each point is one video, comparing its long-run average pace with its recent 30-day pace.  
+**How to read it:** Higher points have stronger recent momentum; points farther right have stronger long-run pace. Shape and color show whether the tag is being carried by Shorts, Videos, or Streams. Hover over a point to see its observed date window and view gain.
+
+```{r bundle-e-tag-momentum-by-type, fig.width=12, fig.height=12}
+bundle_e_ggplotly(
+  plot_bundle_e_attribute_momentum_by_type(
+    video_lifecycle_summary,
+    Talent,
+    attribute = "tag",
+    top_n = 8,
+    min_videos = 3
+  ),
+  tooltip = "text"
+)
+```
+
 ```{r bundle-e-tag-longevity}
 bundle_e_type_table(
-  tag_longevity,
+  bundle_e_attribute_summary_table(tag_longevity, "tag_group", "Tag", top_n = 15),
   empty_text = "No tag longevity table was exported for the current filters."
 )
 ```
