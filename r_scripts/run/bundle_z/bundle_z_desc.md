@@ -1,0 +1,3 @@
+the idea for this bundle is to provide clients with access to the qualitative data. I would like to include an ENA network in the plot to summarize the overall themes and include some findings, but that's for a bit later. As of now, I just need to make sure that I can include an AI summary of the transcript, which I do have. 
+
+But I also need to develop some of the qualitative codes for this analysis. I'm still trying to decide how I'm going to develop codes for this.

@@ -6,12 +6,14 @@ The top-level categories intentionally mirror `bin/linux/codex_prompts/`:
 
 - `monetary/`
   - Money-event timestamping and monetary relationship analysis prompts.
+- `overall_themes/`
+  - Whole-channel theme summaries derived from per-stream summaries.
 - `personality/`
   - Personality open coding, uniqueness, profile synthesis, and related personality-code prompts.
 - `shared_qualities/`
   - Cross-talent shared-baseline prompts.
 - `summaries/`
-  - Stream-summary classification prompts.
+  - Per-stream summary prompts.
 
 Organization rules:
 

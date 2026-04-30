@@ -6,6 +6,15 @@ Primary talent data root:
 Cross-talent processed root:
 - `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data`
 
+Run logging rules:
+- The canonical shell entry point for this workflow is `bin/linux/codex_prompts/personality/personality_qualitative_codebook.sh`.
+- Save Codex run logs and final-message markdown files to `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/codex_prompts/personality/personality_qualitative_codebook/`.
+
+Optional talent scope:
+- The shell runner accepts `--talent "<exact talent folder name>"`.
+- When `TALENT_SLUG` is provided by the runner, focus code-log updates on that exact talent folder while using existing cross-talent artifacts only as needed for comparison.
+- When no `TALENT_SLUG` is provided, process every eligible talent.
+
 Objective:
 Maintain a cumulative cross-talent qualitative code log for streamer personality and interaction style by synthesizing:
 - per-talent `personality_open_coding`
@@ -100,7 +109,7 @@ Talent discovery rules:
 - Treat a directory as eligible only if it contains:
   - usable `personality_open_coding`
   - usable `personality_unique_features/current/unique_personality_profile_codex.md`
-- `summary_classification/current/overall_themes_codex.md` is preferred but may be missing for some talents.
+- `overall_channel_summary/current/overall_channel_summary.md` is preferred but may be missing for some talents.
 - Process every eligible talent found at runtime.
 
 Primary inputs per talent:
@@ -127,9 +136,9 @@ Primary inputs per talent:
 - `<talent>/stream_summaries/overall_themes/personality_unique_features/current/unique_personality_evidence_log_codex.csv`
 - `<talent>/stream_summaries/overall_themes/personality_unique_features/current/unique_personality_state.json`
 
-4) Secondary stabilizing inputs: `summary_classification`
-- `<talent>/stream_summaries/overall_themes/summary_classification/current/overall_themes_codex.md`
-- `<talent>/stream_summaries/overall_themes/summary_classification/current/summary_classification_state.json` if present
+4) Secondary stabilizing inputs: `overall_channel_summary`
+- `<talent>/stream_summaries/overall_channel_summary/current/overall_channel_summary.md`
+- `<talent>/stream_summaries/overall_channel_summary/current/overall_channel_summary_state.json` if present
 
 Existing-log input:
 - If it exists, read:

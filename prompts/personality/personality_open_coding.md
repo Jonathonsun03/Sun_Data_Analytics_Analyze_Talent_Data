@@ -4,20 +4,18 @@ You are working in this data root:
 
 Run logging rules:
 - The canonical shell entry point for this workflow is `bin/linux/codex_prompts/personality/personality_open_coding.sh`.
-- Save runner logs to `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/codex_prompts/personality/personality_open_coding/`.
+- Save Codex run logs and final-message markdown files to `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/codex_prompts/personality/personality_open_coding/`.
 
-Repository automation rules:
-- The canonical runner for this workflow is `py_scripts/run/stream_summaries/personality/personality_profile_v3_incremental_open_coding.py`.
-- If automation changes are needed, update that file in place.
-- Do not create a new runner, a new versioned open-coding script, or a duplicate copy in another folder.
-- Keep workflow-specific code inside `py_scripts/run/stream_summaries/personality/` unless logic is truly reusable across workflows, in which case move only the shared helper pieces into `py_scripts/lib/stream_summaries/`.
-- Treat this prompt as the specification for the existing runner, not as a request to generate a fresh script on each run.
+Optional talent scope:
+- The shell runner accepts `--talent "<exact talent folder name>"`.
+- When `TALENT_SLUG` is provided by the runner, process only that exact talent folder and replace any talent placeholder with that folder name.
+- When no `TALENT_SLUG` is provided, process every eligible talent.
 
-Hardcoded talent directories to process:
-- /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Avaritia Hawthorne 【Variance Project】
-- /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Katya Sable 【Variance Project】
-- /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Leia Memoria【Variance Project】
-- /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Terberri Solaris Ch
+Talent discovery rules:
+- Process every direct talent folder under `/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data` that has usable stream-summary inputs.
+- Skip aggregate or demo folders such as `VarianceProject` and `Northstar Story Lab Demo`.
+- Do not use a hardcoded talent list.
+- Do not process only one talent unless explicitly instructed.
 
 Objective:
 Build an incremental text-grounded personality analysis using OPEN CODING (emergent codes), not a predefined code list. This is a weekly update workflow: analyze only newly eligible videos not yet incorporated into the v3 personality profile, then merge those findings into a living cumulative v3 output set.
@@ -36,9 +34,9 @@ Important limitations:
 - Do not let generic traits such as `playful`, `chatty`, `audience-aware`, `appreciative`, or `energetic` dominate the retained code structure unless they are rewritten into this streamer's distinctive version of those behaviors.
 
 Scope:
-Process all 4 hardcoded talents above.
+Process all eligible talent folders discovered under the talent data root.
 
-For each hardcoded talent path, use these exact input paths:
+For each eligible talent path, use these exact input paths:
 1) `<talent>/stream_summaries/stream_summary_codex/*.md` (context only)
 2) `<talent>/text_playback/*.csv` (primary evidence)
 3) `<talent>/Chat/Original/*_chat.csv` (primary evidence)
@@ -276,7 +274,7 @@ Required structure for `personality_profile_v3_state.json`:
 - `notes`
 
 Execution rules:
-- Evaluate all 4 hardcoded talents for v3 eligibility.
+- Evaluate all eligible discovered talents for v3 eligibility.
 - Identify newly eligible videos using `video_id` tracking from the v3 state file.
 - Process only talents with at least one new eligible `video_id`, unless a talent has missing/empty v3 outputs that require repair.
 - Create missing output folders if needed.

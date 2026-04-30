@@ -3,15 +3,16 @@ You are working in this data root:
 /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
 
 Run logging rules:
-- The canonical shell entry point for this workflow is `bin/linux/codex_prompts/summaries/summarizing_stream_v2.sh`.
-- Save Codex run logs and final-message markdown files to `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/codex_prompts/summaries/summarizing_stream_v2/`.
+- The canonical shell entry point for this workflow is `bin/linux/codex_prompts/overall_themes/overall_channel_summary.sh`.
+- Save Codex run logs and final-message markdown files to `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/codex_prompts/overall_themes/overall_channel_summary/`.
 
-Workflow location rules:
-- The canonical runner for this workflow is `py_scripts/run/stream_summaries/summary_classification/summary_classification_incremental.py`.
-- Keep workflow-specific code inside `py_scripts/run/stream_summaries/summary_classification/` unless logic is truly reusable across workflows, in which case move only the shared helper pieces into `py_scripts/lib/stream_summaries/`.
+Optional talent scope:
+- The shell runner accepts `--talent "<exact talent folder name>"`.
+- When `TALENT_SLUG` is provided by the runner, process only that exact talent folder and replace any talent placeholder with that folder name.
+- When no `TALENT_SLUG` is provided, process every eligible talent.
 
 Objective:
-Build an incremental per-talent qualitative classification of stream text summaries. This workflow should only incorporate newly available stream summaries that have not yet been rolled into the current cumulative summary-classification output.
+Build an incremental per-talent overall channel summary from stream-summary markdown files. This workflow should only incorporate newly available stream summaries that have not yet been rolled into the current cumulative overall-channel output.
 
 Scope rules:
 - Process every talent folder directly under the data root that contains `stream_summaries/`.
@@ -22,7 +23,7 @@ Input paths per talent:
 1) `<talent>/stream_summaries/stream_summary_codex/*.md` (primary summary inputs)
 2) `<talent>/text_playback/*.csv` (raw evidence verification)
 3) `<talent>/Chat/Original/*_chat.csv` (raw evidence verification)
-4) `<talent>/stream_summaries/overall_themes/summary_classification/current/summary_classification_state.json` if present
+4) `<talent>/stream_summaries/overall_channel_summary/current/overall_channel_summary_state.json` if present
 
 Input usage rules:
 - Use `stream_summary_codex/*.md` as the primary analytic input for this workflow.
@@ -33,19 +34,19 @@ Input usage rules:
 - Do not modify raw inputs.
 
 Write outputs to these exact paths:
-1) `<talent>/stream_summaries/overall_themes/summary_classification/current/overall_themes_codex.md`
-2) `<talent>/stream_summaries/overall_themes/summary_classification/current/summary_classification_state.json`
-3) `<talent>/stream_summaries/overall_themes/summary_classification/snapshots/overall_themes_codex_YYYY-MM-DD_HH-MM-SS_±HHMM.md`
+1) `<talent>/stream_summaries/overall_channel_summary/current/overall_channel_summary.md`
+2) `<talent>/stream_summaries/overall_channel_summary/current/overall_channel_summary_state.json`
+3) `<talent>/stream_summaries/overall_channel_summary/snapshots/overall_channel_summary_YYYY-MM-DD_HH-MM-SS_±HHMM.md`
 
 Folder organization rules:
-- Keep summary-classification outputs under `overall_themes/summary_classification/`.
-- Keep the live cumulative markdown and state file only in `summary_classification/current/`.
-- Keep dated historical markdown snapshots only in `summary_classification/snapshots/`.
-- Do not drop new summary-classification markdown files loose in `overall_themes/`.
+- Keep overall channel summary outputs under `stream_summaries/overall_channel_summary/`.
+- Keep the live cumulative markdown and state file only in `overall_channel_summary/current/`.
+- Keep dated historical markdown snapshots only in `overall_channel_summary/snapshots/`.
+- Do not drop new overall-channel markdown files loose in `overall_themes/`.
 - Do not create or update `money_timestamps.csv` in this workflow. That is a separate task.
 
 Incremental eligibility rules:
-- Before processing a talent, check whether `summary_classification_state.json` exists.
+- Before processing a talent, check whether `overall_channel_summary_state.json` exists.
 - If the state file exists, use it to determine which summary `video_id`s have already been incorporated.
 - Eligible summaries for this run are only those whose `video_id`s are not yet recorded as processed in the state file.
 - If no state file exists, treat the talent as an initial bootstrap run and build the cumulative output from all available summary markdown files.
@@ -60,7 +61,7 @@ Summary provenance rules:
 - If the source summaries do not expose reliable version metadata, record `unknown`.
 - Do not guess a summary version from prose style alone.
 
-Required contents for `overall_themes_codex.md`:
+Required contents for `overall_channel_summary.md`:
 
 Start the document with:
 - `Analysis conducted: YYYY-MM-DD HH:MM TZ`
@@ -115,7 +116,7 @@ Start the document with:
 - Explicitly note that this is a summary-driven workflow with raw-log verification, not a raw-log-first full recoding workflow.
 - Explicitly note that this is text-only evidence and does not include visual cues or full vocal prosody.
 
-Requirements for `summary_classification_state.json`:
+Requirements for `overall_channel_summary_state.json`:
 - `talent`
 - `analysis_conducted_at`
 - `update_scope`
@@ -128,15 +129,15 @@ Requirements for `summary_classification_state.json`:
 - `notes`
 
 Snapshot rules:
-- On each run that writes or refreshes the current markdown, also write a dated snapshot markdown in `summary_classification/snapshots/`.
+- On each run that writes or refreshes the current markdown, also write a dated snapshot markdown in `overall_channel_summary/snapshots/`.
 - The snapshot markdown must include:
   - the snapshot date/time
-  - the current cumulative `overall_themes_codex.md` content for that run
-  - the full text of this summary-classification prompt
+  - the current cumulative `overall_channel_summary.md` content for that run
+  - the full text of this overall-channel-summary prompt
   - the recorded source summary version/path information for the incorporated summaries
 
 Evidence constraints:
-- Every quoted example in `overall_themes_codex.md` must be traceable to a raw CSV row when a quote is presented as direct evidence.
+- Every quoted example in `overall_channel_summary.md` must be traceable to a raw CSV row when a quote is presented as direct evidence.
 - If a raw quote cannot be verified, do not include it as a direct quote.
 - Summaries may drive interpretation, but direct examples must not be fabricated.
 

@@ -10,6 +10,11 @@ Run logging rules:
 - The canonical shell entry point for this workflow is `bin/linux/codex_prompts/shared_qualities/shared_behavior_baseline.sh`.
 - Save Codex run logs and final-message markdown files to `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/codex_prompts/shared_qualities/shared_behavior_baseline/`.
 
+Optional talent scope:
+- The shell runner accepts `--talent "<exact talent folder name>"`.
+- When `TALENT_SLUG` is provided by the runner, focus the baseline refresh on that exact talent while using other eligible talents as comparison context only where needed.
+- When no `TALENT_SLUG` is provided, process every eligible talent for the cross-streamer baseline.
+
 Objective:
 Build a cross-streamer shared-behavior baseline that identifies what is common across the streamers in this dataset before later workflows attempt to identify what makes each streamer unique.
 
@@ -50,7 +55,7 @@ Scope rules:
 Upstream dependency rules:
 - This workflow depends on per-talent open-coding outputs already having been produced.
 - Treat `personality_open_coding` as the primary input layer.
-- Treat `summary_classification/current` as a secondary stabilizing layer when needed.
+- Treat `overall_channel_summary/current` as a secondary stabilizing layer when needed.
 - Do not go back to raw text logs for this workflow unless explicitly instructed to audit or verify.
 
 Inputs per talent:
@@ -65,14 +70,14 @@ Primary input layer: `personality_open_coding`
   2) `<talent>/stream_summaries/overall_themes/personality_open_coding/v2/open_coding_evidence_v2.csv`
   3) `<talent>/stream_summaries/overall_themes/personality_profile_v2_open_coding.md`
 
-Secondary input layer: `summary_classification`
-- `<talent>/stream_summaries/overall_themes/summary_classification/current/overall_themes_codex.md`
-- `<talent>/stream_summaries/overall_themes/summary_classification/current/summary_classification_state.json` if present
+Secondary input layer: `overall_channel_summary`
+- `<talent>/stream_summaries/overall_channel_summary/current/overall_channel_summary.md`
+- `<talent>/stream_summaries/overall_channel_summary/current/overall_channel_summary_state.json` if present
 
 Input precedence rules:
 - `open_codebook_*` and `open_coding_evidence_*` are the primary basis for identifying shared patterns.
 - `personality_profile_v*_open_coding.md` may be used to recover memo logic or family summaries but must not substitute for evidence rows.
-- `summary_classification/current/overall_themes_codex.md` can support judgments about stability or coverage but cannot create a shared theme on its own.
+- `overall_channel_summary/current/overall_channel_summary.md` can support judgments about stability or coverage but cannot create a shared theme on its own.
 
 Strict exclusions:
 - Do not use final `personality_profile` outputs as primary inputs for this workflow.

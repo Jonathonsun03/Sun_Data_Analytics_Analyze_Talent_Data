@@ -678,6 +678,9 @@ build_bundle_e_plot_set <- function(
   publish_cohort_performance,
   publish_cohort_performance_by_type,
   video_type_longevity,
+  live_age_curve_comparison = tibble::tibble(),
+  video_age_curve_comparison = tibble::tibble(),
+  short_age_curve_comparison = tibble::tibble(),
   short_window_diagnostics = tibble::tibble(),
   short_window_video_scores = tibble::tibble(),
   talent
@@ -690,7 +693,37 @@ build_bundle_e_plot_set <- function(
     publish_cohort_performance = plot_bundle_e_publish_cohort(publish_cohort_performance, talent),
     publish_cohort_performance_by_type = plot_bundle_e_publish_cohort_by_type(publish_cohort_performance_by_type, talent),
     video_type_longevity = plot_bundle_e_video_type_longevity(video_type_longevity, talent),
+    topic_longevity_by_video_type = plot_bundle_e_topic_video_type_longevity(video_summary, talent),
+    live_uploads_age_normalized_comparison = plot_bundle_e_type_age_curve_comparison(
+      live_age_curve_comparison,
+      talent,
+      content_type_label = "Live uploads"
+    ),
+    video_uploads_age_normalized_comparison = plot_bundle_e_type_age_curve_comparison(
+      video_age_curve_comparison,
+      talent,
+      content_type_label = "Video uploads"
+    ),
+    short_uploads_age_normalized_comparison = plot_bundle_e_type_age_curve_comparison(
+      short_age_curve_comparison,
+      talent,
+      content_type_label = "Short uploads"
+    ),
     short_stability_window = plot_bundle_e_short_window_diagnostics(short_window_diagnostics, talent),
-    top_shorts_within_window = plot_bundle_e_short_window_leaders(short_window_video_scores, talent)
+    top_shorts_within_window = plot_bundle_e_short_window_leaders(short_window_video_scores, talent),
+    topic_momentum_by_video_type = plot_bundle_e_attribute_momentum_by_type(
+      video_summary,
+      talent,
+      attribute = "topic",
+      top_n = 6,
+      min_videos = 3
+    ),
+    tag_momentum_by_video_type = plot_bundle_e_attribute_momentum_by_type(
+      video_summary,
+      talent,
+      attribute = "tag",
+      top_n = 8,
+      min_videos = 3
+    )
   )
 }

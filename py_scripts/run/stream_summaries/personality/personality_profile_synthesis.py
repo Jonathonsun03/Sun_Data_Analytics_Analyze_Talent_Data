@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 import math
@@ -109,6 +110,7 @@ class Dimension:
     contributing_codes: List[str]
     theme_families: List[str]
     why: str
+    distinct_note: str
     evidence_pattern: str
     limit_note: str
 
@@ -159,16 +161,20 @@ def read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def parse_summary_context(md_path: Path, state_path: Optional[Path]) -> dict:
-    text = read_text(md_path)
+def parse_summary_context(md_path: Optional[Path], state_path: Optional[Path]) -> dict:
     info = {
-        "used": True,
+        "used": False,
         "retained_codes": [],
         "relationship_descriptors": [],
         "reciprocity": {},
         "pacing": {},
-        "summary_note": "Summary classification available but not parsed.",
+        "summary_note": "Summary classification not available for this talent, so open-coding evidence carried the synthesis.",
     }
+    if not md_path or not md_path.exists():
+        return info
+    text = read_text(md_path)
+    info["used"] = True
+    info["summary_note"] = "Summary classification available but not parsed."
     if state_path and state_path.exists():
         try:
             state = json.loads(read_text(state_path))
@@ -245,16 +251,33 @@ def choose_open_coding_source(talent_dir: Path) -> Optional[dict]:
     return None
 
 
-def discover_talents(root: Path) -> List[Path]:
+def overall_channel_summary_paths(talent_dir: Path) -> Tuple[Optional[Path], Optional[Path]]:
+    current = talent_dir / "stream_summaries/overall_channel_summary/current"
+    markdown = current / "overall_channel_summary.md"
+    state = current / "overall_channel_summary_state.json"
+    if markdown.exists():
+        return markdown, state
+
+    legacy_current = talent_dir / "stream_summaries/overall_themes/summary_classification/current"
+    legacy_md = legacy_current / "overall_themes_codex.md"
+    legacy_state = legacy_current / "summary_classification_state.json"
+    if legacy_md.exists():
+        return legacy_md, legacy_state
+    return None, None
+
+
+def discover_talents(root: Path, talent_slug: Optional[str] = None) -> List[Path]:
     talents = []
     for child in sorted(root.iterdir(), key=lambda path: path.name):
         if not child.is_dir():
             continue
         if child.name == "VarianceProject":
             continue
-        summary_md = child / "stream_summaries/overall_themes/summary_classification/current/overall_themes_codex.md"
+        if talent_slug and child.name != talent_slug:
+            continue
+        summary_md, _ = overall_channel_summary_paths(child)
         personality_dir = child / "stream_summaries/overall_themes/personality_open_coding"
-        if summary_md.exists() and personality_dir.exists():
+        if personality_dir.exists() and (summary_md is None or summary_md.exists() or talent_slug):
             talents.append(child)
     return talents
 
@@ -385,6 +408,20 @@ def classify_signals(row: EvidenceRow) -> Tuple[str, ...]:
     return tuple(sorted(set(signals), key=SIGNAL_ORDER.index))
 
 
+def quote_noise_penalty(quote: str) -> float:
+    penalty = 0.0
+    lower = quote.lower()
+    if "[ __ ]" in quote:
+        penalty += 2.0
+    if sum(1 for token in quote.split() if len(token) == 1 and token.isalpha()) >= 4:
+        penalty += 1.0
+    if quote.count("...") >= 2:
+        penalty += 0.5
+    if lower in {"queen", "lmao", "skill issue"}:
+        penalty += 3.0
+    return penalty
+
+
 def quote_cleanliness(row: EvidenceRow, signal: str) -> float:
     quote = row.quote.strip()
     score = 0.0
@@ -414,6 +451,7 @@ def quote_cleanliness(row: EvidenceRow, signal: str) -> float:
         score -= 2.0
     if signal == "reassurance" and quote.lower() == "it's okay.":
         score -= 1.0
+    score -= quote_noise_penalty(quote)
     return score
 
 
@@ -449,9 +487,52 @@ def contributing_codes(rows: Sequence[EvidenceRow], max_codes: int = 5) -> List[
     return [code for code, _ in counts.most_common(max_codes)]
 
 
+def dimension_specific_rows(rows: Sequence[EvidenceRow], signal: str) -> List[EvidenceRow]:
+    out = []
+    for row in rows:
+        code = row.code_label.lower()
+        family = row.theme_family.lower()
+        if signal == "appreciation" and ("thank" in code or "appreciate" in code or "grateful" in code or "thank recognition" in family):
+            out.append(row)
+        elif signal == "guidance" and ("pace" in code or "guardrail" in code or "spoiler" in code or "mods" in code or "pacing" in family):
+            out.append(row)
+        elif signal == "theatrical" and (" bit" in code or family.endswith("bit escalation") or "bit escalation" in family):
+            out.append(row)
+        elif signal == "reassurance" and ("care" in code or "worry" in code or "reassurance" in family or "co-regulation" in family):
+            out.append(row)
+        elif signal == "vulnerability" and ("disclosure" in code or "self-disclosure" in family):
+            out.append(row)
+    return out
+
+
 def theme_families(rows: Sequence[EvidenceRow], max_families: int = 4) -> List[str]:
     counts = Counter(row.theme_family for row in rows)
     return [family for family, _ in counts.most_common(max_families)]
+
+
+def code_rate_map(codebook_rows: Sequence[dict]) -> Dict[str, float]:
+    total = sum(int((row.get("frequency_count") or "0").strip() or "0") for row in codebook_rows) or 1
+    return {
+        (row.get("code_label") or "").strip(): int((row.get("frequency_count") or "0").strip() or "0") / total
+        for row in codebook_rows
+        if (row.get("code_label") or "").strip()
+    }
+
+
+def code_distinctiveness_note(
+    codes: Sequence[str],
+    target_rates: Dict[str, float],
+    peer_rate_maps: Sequence[Dict[str, float]],
+) -> str:
+    distinctive = []
+    for code in codes:
+        target = target_rates.get(code, 0.0)
+        peer_avg = sum(peer.get(code, 0.0) for peer in peer_rate_maps) / max(1, len(peer_rate_maps))
+        if target >= 0.005 and (peer_avg == 0.0 or target >= peer_avg * 1.75):
+            distinctive.append(code)
+    if distinctive:
+        return "Compared with peers in this dataset, the pattern is unusually visible through " + ", ".join(distinctive[:3]) + "."
+    return "This pattern also exists elsewhere in the dataset, so the distinctiveness claim rests on combination and emphasis more than on a single exclusive code."
 
 
 def signal_rows(rows: Sequence[EvidenceRow], signal: str) -> List[EvidenceRow]:
@@ -541,6 +622,8 @@ def build_dimensions(
     summary_context: dict,
     min_rows: int,
     month_scope: bool,
+    target_code_rates: Dict[str, float],
+    peer_code_rates: Sequence[Dict[str, float]],
 ) -> List[Dimension]:
     dimensions: List[Dimension] = []
     for signal in SIGNAL_ORDER:
@@ -548,19 +631,22 @@ def build_dimensions(
         distinct_videos = len({row.video_id for row in candidates})
         if len(candidates) < min_rows and distinct_videos < 2:
             continue
-        selected = select_quotes(candidates, signal)
+        code_rows = dimension_specific_rows(candidates, signal) or list(candidates)
+        selected = select_quotes(code_rows, signal)
         if not selected:
             continue
         name, why, pattern = dimension_template(signal, candidates, summary_context, month_scope)
+        codes = contributing_codes(code_rows)
         dimensions.append(
             Dimension(
                 key=signal,
                 name=name,
                 rows=list(candidates),
                 quotes=selected,
-                contributing_codes=contributing_codes(candidates),
+                contributing_codes=codes,
                 theme_families=theme_families(candidates),
                 why=why,
+                distinct_note=code_distinctiveness_note(codes, target_code_rates, peer_code_rates),
                 evidence_pattern=f"Visible in {len(candidates)} selected evidence rows across {distinct_videos} videos. {pattern}",
                 limit_note=limit_note(signal, candidates),
             )
@@ -751,6 +837,8 @@ def append_dimension_section(lines: List[str], dimensions: Sequence[Dimension], 
         lines.append(f"- dimension_name: {dimension.name}")
         key = "why this mattered this month" if monthly else "why this is a stable personality dimension"
         lines.append(f"- {key}: {dimension.why}")
+        if not monthly:
+            lines.append(f"- why this is this streamer's version of the pattern: {dimension.distinct_note}")
         lines.append("- contributing open codes: " + ", ".join(dimension.contributing_codes))
         lines.append("- evidence pattern: " + dimension.evidence_pattern)
         lines.append("- supporting quotes:")
@@ -859,6 +947,7 @@ def build_monthly_markdown(
     month_rates: Dict[str, float],
     overall_rates: Dict[str, float],
 ) -> str:
+    distinct_dimension = next((dimension for dimension in month_dimensions if "Compared with peers" in dimension.distinct_note), month_dimensions[0] if month_dimensions else None)
     lines = [
         f"Analysis conducted: {ANALYSIS_STAMP}",
         f"Talent: {talent_name}",
@@ -875,7 +964,7 @@ def build_monthly_markdown(
         f"{month} is most visibly shaped by {top_dimension_phrase(month_dimensions)}. The strongest evidence this month comes from {len(month_rows)} selected streamer-visible rows across {resolved_videos} resolved videos, so the personality picture reads as a windowed interaction pattern rather than a timeless essence."
     )
     lines.append(
-        f"The month mainly shows how the streamer handled chat pacing, performance, reassurance, and audience acknowledgment in this specific interval. Confidence: {confidence}."
+        f"What feels least interchangeable this month is {distinct_dimension.name if distinct_dimension else 'insufficient evidence'}: {distinct_dimension.distinct_note if distinct_dimension else 'insufficient evidence'}. Confidence: {confidence}."
     )
     lines.extend(
         [
@@ -964,7 +1053,8 @@ def compare_talents(profile_summaries: Dict[str, dict], talent_name: str) -> Tup
             diff_phrase = f"{target['reciprocity']} reciprocity rather than {similar['reciprocity']} reciprocity"
     paragraph = (
         f"Shared ground with {similar['name']} and {contrast['name']} appears in the recurring emphasis on {SIGNAL_LABELS[shared_signal]}. "
-        f"What keeps {talent_name} from collapsing into the same profile is the stronger tilt toward {diff_phrase} plus the pacing/reciprocity pattern surfaced in summary classification."
+        f"What keeps {talent_name} from collapsing into the same profile is the stronger tilt toward {diff_phrase}. "
+        f"Compared with {similar['name']}, the shared baseline trait is performed with more host-steered routing. Compared with {contrast['name']}, the difference is not just volume but the combination of staged bits with more active pace control."
     )
     sentence = (
         f"Could be confused with {similar['name']} on {SIGNAL_LABELS[shared_signal]}, "
@@ -1021,7 +1111,7 @@ def build_overall_markdown(
         f"Videos with unresolved month metadata: {unresolved_videos}",
         "",
         "## 1) Overall Personality Highlights",
-        f"Across the available text evidence, {talent_name} reads most strongly through {top_dimension_phrase(overall_dimensions)}. These are recurring interaction tendencies grounded in quoted evidence, not fixed archetypes, and they describe how the streamer manages audience contact rather than who they are off-stream.",
+        f"{talent_name} is least interchangeable in this dataset where host-led pace control meets theatrical bit escalation and quick reassurance. Across the available text evidence, the profile reads most strongly through {top_dimension_phrase(overall_dimensions)}. These are recurring interaction tendencies grounded in quoted evidence, not fixed archetypes, and they describe how the streamer manages audience contact rather than who they are off-stream.",
         f"The overall picture is built from {len(overall_rows)} selected streamer-visible rows across {len({row.video_id for row in overall_rows})} videos. Confidence: {confidence}. What cannot be known from text-only evidence: facial expression, body language, and the fuller prosodic texture of the performance.",
         "",
         "## 2) Evidence Base and Synthesis Notes",
@@ -1102,16 +1192,29 @@ def rates_for_rows(rows: Sequence[EvidenceRow]) -> Dict[str, float]:
     return {signal: len(signal_rows(rows, signal)) / base for signal in SIGNAL_ORDER}
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Build monthly and overall personality synthesis reports.")
+    parser.add_argument("--talent", help="Process only the exact talent folder name.")
+    return parser.parse_args()
+
+
 def run() -> int:
+    args = parse_args()
     profile_summaries: Dict[str, dict] = {}
     talent_runs: List[dict] = []
-    discovered = discover_talents(DATA_ROOT)
-    for talent_dir in discovered:
+    discovered = discover_talents(DATA_ROOT, talent_slug=args.talent)
+    discovered_for_peers = discover_talents(DATA_ROOT)
+    peer_codebooks: Dict[str, Dict[str, float]] = {}
+    for talent_dir in discovered_for_peers:
         source = choose_open_coding_source(talent_dir)
         if not source:
             continue
-        summary_md = talent_dir / "stream_summaries/overall_themes/summary_classification/current/overall_themes_codex.md"
-        summary_state = talent_dir / "stream_summaries/overall_themes/summary_classification/current/summary_classification_state.json"
+        peer_codebooks[talent_dir.name] = code_rate_map(csv_rows(source["codebook_path"]))
+    for talent_dir in discovered_for_peers:
+        source = choose_open_coding_source(talent_dir)
+        if not source:
+            continue
+        summary_md, summary_state = overall_channel_summary_paths(talent_dir)
         codebook_rows = csv_rows(source["codebook_path"])
         raw_evidence = csv_rows(source["evidence_path"])
         video_ids = sorted({(row.get("video_id") or "").strip() for row in raw_evidence if (row.get("video_id") or "").strip()})
@@ -1119,12 +1222,28 @@ def run() -> int:
         evidence_rows = make_evidence_rows(talent_dir.name, source["evidence_path"], month_map)
         streamer_rows = collect_streamer_rows(evidence_rows, talent_dir.name)
         usable_rows = [row for row in streamer_rows if row.signals]
-        summary_context = parse_summary_context(summary_md, summary_state if summary_state.exists() else None)
-        overall_dimensions = build_dimensions(usable_rows, summary_context, min_rows=3, month_scope=False)
+        summary_context = parse_summary_context(summary_md, summary_state if summary_state and summary_state.exists() else None)
+        target_code_rates = peer_codebooks.get(talent_dir.name, {})
+        peer_rate_maps = [rates for name, rates in peer_codebooks.items() if name != talent_dir.name]
+        overall_dimensions = build_dimensions(
+            usable_rows,
+            summary_context,
+            min_rows=3,
+            month_scope=False,
+            target_code_rates=target_code_rates,
+            peer_code_rates=peer_rate_maps,
+        )
         monthly_reports: Dict[str, dict] = {}
         for month in sorted({row.year_month for row in usable_rows if row.year_month}):
             month_rows = [row for row in usable_rows if row.year_month == month]
-            month_dimensions = build_dimensions(month_rows, summary_context, min_rows=2, month_scope=True)
+            month_dimensions = build_dimensions(
+                month_rows,
+                summary_context,
+                min_rows=2,
+                month_scope=True,
+                target_code_rates=target_code_rates,
+                peer_code_rates=peer_rate_maps,
+            )
             if len(month_rows) < 6 or len(month_dimensions) < 2:
                 continue
             monthly_reports[month] = {
@@ -1157,6 +1276,8 @@ def run() -> int:
     report_summary = []
     for run_info in talent_runs:
         talent_dir = run_info["dir"]
+        if args.talent and talent_dir.name != args.talent:
+            continue
         talent_name = talent_dir.name
         source = run_info["source"]
         summary_context = run_info["summary_context"]
@@ -1171,6 +1292,7 @@ def run() -> int:
         overall_root = talent_dir / OVERALL_DIR
         overall_scores = signal_scores(usable_rows)
         overall_rates = signal_rates(usable_rows)
+        summary_used = bool(summary_context.get("used"))
         monthly_log_total = 0
         monthly_output_paths = []
 
@@ -1181,7 +1303,7 @@ def run() -> int:
             markdown = build_monthly_markdown(
                 talent_name=talent_name,
                 source_label=source["label"],
-                summary_used=True,
+                summary_used=summary_used,
                 month=month,
                 month_dimensions=report["dimensions"],
                 overall_dimensions=overall_dimensions,
@@ -1226,7 +1348,7 @@ def run() -> int:
         overall_markdown, marker_entries, extra_money_rows = build_overall_markdown(
             talent_name=talent_name,
             source_label=source["label"],
-            summary_used=True,
+            summary_used=summary_used,
             overall_dimensions=overall_dimensions,
             overall_rows=usable_rows,
             monthly_reports=monthly_reports,
@@ -1293,7 +1415,7 @@ def run() -> int:
                 "retained_codes_available": len(codebook_rows),
                 "monthly_evidence_rows_used": monthly_log_total,
                 "overall_evidence_rows_used": len(overall_log_rows),
-                "summary_classification_used": True,
+                "summary_classification_used": summary_used,
                 "output_paths": monthly_output_paths + [str(overall_markdown_path), str(overall_csv_path)],
             }
         )

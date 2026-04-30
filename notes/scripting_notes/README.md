@@ -2,6 +2,8 @@
 
 ## Current Notes
 
+- `2026-04-19_qualitative_analysis_runner_cleanup.md`
+  - documents the qualitative-analysis prompt/runner cleanup, `overall_themes` category, `--talent` scoping, Rius smoke test, and nightly stream-summary catch-up schedule
 - `2026-03-18_bundle_a_custom_text_pipeline.md`
   - documents how customized interpretation text was added to Bundle A
   - covers prompts, artifact export, codex-based interpretation generation, report inclusion, output routing, and testing

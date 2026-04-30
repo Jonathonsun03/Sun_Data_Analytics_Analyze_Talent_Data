@@ -95,7 +95,17 @@ Interpretation markdown is written under:
 
 Final HTML report is written under:
 
-- `<datalake_root>/<talent>/reports/bundle_A/`
+- `<datalake_root>/<talent>/reports/bundle_A/report/current/`
+
+Older current HTML reports are moved to:
+
+- `<datalake_root>/<talent>/reports/bundle_A/report/archive/`
+
+Use `--no-interpretations` on the render-only wrapper to render the report without reading existing generated interpretation markdown.
+
+Bundle A report filenames include the render date and analysis window, for example:
+
+- `Bundle_A_2026-04-30_window_90d_rius_isonder_ch.html`
 
 ## Title classification dependency
 

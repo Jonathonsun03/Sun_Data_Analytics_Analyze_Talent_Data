@@ -29,6 +29,7 @@ ALL_TALENTS="false"
 QUIET="false"
 DRY_RUN="false"
 ALLOW_PARTIAL_MATCH="false"
+INCLUDE_INTERPRETATIONS="true"
 
 declare -a TALENTS=()
 declare -a EXTRA_RENDER_ARGS=()
@@ -41,10 +42,27 @@ Usage:
 Description:
   Linux wrapper for Bundle B rendering that writes each report to a datalake path:
     <datalake_root>/<talent>/<report_subdir>/<bundle_name>/
-  and names files with window segment in prefix (for example: Bundle_B_window_90d_avaritia_hawthorne_variance_project.html).
+  and publishes final HTML to:
+    <datalake_root>/<talent>/<report_subdir>/<bundle_name>/report/current/
+  with older current HTML moved to:
+    <datalake_root>/<talent>/<report_subdir>/<bundle_name>/report/archive/
+
+  Final report filenames include the render date and window segment
+  (for example: Bundle_B_2026-04-30_window_90d_avaritia_hawthorne_variance_project.html).
 
   It calls:
     r_scripts/run/bundle_B/render_bundle_B.R
+
+Key options:
+  --all                        Render all talents from the selected input root
+  --talent NAME                Render one talent
+  --window-days N              Rolling lookback days
+  --input-source NAME          Data source for report input: staging|datalake
+  --input-root PATH            Explicit report input root override
+  --datalake-root PATH         Override TALENT_DATALAKE_ROOT
+  --quiet                      Pass --quiet to render script
+  --no-interpretations         Render without existing generated interpretation text
+  --dry-run                    Print commands without running
 USAGE
 }
 
@@ -135,6 +153,102 @@ dedupe_talents_in_place() {
     fi
   done
   TALENTS=("${unique_list[@]}")
+}
+
+slugify_talent() {
+  local slug
+  slug="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/_/g; s/^_+//; s/_+$//')"
+  if [[ -z "${slug}" ]]; then
+    slug="talent"
+  fi
+  printf '%s' "${slug}"
+}
+
+archive_current_reports() {
+  local current_dir="$1"
+  local archive_dir="$2"
+  local current_file base target stamp
+
+  mkdir -p "${current_dir}" "${archive_dir}"
+  for current_file in "${current_dir}"/*.html; do
+    [[ -e "${current_file}" ]] || continue
+    base="$(basename "${current_file}")"
+    target="${archive_dir}/${base}"
+    if [[ -e "${target}" ]]; then
+      stamp="$(date -u +"%Y%m%dT%H%M%SZ")"
+      target="${archive_dir}/${base%.html}_archived_${stamp}.html"
+    fi
+    mv "${current_file}" "${target}"
+  done
+}
+
+archive_legacy_root_reports() {
+  local output_dir="$1"
+  local archive_dir="$2"
+  local rendered_file="$3"
+  local root_file base target stamp
+
+  mkdir -p "${archive_dir}"
+  for root_file in "${output_dir}"/*.html; do
+    [[ -e "${root_file}" ]] || continue
+    [[ "${root_file}" == "${rendered_file}" ]] && continue
+    base="$(basename "${root_file}")"
+    target="${archive_dir}/${base}"
+    if [[ -e "${target}" ]]; then
+      stamp="$(date -u +"%Y%m%dT%H%M%SZ")"
+      target="${archive_dir}/${base%.html}_archived_${stamp}.html"
+    fi
+    mv "${root_file}" "${target}"
+  done
+}
+
+archive_legacy_report_dir() {
+  local legacy_dir="$1"
+  local archive_dir="$2"
+  local legacy_file base target stamp
+
+  [[ -d "${legacy_dir}" ]] || return 0
+  mkdir -p "${archive_dir}"
+  for legacy_file in "${legacy_dir}"/*.html; do
+    [[ -e "${legacy_file}" ]] || continue
+    base="$(basename "${legacy_file}")"
+    target="${archive_dir}/${base}"
+    if [[ -e "${target}" ]]; then
+      stamp="$(date -u +"%Y%m%dT%H%M%SZ")"
+      target="${archive_dir}/${base%.html}_archived_${stamp}.html"
+    fi
+    mv "${legacy_file}" "${target}"
+  done
+}
+
+publish_rendered_report() {
+  local output_dir="$1"
+  local current_dir="$2"
+  local archive_dir="$3"
+  local output_prefix_for_run="$4"
+  local talent_query="$5"
+  local talent_slug rendered_file
+  local -a matches=()
+
+  talent_slug="$(slugify_talent "${talent_query}")"
+  rendered_file="${output_dir}/${output_prefix_for_run}_${talent_slug}.html"
+  if [[ ! -f "${rendered_file}" ]]; then
+    matches=("${output_dir}/${output_prefix_for_run}"_*.html)
+    if [[ ${#matches[@]} -eq 1 && -f "${matches[0]}" ]]; then
+      rendered_file="${matches[0]}"
+    else
+      echo "Error: could not identify rendered Bundle B HTML under ${output_dir}" >&2
+      return 1
+    fi
+  fi
+
+  archive_current_reports "${current_dir}" "${archive_dir}"
+  archive_legacy_root_reports "${output_dir}" "${archive_dir}" "${rendered_file}"
+  archive_legacy_report_dir "${output_dir}/current" "${archive_dir}"
+  archive_legacy_report_dir "${output_dir}/archive" "${archive_dir}"
+  mv "${rendered_file}" "${current_dir}/$(basename "${rendered_file}")"
+  echo "    Published current report: ${current_dir}/$(basename "${rendered_file}")"
+  return 0
 }
 
 while [[ $# -gt 0 ]]; do
@@ -236,6 +350,10 @@ while [[ $# -gt 0 ]]; do
       QUIET="true"
       shift
       ;;
+    --no-interpretations)
+      INCLUDE_INTERPRETATIONS="false"
+      shift
+      ;;
     --dry-run)
       DRY_RUN="true"
       shift
@@ -331,7 +449,10 @@ fi
 if [[ -z "${DATALAKE_ROOT_ARG}" && "${INPUT_SOURCE}" == "datalake" && -n "${INPUT_ROOT}" ]]; then
   DATALAKE_ROOT="${INPUT_ROOT}"
 fi
-mkdir -p "${DATALAKE_ROOT}"
+if [[ "${DRY_RUN}" != "true" ]]; then
+  mkdir -p "${DATALAKE_ROOT}"
+fi
+RUN_DATE="$(date +"%Y-%m-%d")"
 
 WINDOW_SEGMENT="${WINDOW_LABEL}"
 if [[ -z "${WINDOW_SEGMENT}" ]]; then
@@ -360,7 +481,9 @@ if [[ -n "${INPUT_ROOT}" ]]; then
 fi
 echo "Bundle: ${BUNDLE_NAME}"
 echo "Report subdir: ${REPORT_SUBDIR}"
+echo "Render date: ${RUN_DATE}"
 echo "Window segment: ${WINDOW_SEGMENT}"
+echo "Include interpretations: ${INCLUDE_INTERPRETATIONS}"
 echo "Talents: ${TALENTS[*]}"
 
 status=0
@@ -382,8 +505,13 @@ for talent_query in "${TALENTS[@]}"; do
   fi
 
   output_dir="${DATALAKE_ROOT}/${talent_folder_name}/${REPORT_SUBDIR}/${BUNDLE_NAME}"
-  mkdir -p "${output_dir}"
-  output_prefix_for_run="${OUTPUT_PREFIX}_${WINDOW_SEGMENT}"
+  report_dir="${output_dir}/report"
+  current_dir="${report_dir}/current"
+  archive_dir="${report_dir}/archive"
+  if [[ "${DRY_RUN}" != "true" ]]; then
+    mkdir -p "${output_dir}" "${current_dir}" "${archive_dir}"
+  fi
+  output_prefix_for_run="${OUTPUT_PREFIX}_${RUN_DATE}_${WINDOW_SEGMENT}"
 
   cmd=(
     "${RSCRIPT_BIN}"
@@ -412,6 +540,9 @@ for talent_query in "${TALENTS[@]}"; do
   if [[ "${QUIET}" == "true" ]]; then
     cmd+=(--quiet)
   fi
+  if [[ "${INCLUDE_INTERPRETATIONS}" == "false" ]]; then
+    cmd+=(--no-interpretations)
+  fi
   if [[ ${#EXTRA_RENDER_ARGS[@]} -gt 0 ]]; then
     cmd+=("${EXTRA_RENDER_ARGS[@]}")
   fi
@@ -420,6 +551,9 @@ for talent_query in "${TALENTS[@]}"; do
   echo "==> Talent query: ${talent_query}"
   echo "    Resolved output folder: ${talent_folder_name}"
   echo "    Output dir: ${output_dir}"
+  echo "    Report dir: ${report_dir}"
+  echo "    Current dir: ${current_dir}"
+  echo "    Archive dir: ${archive_dir}"
   echo "    Output prefix: ${output_prefix_for_run}"
   echo "    Command: ${cmd[*]}"
 
@@ -430,6 +564,9 @@ for talent_query in "${TALENTS[@]}"; do
   if ! "${cmd[@]}"; then
     status=1
     echo "Error: render failed for talent: ${talent_folder_name}" >&2
+  elif ! publish_rendered_report "${output_dir}" "${current_dir}" "${archive_dir}" "${output_prefix_for_run}" "${talent_query}"; then
+    status=1
+    echo "Error: publish failed for talent: ${talent_folder_name}" >&2
   fi
 done
 

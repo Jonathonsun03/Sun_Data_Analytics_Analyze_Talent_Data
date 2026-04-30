@@ -10,6 +10,11 @@ Run logging rules:
 - The canonical shell entry point for this workflow is `bin/linux/codex_prompts/personality/personality_unique_features.sh`.
 - Save Codex run logs and final-message markdown files to `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/codex_prompts/personality/personality_unique_features/`.
 
+Optional talent scope:
+- The shell runner accepts `--talent "<exact talent folder name>"`.
+- When `TALENT_SLUG` is provided by the runner, process only that exact talent folder and replace any talent placeholder with that folder name.
+- When no `TALENT_SLUG` is provided, process every eligible talent.
+
 Objective:
 Build a talent-specific unique personality profile for each eligible streamer by using the cross-streamer shared-behavior baseline plus each talent's own open-coded evidence.
 
@@ -89,7 +94,7 @@ Talent discovery rules:
 - Exclude aggregate directories such as `VarianceProject`.
 - Treat a directory as eligible only if it contains:
   - usable `personality_open_coding` outputs
-  - usable `summary_classification/current/overall_themes_codex.md`
+  - usable `overall_channel_summary/current/overall_channel_summary.md`
 - Process every eligible talent found at runtime.
 
 Primary cross-talent baseline inputs:
@@ -109,9 +114,9 @@ Primary talent-specific inputs per talent: `personality_open_coding`
   2) `<talent>/stream_summaries/overall_themes/personality_open_coding/v2/open_coding_evidence_v2.csv`
   3) `<talent>/stream_summaries/overall_themes/personality_profile_v2_open_coding.md`
 
-Secondary talent-specific inputs per talent: `summary_classification`
-- `<talent>/stream_summaries/overall_themes/summary_classification/current/overall_themes_codex.md`
-- `<talent>/stream_summaries/overall_themes/summary_classification/current/summary_classification_state.json` if present
+Secondary talent-specific inputs per talent: `overall_channel_summary`
+- `<talent>/stream_summaries/overall_channel_summary/current/overall_channel_summary.md`
+- `<talent>/stream_summaries/overall_channel_summary/current/overall_channel_summary_state.json` if present
 
 Input precedence rules:
 - The shared-interactions baseline defines what counts as common versus non-baseline.

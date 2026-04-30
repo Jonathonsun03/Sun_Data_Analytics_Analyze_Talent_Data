@@ -8,6 +8,7 @@ import json
 import math
 import re
 import sys
+import argparse
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime
@@ -37,9 +38,8 @@ BASELINE_ROOT = Path(
 PROMPT_PATH = (
     REPO_ROOT
     / "prompts"
-    / "personality_profile"
-    / "unique_personality_profile"
-    / "unique_personality_profile.md"
+    / "personality"
+    / "personality_unique_features.md"
 )
 TIMEZONE = ZoneInfo("America/New_York")
 ANALYSIS_NOW = datetime.now(TIMEZONE)
@@ -442,15 +442,19 @@ def family_bucket(theme_family: str) -> str:
     return "shared_or_other"
 
 
-def parse_summary_context(md_path: Path, state_path: Optional[Path]) -> dict:
-    text = md_path.read_text(encoding="utf-8")
+def parse_summary_context(md_path: Optional[Path], state_path: Optional[Path]) -> dict:
     info = {
-        "used": True,
+        "used": False,
         "retained_codes": [],
         "relationship_descriptors": [],
         "reciprocity": {},
         "pacing": {},
     }
+    if not md_path or not md_path.exists():
+        return info
+
+    text = md_path.read_text(encoding="utf-8")
+    info["used"] = True
     if state_path and state_path.exists():
         try:
             state = json.loads(state_path.read_text(encoding="utf-8"))
@@ -499,7 +503,7 @@ class TalentSource:
     codebook_path: Path
     evidence_path: Path
     profile_path: Path
-    summary_md_path: Path
+    summary_md_path: Optional[Path]
     summary_state_path: Optional[Path]
 
 
@@ -553,20 +557,29 @@ class TalentBundle:
     code_stats: Dict[str, dict]
 
 
-def discover_talents() -> List[TalentSource]:
+def discover_talents(talent_scope: Optional[str] = None) -> List[TalentSource]:
     sources: List[TalentSource] = []
     for talent_dir in sorted(path for path in DATA_ROOT.iterdir() if path.is_dir()):
         if talent_dir.name == "VarianceProject":
             continue
-        summary_md = (
-            talent_dir
-            / "stream_summaries"
-            / "overall_themes"
-            / "summary_classification"
-            / "current"
-            / "overall_themes_codex.md"
-        )
+        if talent_scope and talent_dir.name != talent_scope:
+            continue
+        summary_md = talent_dir / "stream_summaries/overall_channel_summary/current/overall_channel_summary.md"
         if not summary_md.exists():
+            summary_md = (
+                talent_dir
+                / "stream_summaries"
+                / "overall_themes"
+                / "summary_classification"
+                / "current"
+                / "overall_themes_codex.md"
+            )
+        if not summary_md.exists():
+            if talent_scope:
+                summary_md = None
+            else:
+                continue
+        if summary_md is None and not talent_scope:
             continue
 
         v3_root = (
@@ -609,7 +622,11 @@ def discover_talents() -> List[TalentSource]:
         else:
             continue
 
-        summary_state = summary_md.parent / "summary_classification_state.json"
+        summary_state = None
+        if summary_md is not None:
+            summary_state = summary_md.parent / "overall_channel_summary_state.json"
+            if not summary_state.exists():
+                summary_state = summary_md.parent / "summary_classification_state.json"
         sources.append(
             TalentSource(
                 talent=talent_dir.name,
@@ -619,9 +636,11 @@ def discover_talents() -> List[TalentSource]:
                 evidence_path=selected["evidence"],
                 profile_path=selected["profile"],
                 summary_md_path=summary_md,
-                summary_state_path=summary_state if summary_state.exists() else None,
+                summary_state_path=summary_state if summary_state and summary_state.exists() else None,
             )
         )
+    if talent_scope and not sources:
+        raise SystemExit(f"Talent not eligible or not found for exact scope: {talent_scope}")
     return sources
 
 
@@ -1472,13 +1491,9 @@ def build_cross_talent_contrast(
     all_bundles: Dict[str, TalentBundle],
 ) -> str:
     peer_order = select_peer_order(bundle, all_bundles)
-    comparison_peers = prioritized_peers(bundle.source.talent, peer_order)
     lines = []
     shared_dims = [dim for dim in dimensions if dim.shared_behavior_name]
-    for index, peer in enumerate(comparison_peers[:2]):
-        if not shared_dims:
-            break
-        dimension = shared_dims[min(index, len(shared_dims) - 1)]
+    for dimension in shared_dims[:2]:
         behavior_names = [
             name
             for name in split_behavior_names(dimension.shared_behavior_name)
@@ -1486,20 +1501,15 @@ def build_cross_talent_contrast(
         ]
         if not behavior_names:
             continue
-        focus_behavior = behavior_names[0]
-        peer_row = baseline["matrix_by_talent"].get(peer, {}).get(focus_behavior)
-        if not peer_row:
+        snippet = build_peer_comparison_snippet(
+            bundle.source.talent,
+            behavior_names[0],
+            baseline,
+            peer_order,
+        )
+        if snippet == "Peer comparison unavailable.":
             continue
-        peer_version = peer_row["talent_specific_version"].rstrip(".").lower()
-        if can_name_peer(bundle.source.talent, peer):
-            lines.append(
-                f"- Could be confused with {strip_variant_suffix(peer)} on {BASELINE_LABELS[focus_behavior]}, but differs in {dimension.dimension_name.lower()} rather than {peer_version}."
-            )
-        else:
-            lead = "Could be confused with other talents in the dataset" if index == 0 else "Could also be confused with peer streamers in this corpus"
-            lines.append(
-                f"- {lead} on {BASELINE_LABELS[focus_behavior]}, but differs in {dimension.dimension_name.lower()} rather than the more {peer_version} version visible elsewhere."
-            )
+        lines.append(f"- {snippet}")
 
     return "\n".join(lines)
 
@@ -1664,16 +1674,25 @@ def render_snapshot(markdown: str, prompt_text: str) -> str:
 
 
 def run() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--talent", dest="talent_scope", help="Process only the exact talent folder name.")
+    args = parser.parse_args()
+
     prompt_text = PROMPT_PATH.read_text(encoding="utf-8")
     baseline = load_baseline()
-    sources = discover_talents()
-    if not sources:
+    target_sources = discover_talents(talent_scope=args.talent_scope)
+    if not target_sources:
         raise SystemExit("No eligible talents found.")
 
-    bundles = {source.talent: load_talent_bundle(source) for source in sources}
+    comparison_sources = discover_talents()
+    source_map = {source.talent: source for source in comparison_sources}
+    for source in target_sources:
+        source_map[source.talent] = source
+
+    bundles = {source.talent: load_talent_bundle(source) for source in source_map.values()}
     summaries = []
 
-    for talent in sorted(bundles):
+    for talent in sorted(source.talent for source in target_sources):
         bundle = bundles[talent]
         dimensions = build_dimensions(bundle, bundles, baseline)
         markdown = render_markdown(bundle, dimensions, baseline, bundles)

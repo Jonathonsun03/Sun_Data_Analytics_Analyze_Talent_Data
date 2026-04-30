@@ -26,7 +26,12 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 DATA_ROOT = Path("/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data")
 REPO_ROOT = Path(__file__).resolve().parents[4]
-PROMPT_SPEC_PATH = REPO_ROOT / "prompts" / "stream_summaries" / "summarizing_stream_classification_v2.md"
+PROMPT_SPEC_PATH = Path(
+    os.environ.get(
+        "SUMMARY_CLASSIFICATION_PROMPT_FILE",
+        REPO_ROOT / "prompts" / "overall_themes" / "overall_channel_summary.md",
+    )
+)
 SKIP_DIRS = {"VarianceProject"}
 MAX_CODES = 5
 FORCE_REFRESH = os.environ.get("SUMMARY_CLASSIFICATION_FORCE_REFRESH") == "1"
@@ -1101,7 +1106,7 @@ def build_snapshot_markdown(
         f"- Recorded source summary prompt version: `{source_version}`",
         f"- Recorded source summary prompt path/label: `{source_label}`",
         "",
-        "## Current cumulative overall_themes_codex.md",
+        "## Current cumulative overall_channel_summary.md",
         "",
         current_markdown.strip(),
         "",
@@ -1132,12 +1137,14 @@ def process_talent(talent_dir: Path, prompt_text: str) -> dict:
     inventory, raw_only_ids = build_inventory(talent_dir)
     all_summary_ids = sorted(inventory)
 
-    current_dir = talent_dir / "stream_summaries" / "overall_themes" / "summary_classification" / "current"
-    snapshots_dir = talent_dir / "stream_summaries" / "overall_themes" / "summary_classification" / "snapshots"
-    markdown_path = current_dir / "overall_themes_codex.md"
-    state_path = current_dir / "summary_classification_state.json"
+    current_dir = talent_dir / "stream_summaries" / "overall_channel_summary" / "current"
+    snapshots_dir = talent_dir / "stream_summaries" / "overall_channel_summary" / "snapshots"
+    markdown_path = current_dir / "overall_channel_summary.md"
+    state_path = current_dir / "overall_channel_summary_state.json"
+    legacy_current_dir = talent_dir / "stream_summaries" / "overall_themes" / "summary_classification" / "current"
+    legacy_state_path = legacy_current_dir / "summary_classification_state.json"
 
-    state = load_json(state_path)
+    state = load_json(state_path) or load_json(legacy_state_path)
     processed_prior = set(state.get("processed_summary_video_ids", []))
     new_ids = [video_id for video_id in all_summary_ids if video_id not in processed_prior]
     update_scope = "incremental update"
@@ -1204,7 +1211,7 @@ def process_talent(talent_dir: Path, prompt_text: str) -> dict:
     write_text(markdown_path, markdown)
 
     snapshot_at = datetime.now().astimezone()
-    snapshot_name = "overall_themes_codex_" + snapshot_at.strftime("%Y-%m-%d_%H-%M-%S_%z") + ".md"
+    snapshot_name = "overall_channel_summary_" + snapshot_at.strftime("%Y-%m-%d_%H-%M-%S_%z") + ".md"
     snapshot_path = snapshots_dir / snapshot_name
     snapshot_markdown = build_snapshot_markdown(snapshot_at, markdown, prompt_text, source_version, source_label)
     write_text(snapshot_path, snapshot_markdown)

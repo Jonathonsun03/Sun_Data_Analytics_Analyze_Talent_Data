@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Incremental v3 open-coding personality profiling for four hardcoded talents.
+"""Incremental v3 open-coding personality profiling for discovered talent folders.
 
 The workflow is stateful:
 - bootstrap from all eligible streams when v3 state is missing
@@ -25,6 +25,7 @@ import json
 import math
 import os
 import re
+import argparse
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime
@@ -34,34 +35,27 @@ from typing import Dict, Iterable, List, Optional, Tuple
 DATA_ROOT = "/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "..", ".."))
-PROMPT_SPEC_PATH = os.path.join(REPO_ROOT, "prompts", "personality", "profile_v3_incremental_open_coding.md")
-TALENTS = [
-    {
-        "name": "Avaritia Hawthorne 【Variance Project】",
-        "path": os.path.join(DATA_ROOT, "Avaritia Hawthorne 【Variance Project】"),
-        "tokens": ("avaritia", "ava"),
-    },
-    {
-        "name": "Katya Sable 【Variance Project】",
-        "path": os.path.join(DATA_ROOT, "Katya Sable 【Variance Project】"),
-        "tokens": ("katya", "sable"),
-    },
-    {
-        "name": "Leia Memoria【Variance Project】",
-        "path": os.path.join(DATA_ROOT, "Leia Memoria【Variance Project】"),
-        "tokens": ("leia", "memoria"),
-    },
-    {
-        "name": "Terberri Solaris Ch",
-        "path": os.path.join(DATA_ROOT, "Terberri Solaris Ch"),
-        "tokens": ("terberri", "solar"),
-    },
-]
+PROMPT_SPEC_PATH = os.path.join(REPO_ROOT, "prompts", "personality", "personality_open_coding.md")
+AGGREGATE_TALENT_DIRS = {"VarianceProject"}
+TOKEN_STOPWORDS = {
+    "ch",
+    "channel",
+    "official",
+    "project",
+    "variance",
+}
+TALENT_TOKEN_OVERRIDES = {
+    "Avaritia Hawthorne 【Variance Project】": ("avaritia", "ava"),
+    "Katya Sable 【Variance Project】": ("katya", "sable"),
+    "Leia Memoria【Variance Project】": ("leia", "memoria"),
+    "Terberri Solaris Ch": ("terberri", "solar", "solaris"),
+}
 
 MIN_PRIMARY_ROWS_SINGLE_SOURCE = 8
 MIN_PRIMARY_ROWS_ANY = 5
 FORCE_REBUILD = os.environ.get("PERSONALITY_V3_FORCE_REBUILD") == "1"
 FORCE_SCOPE_INITIAL = os.environ.get("PERSONALITY_V3_FORCE_SCOPE_INITIAL") == "1"
+TALENT_SLUG = (os.environ.get("TALENT_SLUG") or "").strip()
 
 STOPWORDS = {
     "a",
@@ -229,6 +223,67 @@ def normalize_speaker(speaker: str) -> str:
 
 def tokenize(text: str) -> List[str]:
     return [w for w in normalize_text(text).split() if w]
+
+
+def talent_tokens_from_name(talent_name: str) -> Tuple[str, ...]:
+    override = TALENT_TOKEN_OVERRIDES.get(talent_name)
+    if override:
+        return override
+
+    words = [
+        word
+        for word in re.findall(r"[a-z0-9]+", talent_name.lower())
+        if len(word) >= 3 and word not in TOKEN_STOPWORDS
+    ]
+    tokens = []
+    seen = set()
+    for token in words + (["".join(words)] if len(words) > 1 else []):
+        if token and token not in seen:
+            tokens.append(token)
+            seen.add(token)
+    return tuple(tokens)
+
+
+def discover_talents(talent_filter: str = "") -> List[dict]:
+    if not os.path.isdir(DATA_ROOT):
+        return []
+
+    talents = []
+    for entry in sorted(os.listdir(DATA_ROOT)):
+        if entry in AGGREGATE_TALENT_DIRS:
+            continue
+        if talent_filter and entry != talent_filter:
+            continue
+        talent_path = os.path.join(DATA_ROOT, entry)
+        if not os.path.isdir(talent_path):
+            continue
+
+        primary_files = glob.glob(os.path.join(talent_path, "text_playback", "*.csv")) + glob.glob(
+            os.path.join(talent_path, "Chat", "Original", "*_chat.csv")
+        )
+        summary_files = glob.glob(os.path.join(talent_path, "stream_summaries", "stream_summary_codex", "*.md"))
+        if not primary_files and not summary_files:
+            continue
+
+        talents.append(
+            {
+                "name": entry,
+                "path": talent_path,
+                "tokens": talent_tokens_from_name(entry),
+            }
+        )
+    return talents
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Incremental v3 open-coding personality profiling.")
+    parser.add_argument(
+        "--talent",
+        dest="talent",
+        default=TALENT_SLUG,
+        help="Process only the exact talent folder name.",
+    )
+    return parser.parse_args()
 
 
 def short_quote(text: str, limit: int = 240) -> str:
@@ -1656,11 +1711,18 @@ def classify_talent(state_path: str, output_paths: List[str], discovered_ids: Li
 
 
 def run() -> None:
+    args = parse_args()
+    talent_filter = (args.talent or "").strip()
     pre_run_status = []
     talent_work = {}
     prompt_spec_text = read_text(PROMPT_SPEC_PATH)
+    talents = discover_talents(talent_filter=talent_filter)
+    if not talents:
+        if talent_filter:
+            raise SystemExit(f"No eligible talent folder matched {talent_filter!r} under {DATA_ROOT}")
+        raise SystemExit(f"No eligible talent folders found under {DATA_ROOT}")
 
-    for talent in TALENTS:
+    for talent in talents:
         overall_dir = os.path.join(talent["path"], "stream_summaries", "overall_themes")
         output_paths = migrate_overall_themes_outputs(overall_dir)
         state_path = output_paths["state_path"]

@@ -303,6 +303,28 @@ This command is the full Bundle A pipeline:
 3. runs the editorial rewrite
 4. renders the final HTML
 
+The final Bundle A HTML is published to:
+
+- `<datalake_root>/<talent>/reports/bundle_A/report/current/`
+
+Older current HTML reports are moved to:
+
+- `<datalake_root>/<talent>/reports/bundle_A/report/archive/`
+
+To render a simplified chart/table-only report without existing generated text:
+
+```bash
+bin/linux/render_reports/bundle_A/run_bundle_A_render_only.sh \
+  --talent "Leia Memoria【Variance Project】" \
+  --window-days 90 \
+  --input-source datalake \
+  --no-interpretations
+```
+
+Report filenames include the render date and analysis window, for example:
+
+- `Bundle_A_2026-04-30_window_90d_leia_memoria_variance_project.html`
+
 Single-prompt Codex test:
 
 ```bash
@@ -439,4 +461,54 @@ If using the log path above, create it once:
 
 ```bash
 mkdir -p notes/logs
+```
+
+## Monthly Bundle A Render-Only Batch
+
+Path: `bin/linux/render_reports/run_monthly_bundle_A_render_only.sh`
+
+This wrapper renders simplified Bundle A reports for all talents, without existing generated interpretation text by default, across these windows:
+
+- 30 days
+- 60 days
+- 90 days
+
+Example:
+
+```bash
+bin/linux/render_reports/run_monthly_bundle_A_render_only.sh \
+  --input-source datalake \
+  --input-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data \
+  --datalake-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+```
+
+Cron entry installed for 03:00 on the 1st day of every month:
+
+```cron
+0 3 1 * * cd /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data && bin/linux/render_reports/run_monthly_bundle_A_render_only.sh --input-source datalake --input-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --datalake-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data >> /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/notes/logs/monthly_bundle_A_render_only.log 2>&1
+```
+
+## Monthly Bundle B Render-Only Batch
+
+Path: `bin/linux/render_reports/run_monthly_bundle_B_render_only.sh`
+
+This wrapper renders simplified Bundle B reports for all talents, without existing generated interpretation text by default, across these windows:
+
+- 30 days
+- 60 days
+- 90 days
+
+Example:
+
+```bash
+bin/linux/render_reports/run_monthly_bundle_B_render_only.sh \
+  --input-source datalake \
+  --input-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data \
+  --datalake-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+```
+
+Cron entry installed for 04:00 on the 1st day of every month:
+
+```cron
+0 4 1 * * cd /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data && bin/linux/render_reports/run_monthly_bundle_B_render_only.sh --input-source datalake --input-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data --datalake-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data >> /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/notes/logs/monthly_bundle_B_render_only.log 2>&1
 ```

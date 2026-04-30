@@ -6,6 +6,11 @@ Run logging rules:
 - The canonical shell entry point for this workflow is `bin/linux/codex_prompts/personality/personality_profile.sh`.
 - Save Codex run logs and final-message markdown files to `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/codex_prompts/personality/personality_profile/`.
 
+Optional talent scope:
+- The shell runner accepts `--talent "<exact talent folder name>"`.
+- When `TALENT_SLUG` is provided by the runner, process only that exact talent folder and replace any talent placeholder with that folder name.
+- When no `TALENT_SLUG` is provided, process every eligible talent.
+
 Objective:
 Build text-grounded personality profile outputs for every eligible talent. Each talent should receive two reporting windows saved under that talent's `personality_profile/` directory:
 
@@ -34,7 +39,7 @@ Talent discovery rules:
 - Exclude non-talent aggregate directories such as `/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/VarianceProject`.
 - Treat a directory as eligible only if it contains:
   - `stream_summaries/overall_themes/personality_open_coding/`
-  - `stream_summaries/overall_themes/summary_classification/current/overall_themes_codex.md`
+  - `stream_summaries/overall_channel_summary/current/overall_channel_summary.md`
 - Process every eligible talent found at runtime. Do not hardcode a fixed talent list.
 
 Use these inputs for each talent:
@@ -49,9 +54,9 @@ Primary evidence layer: `personality_open_coding`
   2) `<talent>/stream_summaries/overall_themes/personality_open_coding/v2/open_coding_evidence_v2.csv`
   3) `<talent>/stream_summaries/overall_themes/personality_open_coding/v2/personality_profile_v2_open_coding.md`
 
-Secondary context layer: `summary_classification`
-- `<talent>/stream_summaries/overall_themes/summary_classification/current/overall_themes_codex.md`
-- `<talent>/stream_summaries/overall_themes/summary_classification/current/summary_classification_state.json` if present
+Secondary context layer: `overall_channel_summary`
+- `<talent>/stream_summaries/overall_channel_summary/current/overall_channel_summary.md`
+- `<talent>/stream_summaries/overall_channel_summary/current/overall_channel_summary_state.json` if present
 
 Optional month-resolution inputs:
 - Any reliable per-video date metadata found inside the talent directory may be used only to assign a `video_id` to a calendar month.
@@ -65,7 +70,7 @@ Input precedence rules:
 - `open_coding_evidence_*.csv` is the main evidence source for claims and quotes.
 - `open_codebook_*.csv` defines what retained emergent codes mean and how often they occur overall.
 - `personality_profile_v*_open_coding.md` can help interpret code families and memo logic, but do not merely restate it.
-- `summary_classification/current/overall_themes_codex.md` is a secondary source used to check stability, prevalence, and channel-level context.
+- `overall_channel_summary/current/overall_channel_summary.md` is a secondary source used to check stability, prevalence, and channel-level context.
 - `summary_classification` may support a claim, sharpen a contrast, or flag a limit, but it cannot create a major personality theme by itself if the open-coding evidence does not support that theme.
 
 Strict exclusions:

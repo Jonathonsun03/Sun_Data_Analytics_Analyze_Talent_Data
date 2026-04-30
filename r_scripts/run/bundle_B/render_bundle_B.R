@@ -102,6 +102,7 @@ if (output_dir_supplied) {
 
 output_prefix <- rr_arg_value(args, "--output-prefix", "Bundle_B")
 quiet_render <- rr_has_flag(args, "--quiet")
+include_interpretations <- !rr_has_flag(args, "--no-interpretations")
 data_source <- tolower(trimws(rr_arg_value(args, "--data-source", "datalake")))
 if (!(data_source %in% c("staging", "datalake"))) {
   stop("`--data-source` must be one of: staging, datalake.")
@@ -194,6 +195,7 @@ cat("Data root:", data_root, "\n")
 if (nzchar(titles_path)) {
   cat("Title classifications:", titles_path, "\n")
 }
+cat("Include interpretations:", if (include_interpretations) "yes" else "no", "\n")
 if (is.na(window_days)) {
   if (!is.na(start_date) || !is.na(end_date)) {
     cat(
@@ -236,6 +238,7 @@ result_df <- rr_render_for_talents(
       render_cli = render_cli,
       render_output_dir = render_dir,
       render_output_prefix = output_prefix,
+      include_interpretations = include_interpretations,
       window_days = if (is.na(window_days)) NULL else window_days,
       start_date = if (is.na(start_date)) NULL else start_date,
       end_date = if (is.na(end_date)) NULL else end_date

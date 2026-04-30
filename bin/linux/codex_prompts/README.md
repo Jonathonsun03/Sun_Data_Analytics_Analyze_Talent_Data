@@ -7,18 +7,29 @@ Each prompt category should document its local naming and archive rules with a n
 
 Use the scripts inside the category folders as the real run targets:
 
+- `personality_pipeline/run_personality_pipeline.sh`
 - `personality/personality_open_coding.sh`
 - `shared_qualities/shared_behavior_baseline.sh`
 - `personality/personality_qualitative_codebook.sh`
 - `personality/personality_unique_features.sh`
 - `personality/personality_profile.sh`
-- `summaries/summarizing_stream_v2.sh`
+- `overall_themes/overall_channel_summary.sh`
+- `summaries/stream_summary_codex.sh`
+- `summaries/stream_summary_codex_scheduled.sh`
 - `monetary/monetary_summary_classification.sh`
 - `monetary/money_timestamps_incremental.sh`
 
 ## Personality pipeline
 
 The personality workflow is designed as a staged qualitative pipeline rather than a single summary pass.
+
+Start with the full runner when you want the complete workflow:
+
+- `personality_pipeline/run_personality_pipeline.sh --talent "<exact talent folder name>"`
+
+The dedicated runner docs are in:
+
+- `personality_pipeline/README.md`
 
 ### 1. Talent-local open coding
 
@@ -128,8 +139,21 @@ In short:
 
 ### Summaries
 
-- `summaries/summarizing_stream_v2.sh`
-- used for stream-summary classification and supporting summary artifacts
+- `summaries/stream_summary_codex.sh`
+  - creates per-stream summary markdown files from `text_playback/*.csv`
+  - writes to `<talent>/stream_summaries/stream_summary_codex/`
+- `summaries/stream_summary_codex_scheduled.sh`
+  - scans talent folders for missing or empty per-stream summaries
+  - runs `stream_summary_codex.sh` with a capped `--limit`
+  - uses a lock so scheduled runs do not overlap
+  - defaults to the 12:04 AM-5:05 AM window and a cap of 20 summaries
+
+### Overall Themes
+
+- `overall_themes/overall_channel_summary.sh`
+  - runs the maintained overall-channel prompt through Codex
+  - consumes existing per-stream summaries and builds cumulative overall channel summary artifacts
+  - writes to `<talent>/stream_summaries/overall_channel_summary/`
 
 ### Monetary
 
@@ -146,14 +170,16 @@ The log directory mirrors this `bin/linux/codex_prompts/` tree, with one folder 
 - `personality/personality_open_coding/`
 - `personality/personality_profile/`
 - `personality/personality_unique_features/`
+- `overall_themes/overall_channel_summary/`
 - `shared_qualities/shared_behavior_baseline/`
-- `summaries/summarizing_stream_v2/`
+- `summaries/stream_summary_codex/`
+- `summaries/stream_summary_codex_scheduled/`
 - `monetary/monetary_summary_classification/`
 - `monetary/money_timestamps_incremental/`
 
-Most Codex-driven wrappers also write a final-message markdown file alongside the `.log` file in that same per-script folder.
+Codex-driven wrappers also write a final-message markdown file alongside the `.log` file in that same per-script folder.
 
 ## Maintenance rule
 
 Keep only the categorized scripts in this directory tree as the maintained entry points.
-Do not add new top-level forwarding shims unless there is a strong compatibility reason.
+Use dedicated workflow folders, such as `personality_pipeline/`, for multi-step runners that coordinate scripts from more than one category.

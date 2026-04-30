@@ -1,6 +1,6 @@
 ---
-title: "`r { t <- params$talent; if (!(length(t) == 1 && !is.na(t) && nzchar(trimws(as.character(t))))) t <- 'Talent'; t <- trimws(as.character(t)); t_clean <- trimws(gsub('\\s*[\\[【].*$', '', t)); paste0('Performance and Growth Overview Report: ', t_clean) }`"
-subtitle: "`r { r <- params$included_date_range; if (!(length(r) == 1 && !is.na(r) && nzchar(trimws(as.character(r))))) r <- 'All available dates'; paste0('Data Range: ', as.character(r)) }`"
+title: "`r { t <- params$talent; if (!(length(t) == 1 && !is.na(t) && nzchar(trimws(as.character(t))))) t <- 'Talent'; t <- trimws(as.character(t)); t_clean <- trimws(gsub('\\s*[\\[【].*$', '', t)); paste0('Bundle A Performance and Growth Overview Report: ', t_clean) }`"
+subtitle: "`r { r <- params$included_date_range; if (!(length(r) == 1 && !is.na(r) && nzchar(trimws(as.character(r))))) r <- 'All available dates'; paste0('Report Detail: Performance baseline, growth trends, audience composition, and content strategy | Data Range: ', as.character(r)) }`"
 author: "Author: Zhuni Excel & Jonathon Sun"
 date: "`r { x <- params$render_generated_at; if (length(x) == 1 && !is.na(x) && nzchar(trimws(as.character(x)))) { x <- trimws(as.character(x)); x_date <- sub('^([0-9]{4}-[0-9]{2}-[0-9]{2}).*$', '\\\\1', x); if (grepl('^[0-9]{4}-[0-9]{2}-[0-9]{2}$', x_date)) paste0('Report Date: ', x_date) else paste0('Report Date: ', format(Sys.Date(), '%Y-%m-%d')) } else paste0('Report Date: ', format(Sys.Date(), '%Y-%m-%d')) }`"
 output:
@@ -18,6 +18,7 @@ params:
   render_cli: null
   render_output_dir: null
   render_output_prefix: null
+  include_interpretations: true
   window_days: null
   start_date: null
   end_date: null
@@ -427,9 +428,22 @@ if (!isTRUE(audience_demographics_available) && !nzchar(audience_demographics_re
 # Backward-compatible alias used by some legacy chunks.
 df <- analytics
 
+bundle_a_include_interpretations <- {
+  x <- params$include_interpretations
+  if (is.null(x) || length(x) == 0 || is.na(x[[1]])) {
+    TRUE
+  } else if (is.logical(x)) {
+    isTRUE(x[[1]])
+  } else {
+    tolower(trimws(as.character(x[[1]]))) %in% c("true", "t", "yes", "y", "1")
+  }
+}
+
 bundle_a_interp_root <- {
   out_dir <- params$render_output_dir
-  if (is.null(out_dir) || length(out_dir) == 0 || is.na(out_dir[[1]]) || !nzchar(trimws(as.character(out_dir[[1]])))) {
+  if (!isTRUE(bundle_a_include_interpretations)) {
+    NULL
+  } else if (is.null(out_dir) || length(out_dir) == 0 || is.na(out_dir[[1]]) || !nzchar(trimws(as.character(out_dir[[1]])))) {
     NULL
   } else {
     file.path(trimws(as.character(out_dir[[1]])), "interpretations")

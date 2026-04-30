@@ -6,9 +6,10 @@ Run logging rules:
 - The canonical shell entry point for this workflow is `bin/linux/codex_prompts/monetary/monetary_summary_classification.sh`.
 - Save Codex run logs and final-message markdown files to `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/codex_prompts/monetary/monetary_summary_classification/`.
 
-Workflow location rules:
-- The canonical runner for this workflow is `py_scripts/run/stream_summaries/monetary_analysis/monetary_summary_classification_incremental.py`.
-- Keep workflow-specific code inside `py_scripts/run/stream_summaries/monetary_analysis/` unless logic is truly reusable across workflows, in which case move only the shared helper pieces into `py_scripts/lib/stream_summaries/`.
+Optional talent scope:
+- The shell runner accepts `--talent "<exact talent folder name>"`.
+- When `TALENT_SLUG` is provided by the runner, process only that exact talent folder and replace any talent placeholder with that folder name.
+- When no `TALENT_SLUG` is provided, process every eligible talent.
 
 Objective:
 Build an incremental per-talent qualitative monetary-relationship analysis from raw text logs only.

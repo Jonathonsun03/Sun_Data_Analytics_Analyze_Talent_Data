@@ -56,9 +56,25 @@ window_start_date <- runtime_window$window_start_date
 window_end_date <- runtime_window$window_end_date
 window_mode <- runtime_window$window_mode
 
+included_date_range <- if (identical(window_mode, "explicit_range")) {
+  paste(as.character(window_start_date), "to", as.character(window_end_date))
+} else if (identical(window_mode, "days_back")) {
+  paste(as.character(window_start_date), "to", as.character(window_end_date))
+} else {
+  "All available dates"
+}
+
 talent_root <- select_talent(Talent, root = root)
 files <- TalentFiles(talent_root)
 titles <- load_bundle_e_titles(Talent)
+
+bundle_e_artifact_root <- report_resolve_artifact_root(
+  talent_root = talent_root,
+  bundle_name = "bundle_e",
+  report_subdir = "reports",
+  artifact_subdir = "artifacts",
+  env_var = "BUNDLE_E_ARTIFACT_ROOT"
+)
 
 panel_full <- build_bundle_e_long_panel(
   files = files,
@@ -121,17 +137,40 @@ bundle_e_plots <- build_bundle_e_plot_set(
   publish_cohort_performance = publish_cohort_performance,
   publish_cohort_performance_by_type = publish_cohort_performance_by_type,
   video_type_longevity = video_type_longevity,
+  live_age_curve_comparison = live_top_vs_newest_age_curve_comparison,
+  video_age_curve_comparison = video_highest_vs_newest_age_curve_comparison,
+  short_age_curve_comparison = short_highest_vs_newest_age_curve_comparison,
   short_window_diagnostics = short_window_analysis$window_diagnostics,
   short_window_video_scores = short_window_analysis$video_scores,
   talent = Talent
 )
 
+dataset_sizes <- tibble::tibble(
+  dataset = c("panel_full", "panel_window", "video_summary"),
+  rows = c(nrow(panel_full), nrow(panel_window), nrow(video_summary)),
+  cols = c(ncol(panel_full), ncol(panel_window), ncol(video_summary))
+)
+
+overall_summary <- build_bundle_e_overall_summary_table(
+  library_growth_snapshot = library_growth_snapshot,
+  video_lifecycle_summary = video_summary,
+  dataset_sizes = dataset_sizes,
+  included_date_range = included_date_range
+)
+
+window_summary <- build_bundle_e_window_summary_table(
+  library_growth_snapshot = library_growth_snapshot,
+  video_lifecycle_summary = video_summary,
+  panel_coverage_summary = panel_coverage_summary,
+  artifact_root = bundle_e_artifact_root,
+  window_mode = window_mode,
+  window_days = window_days,
+  included_date_range = included_date_range
+)
+
 bundle_e_tables <- list(
-  dataset_sizes = tibble::tibble(
-    dataset = c("panel_full", "panel_window", "video_summary"),
-    rows = c(nrow(panel_full), nrow(panel_window), nrow(video_summary)),
-    cols = c(ncol(panel_full), ncol(panel_window), ncol(video_summary))
-  ),
+  dataset_sizes = dataset_sizes,
+  overall_summary = overall_summary,
   panel_coverage_summary = panel_coverage_summary,
   library_growth_snapshot = library_growth_snapshot,
   back_catalog_vs_recent_contribution = back_catalog_contribution,
@@ -151,16 +190,38 @@ bundle_e_tables <- list(
   live_top_vs_newest_age_curve_comparison = live_top_vs_newest_age_curve_comparison,
   video_highest_vs_newest_age_curve_comparison = video_highest_vs_newest_age_curve_comparison,
   short_highest_vs_newest_age_curve_comparison = short_highest_vs_newest_age_curve_comparison,
+  live_uploads_included_in_comparison = bundle_e_age_curve_comparison_table(live_top_vs_newest_age_curve_comparison),
+  video_uploads_included_in_comparison = bundle_e_age_curve_comparison_table(video_highest_vs_newest_age_curve_comparison),
+  short_uploads_included_in_comparison = bundle_e_age_curve_comparison_table(short_highest_vs_newest_age_curve_comparison),
   evergreen_video_leaders = leaders$evergreen_video_leaders,
   sleeper_reacceleration_candidates = leaders$sleeper_reacceleration_candidates,
+  lifecycle_classification_guide = bundle_e_classification_guide_table(),
+  lifecycle_classification_leaders = bundle_e_combined_leader_table(
+    leaders$evergreen_video_leaders,
+    leaders$sleeper_reacceleration_candidates
+  ),
+  topic_longevity_by_video_type = bundle_e_topic_video_type_table(video_summary),
+  topic_longevity_display = bundle_e_attribute_summary_table(topic_longevity, "group_value", "Topic"),
+  tag_longevity_display = bundle_e_attribute_summary_table(tag_longevity, "tag_group", "Tag", top_n = 15),
   topic_longevity = topic_longevity,
   tag_longevity = tag_longevity,
+  short_window_leaders_display = short_window_analysis$video_scores %>%
+    dplyr::select(dplyr::any_of(c(
+      "Title",
+      "window_days",
+      "views_at_window",
+      "views_at_window_percentile",
+      "early_performance_bucket",
+      "standout_within_window"
+    ))),
+  window_summary = window_summary,
   metadata = tibble::tibble(
     key = c(
       "talent",
       "generated_at_utc",
       "data_source",
       "data_root",
+      "artifact_root",
       "window_mode",
       "window_start_date",
       "window_end_date"
@@ -170,6 +231,7 @@ bundle_e_tables <- list(
       as.character(Sys.time()),
       data_source,
       normalizePath(root, winslash = "/", mustWork = FALSE),
+      bundle_e_artifact_root,
       window_mode,
       if (is.na(window_start_date)) NA_character_ else as.character(window_start_date),
       if (is.na(window_end_date)) NA_character_ else as.character(window_end_date)
@@ -192,13 +254,11 @@ bundle_e_ai_inputs <- list(
   key_tables = bundle_e_tables
 )
 
-bundle_e_artifact_root <- report_resolve_artifact_root(
-  talent_root = talent_root,
-  bundle_name = "bundle_e",
-  report_subdir = "reports",
-  artifact_subdir = "artifacts",
-  env_var = "BUNDLE_E_ARTIFACT_ROOT"
-)
+for (nm in names(bundle_e_plots)) {
+  cat("\nRendering plot:", nm, "\n")
+  print(bundle_e_plots[[nm]])
+}
+
 bundle_e_export <- report_export_artifacts(
   plots = bundle_e_plots,
   tables = bundle_e_tables,

@@ -39,9 +39,6 @@ titles <- basename(files) %>%
 
 streams <- lapply(files, fread)
 
-streams[[104]] %>% 
-glimpse()
-
 
 View(streams[[104]])
 

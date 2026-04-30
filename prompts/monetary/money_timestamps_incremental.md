@@ -6,6 +6,11 @@ Run logging rules:
 - The canonical shell entry point for this workflow is `bin/linux/codex_prompts/monetary/money_timestamps_incremental.sh`.
 - Save Codex run logs and final-message markdown files to `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/codex_prompts/monetary/money_timestamps_incremental/`.
 
+Optional talent scope:
+- The shell runner accepts `--talent "<exact talent folder name>"`.
+- When `TALENT_SLUG` is provided by the runner, process only that exact talent folder and replace any talent placeholder with that folder name.
+- When no `TALENT_SLUG` is provided, process every eligible talent.
+
 Objective:
 Maintain an incremental per-talent paid-event log from raw text logs. This workflow is responsible only for detecting, validating, and updating money-event timestamps.
 

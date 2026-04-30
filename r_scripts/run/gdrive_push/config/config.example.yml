@@ -1,0 +1,10 @@
+permissions_sheet: YOUR_GOOGLE_SHEET_ID_OR_URL
+permissions_sheet_tab: permissions
+client_drive_root: YOUR_CLIENT_DELIVERY_ROOT_FOLDER_ID_OR_URL
+datalake_root: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data
+google_email: Jonathonsun03@gmail.com
+google_auth_cache: ~/.cache/gargle
+local_max_depth: 4
+raw_days: 14
+active_only: true
+share_role: reader

@@ -155,9 +155,16 @@ Bundle A outputs were standardized so all outputs for a talent live in one folde
 
 That folder now holds:
 
-- final HTML report,
+- `report/current/` for the most recent final HTML report,
+- `report/archive/` for older final HTML reports,
 - `artifacts/`,
 - `interpretations/`
+
+The render-only wrapper can skip existing generated interpretation markdown with `--no-interpretations`.
+
+Final HTML filenames include the render date and analysis window, for example:
+
+- `Bundle_A_2026-04-30_window_90d_leia_memoria_variance_project.html`
 
 Within `interpretations/`, later additions include:
 
