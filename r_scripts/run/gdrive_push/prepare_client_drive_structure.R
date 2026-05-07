@@ -30,6 +30,8 @@ usage <- function() {
       "  delivery_group / talent / allowed_data_folder_structure",
       "",
       "Use --upload-files with --execute to upload selected delivery files.",
+      "Use --report-files-only with --upload-files to limit uploads to bundle report files.",
+      "Use --migrate-report-files with --execute to move legacy root-level bundle reports into report/current or report/archive.",
       "Use --share-folders with --execute to share each delivery group folder with client_email recipients.",
       "Default behavior is dry-run. Add --execute to create missing folders.",
       "",
@@ -55,6 +57,8 @@ parse_args <- function(args) {
     share_role = "",
     execute = FALSE,
     upload_files = FALSE,
+    report_files_only = FALSE,
+    migrate_report_files = FALSE,
     share_folders = FALSE,
     help = FALSE
   )
@@ -68,6 +72,10 @@ parse_args <- function(args) {
       out$execute <- TRUE
     } else if (arg == "--upload-files") {
       out$upload_files <- TRUE
+    } else if (arg == "--report-files-only") {
+      out$report_files_only <- TRUE
+    } else if (arg == "--migrate-report-files") {
+      out$migrate_report_files <- TRUE
     } else if (arg == "--share-folders") {
       out$share_folders <- TRUE
     } else if (arg == "--active-only") {
@@ -216,7 +224,21 @@ file_plan <- gdrive_talent_build_delivery_file_plan(
   structure_plan = plan$structure_plan,
   raw_days = args$raw_days
 )
+if (isTRUE(args$report_files_only)) {
+  file_plan <- file_plan[
+    vapply(file_plan$data_type, gdrive_talent_is_bundle_type, logical(1)),
+    ,
+    drop = FALSE
+  ]
+  rownames(file_plan) <- NULL
+}
 write_preview(file_plan, "Selected delivery files:")
+
+migration_plan <- gdrive_talent_build_report_file_migration_plan(
+  file_plan = file_plan,
+  root_folder_id = args$client_drive_root
+)
+write_preview(migration_plan, "Legacy report file migration plan:")
 
 share_plan <- gdrive_talent_build_share_plan(plan$permissions)
 write_preview(share_plan, "Delivery group sharing plan:")
@@ -237,6 +259,16 @@ if (isTRUE(args$upload_files)) {
     dry_run = !isTRUE(args$execute)
   )
   write_preview(upload_result, "Delivery file upload result:")
+}
+
+if (isTRUE(args$migrate_report_files)) {
+  cat("\nReport file migration mode: ", if (isTRUE(args$execute)) "execute" else "dry-run", "\n", sep = "")
+  migration_result <- gdrive_talent_execute_report_file_migration_plan(
+    migration_plan = migration_plan,
+    root_folder_id = args$client_drive_root,
+    dry_run = !isTRUE(args$execute)
+  )
+  write_preview(migration_result, "Legacy report file migration result:")
 }
 
 if (isTRUE(args$share_folders)) {

@@ -46,6 +46,14 @@ theme_nyt <- function(base_size = 14, base_family = "serif") {
         size = base_size * 0.9,
         color = "#333333"
       ),
+      axis.text.y = element_text(
+        family = base_family,
+        size = base_size * 0.9,
+        color = "#333333",
+        angle = 45,
+        hjust = 1,
+        vjust = 0.5
+      ),
       axis.ticks = element_line(color = "#333333", linewidth = 0.3),
       legend.position = "right",
       legend.title = element_text(face = "bold", size = base_size * 0.9),

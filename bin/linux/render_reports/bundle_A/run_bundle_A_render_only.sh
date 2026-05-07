@@ -206,12 +206,16 @@ slugify_talent() {
 archive_current_reports() {
   local current_dir="$1"
   local archive_dir="$2"
+  local window_segment="$3"
   local current_file base target stamp
 
   mkdir -p "${current_dir}" "${archive_dir}"
   for current_file in "${current_dir}"/*.html; do
     [[ -e "${current_file}" ]] || continue
     base="$(basename "${current_file}")"
+    if [[ -n "${window_segment}" && "${base}" != *"${window_segment}"* ]]; then
+      continue
+    fi
     target="${archive_dir}/${base}"
     if [[ -e "${target}" ]]; then
       stamp="$(date -u +"%Y%m%dT%H%M%SZ")"
@@ -266,6 +270,7 @@ publish_rendered_report() {
   local archive_dir="$3"
   local output_prefix_for_run="$4"
   local talent_query="$5"
+  local window_segment="$6"
   local talent_slug rendered_file
   local -a matches=()
 
@@ -281,7 +286,7 @@ publish_rendered_report() {
     fi
   fi
 
-  archive_current_reports "${current_dir}" "${archive_dir}"
+  archive_current_reports "${current_dir}" "${archive_dir}" "${window_segment}"
   archive_legacy_root_reports "${output_dir}" "${archive_dir}" "${rendered_file}"
   archive_legacy_report_dir "${output_dir}/current" "${archive_dir}"
   archive_legacy_report_dir "${output_dir}/archive" "${archive_dir}"
@@ -606,7 +611,7 @@ for talent_query in "${TALENTS[@]}"; do
   if ! "${cmd[@]}"; then
     status=1
     echo "Error: render failed for talent: ${talent_folder_name}" >&2
-  elif ! publish_rendered_report "${output_dir}" "${current_dir}" "${archive_dir}" "${output_prefix_for_run}" "${talent_query}"; then
+  elif ! publish_rendered_report "${output_dir}" "${current_dir}" "${archive_dir}" "${output_prefix_for_run}" "${talent_query}" "${WINDOW_SEGMENT}"; then
     status=1
     echo "Error: publish failed for talent: ${talent_folder_name}" >&2
   fi

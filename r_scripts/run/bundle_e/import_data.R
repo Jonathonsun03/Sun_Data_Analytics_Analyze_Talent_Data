@@ -23,10 +23,7 @@ source(here::here("r_scripts", "lib", "clean_data", "CleanData.R"))
 
 load_bundle_e_titles <- function(
   talent,
-  titles_path = file.path(
-    "classification", "output", "title_classifications",
-    "classification_export_gpt-5-mini_from_duckdb.csv"
-  )
+  titles_path = NULL
 ) {
   load_title_classifications(
     path = titles_path,

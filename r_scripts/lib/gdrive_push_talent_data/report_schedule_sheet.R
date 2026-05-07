@@ -176,10 +176,9 @@ gdrive_talent_find_latest_scheduled_report <- function(
     file.path(talent_path, "reports", paste0("bundle_", toupper(suffix)))
   )
   files <- unique(unlist(lapply(report_dirs, function(dir) {
-    Sys.glob(file.path(dir, "*"))
+    gdrive_talent_list_report_files(dir, include_archive = TRUE)
   }), use.names = FALSE))
   files <- files[file.exists(files)]
-  files <- files[grepl("\\.(html?|pdf|docx)$", files, ignore.case = TRUE)]
 
   if (length(files) == 0) {
     return(list(
@@ -190,20 +189,15 @@ gdrive_talent_find_latest_scheduled_report <- function(
     ))
   }
 
-  if (!is.na(window_days) && window_days > 0) {
-    window_pattern <- paste0("window_", as.integer(window_days), "d")
-    window_files <- files[grepl(window_pattern, basename(files), ignore.case = TRUE)]
-    if (length(window_files) > 0) {
-      files <- window_files
-    }
-  }
-
-  info <- file.info(files)
-  latest_idx <- which.max(info$mtime)
-  latest_path <- normalizePath(files[[latest_idx]], winslash = "/", mustWork = FALSE)
+  latest_path <- normalizePath(
+    gdrive_talent_select_latest_report_file(files, window_days = window_days),
+    winslash = "/",
+    mustWork = FALSE
+  )
+  info <- file.info(latest_path)
 
   list(
-    last_run = as.Date(info$mtime[[latest_idx]]),
+    last_run = as.Date(info$mtime[[1]]),
     latest_report_path = latest_path,
     latest_report_file = basename(latest_path),
     run_source = "datalake_rendered_report_mtime"

@@ -17,7 +17,7 @@ permissions <- gdrive_talent_read_permissions(
 manifest <- gdrive_talent_manifest(data.frame(
   data_type = c("bundle_a", "chat_logs"),
   local_path_pattern = c(
-    "/mnt/datalake/.../{talent_id}/reports/bundle_a/*.html",
+    "/mnt/datalake/.../{talent_id}/reports/bundle_A/report/current/*.html",
     "/mnt/datalake/.../{talent_id}/chat_logs/*.csv"
   ),
   drive_subdir = c("bundle_a", "chat_logs"),
@@ -37,6 +37,14 @@ gdrive_talent_execute_upload_plan(
 ```
 
 Use `dry_run = FALSE` only after reviewing the generated upload plan.
+
+For bundle report data types such as `bundle_a` and `bundle_b`, the delivery
+file selector prefers rendered reports under `report/current/` and uploads all
+current window reports into the matching Google Drive path
+`bundle_a/report/current/` or `bundle_b/report/current/`. The folder planner
+also creates `bundle_a/report/archive/` and `bundle_b/report/archive/` so the
+Drive tree mirrors the DataLake tree. Legacy root-level bundle HTML remains
+supported as a fallback.
 
 ## Talents sheet sync
 

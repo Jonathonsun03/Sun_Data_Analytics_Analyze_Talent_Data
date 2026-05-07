@@ -5,6 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 R_SCRIPT="r_scripts/run/gdrive_push/prepare_client_drive_structure.R"
 
+export LANG="${LANG:-C.utf8}"
+export LC_ALL="${LC_ALL:-C.utf8}"
+
 usage() {
   cat <<'USAGE'
 Usage:
@@ -31,6 +34,8 @@ Options:
   --share-role ROLE               Share role for delivery group folders (default from config)
   --execute                       Actually create folders; otherwise dry-run
   --upload-files                  Include selected file uploads; requires --execute to upload
+  --report-files-only             With --upload-files, limit uploads to bundle report files
+  --migrate-report-files          Move legacy root-level bundle report files into report/current or report/archive
   --share-folders                 Share delivery group folders with client_email recipients
   -h, --help                      Show this help
 
@@ -58,7 +63,7 @@ while [[ $# -gt 0 ]]; do
       ARGS+=("$1" "$2")
       shift 2
       ;;
-    --execute|--upload-files|--active-only|--share-folders)
+    --execute|--upload-files|--report-files-only|--migrate-report-files|--active-only|--share-folders)
       ARGS+=("$1")
       shift
       ;;

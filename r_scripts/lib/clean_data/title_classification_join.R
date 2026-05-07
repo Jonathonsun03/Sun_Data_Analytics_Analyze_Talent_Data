@@ -1,8 +1,27 @@
+resolve_latest_title_classifications_path <- function(
+  export_dir = file.path("classification", "output", "title_classifications")
+) {
+  if (!dir.exists(export_dir)) {
+    stop("Title-classification export directory does not exist: ", export_dir)
+  }
+
+  candidates <- list.files(
+    export_dir,
+    pattern = "^classification_export_.+\\.csv$",
+    full.names = TRUE
+  )
+  candidates <- candidates[file.exists(candidates)]
+  if (length(candidates) == 0) {
+    stop("No title-classification export CSVs found in: ", export_dir)
+  }
+
+  info <- file.info(candidates)
+  candidates <- candidates[order(info$mtime, basename(candidates), decreasing = TRUE)]
+  candidates[[1]]
+}
+
 load_title_classifications <- function(
-  path = file.path(
-    "classification", "output", "title_classifications",
-    "classification_export_gpt-5-mini_from_duckdb.csv"
-  ),
+  path = NULL,
   talent = NULL,
   latest_per_video = TRUE
 ) {
@@ -24,6 +43,9 @@ load_title_classifications <- function(
   }
   if (nzchar(override)) {
     path <- override
+  }
+  if (is.null(path) || !nzchar(trimws(path))) {
+    path <- resolve_latest_title_classifications_path()
   }
 
   titles <- readr::read_csv(path, show_col_types = FALSE, progress = FALSE)

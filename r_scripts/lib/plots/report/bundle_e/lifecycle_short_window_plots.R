@@ -92,7 +92,13 @@ plot_bundle_e_short_window_leaders <- function(video_scores, talent, top_n = 12)
     ggplot2::coord_flip() +
     theme_nyt() +
     ggplot2::theme(
-      axis.text.y = ggplot2::element_text(size = 8.5, lineheight = 0.82)
+      axis.text.y = ggplot2::element_text(
+        size = 8.5,
+        angle = 45,
+        hjust = 1,
+        vjust = 0.5,
+        lineheight = 0.82
+      )
     ) +
     ggplot2::labs(
       title = bundle_e_title_text("Top Shorts Within Window"),

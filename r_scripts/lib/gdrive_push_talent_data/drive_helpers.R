@@ -40,6 +40,18 @@ gdrive_talent_get_or_create_folder <- function(name, parent, dry_run = FALSE) {
   googledrive::drive_mkdir(name = name, path = parent)
 }
 
+gdrive_talent_find_child_folder <- function(name, parent) {
+  gdrive_talent_assert_packages("googledrive")
+  name <- gdrive_talent_safe_name(name)
+  parent <- gdrive_talent_as_id(parent)
+  existing <- googledrive::drive_ls(parent, type = "folder")
+  existing <- existing[existing$name == name, , drop = FALSE]
+  if (nrow(existing) == 0) {
+    return(NULL)
+  }
+  existing[1, , drop = FALSE]
+}
+
 gdrive_talent_resolve_destination <- function(
   root_folder_id,
   delivery_group_display_name = NULL,
@@ -62,11 +74,21 @@ gdrive_talent_resolve_destination <- function(
     parent = delivery_group_folder,
     dry_run = dry_run
   )
-  data_folder <- gdrive_talent_get_or_create_folder(
-    drive_subdir,
-    parent = talent_folder,
-    dry_run = dry_run
-  )
+
+  subdirs <- unlist(strsplit(gdrive_talent_chr(drive_subdir), "[/\\\\]+"))
+  subdirs <- subdirs[nzchar(subdirs)]
+  if (length(subdirs) == 0) {
+    return(talent_folder)
+  }
+
+  data_folder <- talent_folder
+  for (subdir in subdirs) {
+    data_folder <- gdrive_talent_get_or_create_folder(
+      subdir,
+      parent = data_folder,
+      dry_run = dry_run
+    )
+  }
 
   data_folder
 }
@@ -93,12 +115,33 @@ gdrive_talent_upload_file <- function(
   gdrive_talent_assert_packages("googledrive")
   drive_file_name <- gdrive_talent_safe_file_name(drive_file_name)
 
-  if (isTRUE(overwrite)) {
-    existing <- googledrive::drive_ls(destination_folder)
-    existing <- existing[existing$name == drive_file_name, , drop = FALSE]
-    if (nrow(existing) > 0) {
-      googledrive::drive_rm(existing)
+  if (!file.exists(local_file) || dir.exists(local_file)) {
+    return(data.frame(
+      action = "skip",
+      local_file = local_file,
+      drive_file_name = drive_file_name,
+      destination_folder_id = NA_character_,
+      status = "missing_local_file",
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  existing <- googledrive::drive_ls(destination_folder)
+  existing <- existing[existing$name == drive_file_name, , drop = FALSE]
+
+  if (nrow(existing) > 0) {
+    if (!isTRUE(overwrite)) {
+      return(data.frame(
+        action = "skip",
+        local_file = local_file,
+        drive_file_name = drive_file_name,
+        destination_folder_id = as.character(existing$id[[1]]),
+        status = "skipped_existing",
+        stringsAsFactors = FALSE
+      ))
     }
+
+    googledrive::drive_rm(existing)
   }
 
   uploaded <- googledrive::drive_upload(

@@ -116,21 +116,25 @@ gdrive_talent_report_render_counts <- function(datalake_root, bundle_key) {
     file.path(datalake_root, "*", "reports", paste0("bundle_", toupper(bundle_suffix)))
   )
   files <- unique(unlist(lapply(report_dirs, function(pattern) {
-    Sys.glob(file.path(pattern, "*"))
+    dirs <- Sys.glob(pattern)
+    unique(unlist(lapply(dirs, gdrive_talent_list_report_files, include_archive = TRUE), use.names = FALSE))
   }), use.names = FALSE))
+  if (is.null(files)) {
+    files <- character()
+  }
+  files <- as.character(files)
   files <- files[file.exists(files)]
-  files <- files[grepl("\\.(html?|pdf|docx)$", files, ignore.case = TRUE)]
 
   if (length(files) == 0) {
     return(list(rendered_report_count = 0L, latest_rendered_report = "", latest_rendered_at = ""))
   }
 
-  info <- file.info(files)
-  latest_idx <- which.max(info$mtime)
+  latest_file <- gdrive_talent_select_latest_report_file(files)
+  info <- file.info(latest_file)
   list(
     rendered_report_count = length(files),
-    latest_rendered_report = normalizePath(files[[latest_idx]], winslash = "/", mustWork = FALSE),
-    latest_rendered_at = format(info$mtime[[latest_idx]], "%Y-%m-%d %H:%M:%S %z")
+    latest_rendered_report = normalizePath(latest_file, winslash = "/", mustWork = FALSE),
+    latest_rendered_at = format(info$mtime[[1]], "%Y-%m-%d %H:%M:%S %z")
   )
 }
 

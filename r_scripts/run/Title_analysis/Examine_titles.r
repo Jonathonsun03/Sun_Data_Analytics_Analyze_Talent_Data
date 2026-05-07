@@ -32,7 +32,7 @@ list.files(here("r_scripts", "lib", "plots"), pattern = "\\.[rR]$", full.names =
 # Importing Title data ----------------------
 remove <- c("classification_json", "taxonomy_version", "prompt_version","created_at", "title_hash")
 
-df <- fread(here("classification","output","title_classifications","classification_export_gpt-5-mini_v6_v6.csv")) %>%
+df <- fread(resolve_latest_title_classifications_path()) %>%
     select(-all_of(remove))
 
 df_clean <- df %>%

@@ -61,10 +61,7 @@ apply_bundle_b_window <- function(df, window_mode, window_start_date, window_end
 
 load_bundle_b_titles <- function(
   talent,
-  titles_path = file.path(
-    "classification", "output", "title_classifications",
-    "classification_export_gpt-5-mini_from_duckdb.csv"
-  )
+  titles_path = NULL
 ) {
   override <- trimws(Sys.getenv("BUNDLE_B_TITLE_CLASSIFICATIONS_PATH", unset = ""))
   if (!nzchar(override)) {

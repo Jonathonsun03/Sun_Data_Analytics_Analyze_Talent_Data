@@ -20,6 +20,27 @@ gdrive_talent_build_client_structure_plan <- function(
   missing <- vector("list", 0)
   row_idx <- 0L
   missing_idx <- 0L
+  bundle_types <- c("bundle_a", "bundle_b", "bundle_c", "bundle_e", "bundle_z")
+
+  add_structure_row <- function(row, data_dir, source_relative_path, folder_name, parent_path, depth, upload_enabled) {
+    row_idx <<- row_idx + 1L
+    rows[[row_idx]] <<- data.frame(
+      client_id = row$client_id[[1]],
+      client_display_name = row$client_display_name[[1]],
+      client_email = if ("client_email" %in% names(row)) row$client_email[[1]] else "",
+      delivery_group_id = row$delivery_group_id[[1]],
+      delivery_group_display_name = row$delivery_group_display_name[[1]],
+      talent_id = row$talent_id[[1]],
+      data_type = row$data_type[[1]],
+      source_local_path = data_dir,
+      source_relative_path = source_relative_path,
+      folder_name = folder_name,
+      parent_path = parent_path,
+      depth = depth,
+      upload_enabled = upload_enabled,
+      stringsAsFactors = FALSE
+    )
+  }
 
   for (i in seq_len(nrow(allowed))) {
     row <- allowed[i, , drop = FALSE]
@@ -64,22 +85,15 @@ gdrive_talent_build_client_structure_plan <- function(
       next
     }
 
-    row_idx <- row_idx + 1L
-    rows[[row_idx]] <- data.frame(
-      client_id = row$client_id[[1]],
-      client_display_name = row$client_display_name[[1]],
-      client_email = if ("client_email" %in% names(row)) row$client_email[[1]] else "",
-      delivery_group_id = row$delivery_group_id[[1]],
-      delivery_group_display_name = row$delivery_group_display_name[[1]],
-      talent_id = row$talent_id[[1]],
-      data_type = row$data_type[[1]],
-      source_local_path = data_dir,
-      source_relative_path = row$data_type[[1]],
-      folder_name = row$data_type[[1]],
-      parent_path = "",
-      depth = 1L,
-      stringsAsFactors = FALSE
-    )
+    data_type <- tolower(gdrive_talent_chr(row$data_type[[1]]))
+    if (data_type %in% bundle_types) {
+      add_structure_row(row, data_dir, row$data_type[[1]], row$data_type[[1]], "", 1L, FALSE)
+      add_structure_row(row, data_dir, file.path(row$data_type[[1]], "report"), "report", row$data_type[[1]], 2L, FALSE)
+      add_structure_row(row, data_dir, file.path(row$data_type[[1]], "report", "current"), "current", file.path(row$data_type[[1]], "report"), 3L, TRUE)
+      add_structure_row(row, data_dir, file.path(row$data_type[[1]], "report", "archive"), "archive", file.path(row$data_type[[1]], "report"), 3L, FALSE)
+    } else {
+      add_structure_row(row, data_dir, row$data_type[[1]], row$data_type[[1]], "", 1L, TRUE)
+    }
   }
 
   if (length(rows) > 0) {
@@ -111,7 +125,8 @@ gdrive_talent_build_client_structure_plan <- function(
       "source_relative_path",
       "folder_name",
       "parent_path",
-      "depth"
+      "depth",
+      "upload_enabled"
     ))
   }
 

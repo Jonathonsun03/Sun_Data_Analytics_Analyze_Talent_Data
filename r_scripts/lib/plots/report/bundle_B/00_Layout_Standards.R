@@ -33,6 +33,12 @@ bundle_b_theme_standard <- function() {
       margin = ggplot2::margin(r = 8)
     ),
     axis.text = ggplot2::element_text(size = 10),
+    axis.text.y = ggplot2::element_text(
+      size = 10,
+      angle = 45,
+      hjust = 1,
+      vjust = 0.5
+    ),
     strip.text = ggplot2::element_text(size = 11, face = "bold"),
     legend.title = ggplot2::element_text(size = 10),
     legend.text = ggplot2::element_text(size = 9),
@@ -54,7 +60,7 @@ bundle_b_plotly_layout <- function(
     plotly::layout(
       margin = list(l = margin_l, r = margin_r, b = margin_b, t = margin_t),
       xaxis = list(automargin = TRUE),
-      yaxis = list(automargin = TRUE),
+      yaxis = list(automargin = TRUE, tickangle = 45),
       autosize = TRUE,
       title = list(x = 0.01, xanchor = "left")
     )
@@ -65,6 +71,9 @@ bundle_b_plotly_layout <- function(
       plot_obj$x$layout[[axis_key]] <- list()
     }
     plot_obj$x$layout[[axis_key]]$automargin <- TRUE
+    if (grepl("^yaxis[0-9]*$", axis_key)) {
+      plot_obj$x$layout[[axis_key]]$tickangle <- 45
+    }
     axis_title <- plot_obj$x$layout[[axis_key]]$title
     if (!is.null(axis_title)) {
       if (is.list(axis_title)) {

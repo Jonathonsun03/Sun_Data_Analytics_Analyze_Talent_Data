@@ -5,6 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 R_SCRIPT="r_scripts/run/gdrive_push/sync_client_permissions_sheet.R"
 
+export LANG="${LANG:-C.utf8}"
+export LC_ALL="${LC_ALL:-C.utf8}"
+
 usage() {
   cat <<'USAGE'
 Usage:

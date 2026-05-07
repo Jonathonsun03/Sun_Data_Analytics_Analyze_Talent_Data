@@ -109,11 +109,11 @@ Bundle A report filenames include the render date and analysis window, for examp
 
 ## Title classification dependency
 
-Bundle A joins title classifications from:
+Bundle A joins title classifications from the newest CSV in:
 
-`classification/output/title_classifications/classification_export_gpt-5-mini_from_duckdb.csv`
+`classification/output/title_classifications/`
 
-If you refresh title classifications manually, make sure this export is current before running Bundle A.
+Set `TITLE_CLASSIFICATIONS_PATH` or `BUNDLE_A_TITLE_CLASSIFICATIONS_PATH` to pin a specific export.
 
 ## Missing audience demographics behavior
 
