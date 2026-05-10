@@ -10,6 +10,13 @@ Run logging rules:
 - The canonical shell entry point for this workflow is `bin/linux/codex_prompts/shared_qualities/shared_behavior_baseline.sh`.
 - Save Codex run logs and final-message markdown files to `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/codex_prompts/shared_qualities/shared_behavior_baseline/`.
 
+Execution guard:
+- If you are reading this prompt inside a `codex exec` session that was launched by `bin/linux/codex_prompts/shared_qualities/shared_behavior_baseline.sh`, do not invoke `bin/linux/codex_prompts/shared_qualities/shared_behavior_baseline.sh` again.
+- Do not run `codex exec` from inside this workflow.
+- Perform the file inspection and output-writing work directly in the current Codex run.
+- The shell entry point is only for the outer human/operator command.
+- If scripting is useful for CSV inspection or output writing, use `python3`, not `python`.
+
 Optional talent scope:
 - The shell runner accepts `--talent "<exact talent folder name>"`.
 - When `TALENT_SLUG` is provided by the runner, focus the baseline refresh on that exact talent while using other eligible talents as comparison context only where needed.
@@ -31,6 +38,19 @@ Why this workflow exists:
 - Without an explicit shared baseline, later personality profiles tend to overstate generic streamer traits as if they were unique.
 - This workflow should create the comparative baseline that later personality-profile workflows can use to decide whether a trait is shared, distinctive-in-form, or truly unique.
 
+Maintained Python implementation:
+- Use `py_scripts/run/stream_summaries/personality/build_shared_behavior_baseline.py` for this workflow when possible.
+- Use `py_scripts/lib/shared_interactions_eligibility.py` as the source of truth for eligible talent discovery.
+- Eligibility defaults:
+  - direct child talent folders under `/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data`
+  - exclude only known aggregate/demo folders, not individual talents whose names contain `【Variance Project】`
+  - require usable `personality_open_coding` outputs
+  - require a non-empty overall `personality_profile` output modified within the last 31 days unless the run explicitly includes stale profiles
+- The Python builder accepts:
+  - `--profile-days N`
+  - `--include-stale-profiles`
+- Record the profile recency policy in `shared_behavior_state.json`.
+
 Core analytic standard:
 - The baseline must be text-grounded and evidence-backed.
 - Shared themes must be derived from the existing per-talent evidence, not invented abstractly.
@@ -50,6 +70,7 @@ Important limitations:
 Scope rules:
 - Process every direct talent folder under `/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data` except aggregate folders such as `VarianceProject`.
 - Only include a talent if it has usable upstream personality-open-coding outputs.
+- Only include a talent in the current comparison set when it has a recent overall personality profile under `<talent>/stream_summaries/overall_themes/personality_profile/overall/`, using the run's configured profile recency window.
 - This is a cross-talent workflow. Do not process only one talent unless explicitly instructed.
 
 Upstream dependency rules:

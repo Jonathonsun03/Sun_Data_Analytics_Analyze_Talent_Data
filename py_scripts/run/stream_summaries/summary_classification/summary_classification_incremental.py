@@ -34,7 +34,9 @@ PROMPT_SPEC_PATH = Path(
 )
 SKIP_DIRS = {"VarianceProject"}
 MAX_CODES = 5
+MIN_SUMMARIES_FOR_CODE = 3
 FORCE_REFRESH = os.environ.get("SUMMARY_CLASSIFICATION_FORCE_REFRESH") == "1"
+TALENT_SLUG = os.environ.get("TALENT_SLUG", "").strip()
 
 STOPWORDS = {
     "a",
@@ -403,6 +405,14 @@ def compile_any(patterns: Sequence[str]) -> List[re.Pattern[str]]:
 
 
 def discover_talents() -> List[Path]:
+    if TALENT_SLUG:
+        scoped_path = DATA_ROOT / TALENT_SLUG
+        if scoped_path.name in SKIP_DIRS:
+            return []
+        if scoped_path.is_dir() and (scoped_path / "stream_summaries").is_dir():
+            return [scoped_path]
+        return []
+
     talents = []
     for path in sorted(DATA_ROOT.iterdir()):
         if not path.is_dir():
@@ -840,7 +850,7 @@ def select_codes(
         summary_patterns = compile_any(spec["summary_patterns"])
         event_patterns = compile_any(spec["event_patterns"])
         supported_docs = [doc for doc in selected_docs if summary_matches(doc, summary_patterns)]
-        if not supported_docs:
+        if len(supported_docs) < MIN_SUMMARIES_FOR_CODE:
             continue
         candidate_events = []
         for video_id in analysis_ids:
@@ -911,16 +921,15 @@ def build_relationship_overview(
 ) -> str:
     if not docs:
         return "Insufficient summary evidence was available to build a cumulative overview."
-    descriptors = descriptor_summary(docs)
-    descriptor_text = ", ".join(descriptors[:3]) if descriptors else "mixed in tone"
     code_names = ", ".join(code.code_name for code in codes[:3]) if codes else "few stable recurring codes"
     first = (
-        f"Across {len(docs)} incorporated summaries, {talent_name}'s text-visible relationship with chat is most often described as "
-        f"{descriptor_text}. The summaries repeatedly frame the interaction around {code_names}, and {reciprocity_summary(docs)}."
+        f"Across {len(docs)} incorporated summaries, {talent_name}'s text-visible relationship with chat is primarily "
+        f"streamer-led but consistently audience-aware. The summaries repeatedly frame the interaction around {code_names}, "
+        f"and {reciprocity_summary(docs)}."
     )
     second = (
         f"The cumulative picture suggests a streamer who uses text interaction to keep viewers socially present even when the stream format changes. "
-        f"{pacing_summary(docs)}. Where the evidence is weaker, it is usually because summaries are formulaic or because one raw input class is missing for some videos."
+        f"{pacing_summary(docs).capitalize()}. Where the evidence is weaker, it is usually because summaries are formulaic or because one raw input class is missing for some videos."
     )
     if update_scope == "initial bootstrap":
         newest_note = "Because this is the initial bootstrap, the current run establishes the baseline cumulative picture rather than revising an earlier one."

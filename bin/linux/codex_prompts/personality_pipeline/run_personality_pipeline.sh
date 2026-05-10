@@ -88,15 +88,17 @@ if [[ -n "$RECENT_MONTHS" && -n "$SINCE_DATE" ]]; then
 fi
 
 STEPS=(
-  "$CODEX_PROMPTS_DIR/personality/personality_open_coding.sh"
-  "$CODEX_PROMPTS_DIR/shared_qualities/shared_behavior_baseline.sh"
-  "$CODEX_PROMPTS_DIR/personality/personality_unique_features.sh"
-  "$CODEX_PROMPTS_DIR/personality/personality_qualitative_codebook.sh"
-  "$CODEX_PROMPTS_DIR/personality/personality_profile.sh"
+  "scoped:$CODEX_PROMPTS_DIR/personality/personality_open_coding.sh"
+  "global:$CODEX_PROMPTS_DIR/shared_qualities/shared_behavior_baseline.sh"
+  "scoped:$CODEX_PROMPTS_DIR/personality/personality_unique_features.sh"
+  "global:$CODEX_PROMPTS_DIR/personality/personality_qualitative_codebook.sh"
+  "scoped:$CODEX_PROMPTS_DIR/personality/personality_profile.sh"
 )
 
 run_step() {
-  local step_path="$1"
+  local step_spec="$1"
+  local step_scope="${step_spec%%:*}"
+  local step_path="${step_spec#*:}"
   local step_name
   local step_args=()
   step_name="$(basename "$step_path")"
@@ -106,7 +108,7 @@ run_step() {
     exit 1
   fi
 
-  if [[ -n "$TALENT_SCOPE" ]]; then
+  if [[ -n "$TALENT_SCOPE" && "$step_scope" == "scoped" ]]; then
     step_args+=(--talent "$TALENT_SCOPE")
   fi
   if [[ -n "$RECENT_MONTHS" ]]; then
@@ -123,7 +125,9 @@ run_step() {
   echo "=== Running personality pipeline step: $step_name ==="
   if [[ "$DRY_RUN" -eq 1 ]]; then
     printf '%q' "$step_path"
-    printf ' %q' "${step_args[@]}"
+    if [[ "${#step_args[@]}" -gt 0 ]]; then
+      printf ' %q' "${step_args[@]}"
+    fi
     printf '\n'
   else
     if ! "$step_path" "${step_args[@]}"; then

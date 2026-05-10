@@ -53,6 +53,7 @@ fi
 
 RUN_PROMPT_FILE="$PROMPT_FILE"
 if [[ -n "$TALENT_SCOPE" ]]; then
+  export TALENT_SLUG="$TALENT_SCOPE"
   RUN_PROMPT_FILE="$(mktemp)"
   cp "$PROMPT_FILE" "$RUN_PROMPT_FILE"
   {

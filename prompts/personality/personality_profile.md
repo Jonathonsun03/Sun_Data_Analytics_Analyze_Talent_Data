@@ -6,6 +6,13 @@ Run logging rules:
 - The canonical shell entry point for this workflow is `bin/linux/codex_prompts/personality/personality_profile.sh`.
 - Save Codex run logs and final-message markdown files to `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/codex_prompts/personality/personality_profile/`.
 
+Execution guard:
+- If you are reading this prompt inside a `codex exec` session that was launched by `bin/linux/codex_prompts/personality/personality_profile.sh`, do not invoke `bin/linux/codex_prompts/personality/personality_profile.sh` again.
+- Do not run `codex exec` from inside this workflow.
+- Perform the file inspection and output-writing work directly in the current Codex run.
+- The shell entry point is only for the outer human/operator command.
+- If scripting is useful for CSV inspection or output writing, use `python3`, not `python`.
+
 Optional talent scope:
 - The shell runner accepts `--talent "<exact talent folder name>"`.
 - When `TALENT_SLUG` is provided by the runner, process only that exact talent folder and replace any talent placeholder with that folder name.

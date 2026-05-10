@@ -9,6 +9,8 @@ TALENT_SCOPE=""
 RECENT_MONTHS=""
 SINCE_DATE=""
 UNTIL_DATE=""
+PROFILE_DAYS="31"
+INCLUDE_STALE_PROFILES=0
 LOG_ROOT="/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/codex_prompts"
 LOG_DIR="$LOG_ROOT/shared_qualities/shared_behavior_baseline"
 RUN_TS="$(date +%Y-%m-%d_%H-%M-%S)"
@@ -26,6 +28,9 @@ Options:
   --recent-months N  Focus this run on the last N months.
   --since DATE       Focus this run on data on or after DATE (YYYY-MM-DD).
   --until DATE       Focus this run on data on or before DATE (YYYY-MM-DD).
+  --profile-days N   Eligible talents need a personality profile modified in the last N days. Default: 31.
+  --include-stale-profiles
+                     Include older personality profiles if open-coding outputs are usable.
   -h, --help         Show this help.
 EOF
 }
@@ -64,6 +69,18 @@ while [[ $# -gt 0 ]]; do
       fi
       shift 2
       ;;
+    --profile-days)
+      PROFILE_DAYS="${2:-}"
+      if [[ ! "$PROFILE_DAYS" =~ ^[0-9]+$ ]] || [[ "$PROFILE_DAYS" -lt 1 ]]; then
+        echo "Error: --profile-days requires a positive integer" >&2
+        exit 1
+      fi
+      shift 2
+      ;;
+    --include-stale-profiles)
+      INCLUDE_STALE_PROFILES=1
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -98,7 +115,7 @@ if [[ -n "$WINDOW_START_DATE" || -n "$UNTIL_DATE" || -n "$RECENT_MONTHS" ]]; the
 fi
 
 RUN_PROMPT_FILE="$PROMPT_FILE"
-if [[ -n "$TALENT_SCOPE" || "$HAS_WINDOW_SCOPE" -eq 1 ]]; then
+if [[ -n "$TALENT_SCOPE" || "$HAS_WINDOW_SCOPE" -eq 1 || -n "$PROFILE_DAYS" || "$INCLUDE_STALE_PROFILES" -eq 1 ]]; then
   RUN_PROMPT_FILE="$(mktemp)"
   cp "$PROMPT_FILE" "$RUN_PROMPT_FILE"
   if [[ -n "$TALENT_SCOPE" ]]; then
@@ -126,6 +143,20 @@ if [[ -n "$TALENT_SCOPE" || "$HAS_WINDOW_SCOPE" -eq 1 ]]; then
       echo "- If a source item has no resolvable date or month, skip it for window-limited new analysis and mention the skip count if available."
     } >> "$RUN_PROMPT_FILE"
   fi
+  {
+    echo
+    echo "Additional shared-interactions eligibility scope:"
+    echo "- PROFILE_DAYS: $PROFILE_DAYS"
+    if [[ "$INCLUDE_STALE_PROFILES" -eq 1 ]]; then
+      echo "- INCLUDE_STALE_PROFILES: yes"
+      echo "- Include talents with older personality_profile outputs when their personality_open_coding outputs are usable."
+    else
+      echo "- INCLUDE_STALE_PROFILES: no"
+      echo "- Include only talents with a non-empty personality_profile overall output modified within PROFILE_DAYS."
+    fi
+    echo "- Use py_scripts/lib/shared_interactions_eligibility.py as the source of truth for eligible talent discovery."
+    echo "- If using the maintained Python builder, pass --profile-days $PROFILE_DAYS$(if [[ "$INCLUDE_STALE_PROFILES" -eq 1 ]]; then printf ' --include-stale-profiles'; fi)."
+  } >> "$RUN_PROMPT_FILE"
 fi
 
 cd "$REPO"

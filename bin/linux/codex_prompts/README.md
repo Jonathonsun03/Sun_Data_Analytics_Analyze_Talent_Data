@@ -18,6 +18,29 @@ Use the scripts inside the category folders as the real run targets:
 - `summaries/stream_summary_codex_scheduled.sh`
 - `monetary/monetary_summary_classification.sh`
 - `monetary/money_timestamps_incremental.sh`
+- `all_analysis/run_stream_analysis_pipeline.sh`
+
+## Full stream analysis pipeline
+
+Use this when you want to run the maintained qualitative analysis stack in dependency order:
+
+- `all_analysis/run_stream_analysis_pipeline.sh --talent "<exact talent folder name>"`
+
+That runner calls:
+
+1. `summaries/stream_summary_codex.sh`
+2. `overall_themes/overall_channel_summary.sh`
+3. `monetary/money_timestamps_incremental.sh`
+4. `monetary/monetary_summary_classification.sh`
+5. `personality_pipeline/run_personality_pipeline.sh`
+
+Useful options:
+
+- `--summary-limit N` caps missing/empty per-stream summaries for catch-up runs.
+- `--skip-summaries`, `--skip-overall`, `--skip-monetary`, and `--skip-personality` let you rerun only part of the stack.
+- `--dry-run` prints the commands without launching Codex runs.
+
+The old `summary_classification` naming is now represented by `overall_channel_summary` outputs. Downstream scripts still know how to fall back to legacy summary-classification paths where they exist.
 
 ## Personality pipeline
 

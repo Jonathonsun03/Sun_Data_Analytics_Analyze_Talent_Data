@@ -1,0 +1,40 @@
+/mnt/datalake/DataLake/Sun_Data_Analytics/
+│
+├── Talent_data/
+│   │
+│   ├── Talent_A/
+│   │   ├── text_playback/
+│   │   ├── stream_summaries/
+│   │   ├── subtitles/
+│   │   └── other existing files...
+│   │
+│   ├── Talent_B/
+│   │   ├── text_playback/
+│   │   ├── stream_summaries/
+│   │   └── other existing files...
+│   │
+│   └── Talent_C/
+│       └── ...
+│
+└── Processed/
+    └── Talent_Data/
+        │
+        ├── databases/
+        │   ├── classifications.duckdb
+        │   └── qualitative_ena.duckdb
+        │
+        ├── shared_interactions/
+        │   └── current/
+        │
+        ├── ena_extracts/
+        │   ├── test_talent_a_paid_messages/
+        │   │   ├── ena_wide.csv
+        │   │   ├── ena_wide.rds
+        │   │   └── metadata.json
+        │   │
+        │   └── all_talents_paid_messages/
+        │       ├── ena_wide.csv
+        │       ├── ena_wide.rds
+        │       └── metadata.json
+        │
+        └── other processed outputs...
