@@ -2,7 +2,7 @@ library(tidyverse)
 library(dplyr)
 
 
-path <- "/home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/classification/output/title_classifications/classification_export_gpt-5-mini_v6_v6.csv"
+path <- "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/current/classification_export_current.csv"
 
 df <- read.csv(path)
 

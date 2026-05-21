@@ -36,7 +36,7 @@ talent_col <- arg_value("--talent-col", "talent")
 video_id_col <- arg_value("--video-id-col", "Video ID")
 title_col <- arg_value("--title-col", "Title")
 content_type_col <- arg_value("--content-type-col", "Content Type")
-published_at_col <- arg_value("--published-at-col", "")
+published_at_col <- arg_value("--published-at-col", "Published At")
 talent_filter <- arg_value("--talent", "")
 
 limit_per_talent <- suppressWarnings(as.integer(arg_value("--limit-per-talent", "0")))
@@ -47,11 +47,16 @@ if (is.na(limit_per_talent) || limit_per_talent < 0) {
 model <- arg_value("--model", Sys.getenv("OPENAI_MODEL", unset = "gpt-5-mini"))
 batch_size <- arg_value("--batch-size", Sys.getenv("CLASSIFICATION_BATCH_SIZE", unset = "25"))
 max_retries <- arg_value("--max-retries", Sys.getenv("CLASSIFICATION_MAX_RETRIES", unset = "2"))
+timeout_seconds <- arg_value(
+  "--timeout-seconds",
+  Sys.getenv("CLASSIFICATION_TIMEOUT_SECONDS", unset = "120")
+)
 force_reclassify <- has_flag("--force-reclassify")
 
 Sys.setenv(OPENAI_MODEL = model)
 Sys.setenv(CLASSIFICATION_BATCH_SIZE = as.character(batch_size))
 Sys.setenv(CLASSIFICATION_MAX_RETRIES = as.character(max_retries))
+Sys.setenv(CLASSIFICATION_TIMEOUT_SECONDS = as.character(timeout_seconds))
 Sys.setenv(CLASSIFICATION_FORCE_RECLASSIFY = if (force_reclassify) "1" else "0")
 
 full_csv <- if (grepl("^/", csv_path)) csv_path else repo_path(csv_path)

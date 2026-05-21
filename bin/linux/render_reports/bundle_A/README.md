@@ -111,7 +111,7 @@ Bundle A report filenames include the render date and analysis window, for examp
 
 Bundle A joins title classifications from the newest CSV in:
 
-`classification/output/title_classifications/`
+`/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/current/classification_export_current.csv`
 
 Set `TITLE_CLASSIFICATIONS_PATH` or `BUNDLE_A_TITLE_CLASSIFICATIONS_PATH` to pin a specific export.
 

@@ -4,10 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
-CLASSIFY_RUNNER="bin/linux/classification/run_title_classification.sh"
-EXPORT_SCRIPT="r_scripts/run/Title_classification/title_classification/05_export_results_csv.R"
-CONFIG_JSON="classification/config/talent_profiles.json"
-EXPORT_DIR="classification/output/title_classifications"
+BATCH_RUNNER="bin/linux/classification/run_title_classification_batch.sh"
 
 usage() {
   cat <<'EOF'
@@ -15,22 +12,21 @@ Usage:
   bin/linux/classification/run_title_classification_weekly.sh [classification options...]
 
 Description:
-  Weekly wrapper that:
-    1) runs title classification
-    2) exports a CSV snapshot for the current model/version
-
-  Export location:
-    classification/output/title_classifications
+  Weekly wrapper for title classification. This now builds an OpenAI Batch API
+  run using the current compiled prompt definitions. Submit with --execute
+  after reviewing the run folder, or use run_title_classification_batch.sh for
+  submit/check/apply modes.
 
 Examples:
-  Full weekly run:
-    bin/linux/classification/run_title_classification_weekly.sh
+  Build weekly pending batch:
+    bin/linux/classification/run_title_classification_weekly.sh --batch-size 25
 
-  Smoke test:
-    bin/linux/classification/run_title_classification_weekly.sh --limit-per-talent 5
+  Build full reclassification batch with current definitions:
+    bin/linux/classification/run_title_classification_weekly.sh --batch-size 25 --force-reclassify
 
-  Force prompt-test rerun:
-    bin/linux/classification/run_title_classification_weekly.sh --limit-per-talent 5 --force-reclassify
+  Build and submit:
+    bin/linux/classification/run_title_classification_weekly.sh --batch-size 25 --force-reclassify --execute
+
 EOF
 }
 
@@ -41,38 +37,9 @@ fi
 
 cd "${REPO_ROOT}"
 
-if [[ ! -x "${CLASSIFY_RUNNER}" ]]; then
-  echo "Error: missing/executable runner: ${CLASSIFY_RUNNER}" >&2
+if [[ ! -x "${BATCH_RUNNER}" ]]; then
+  echo "Error: missing/executable runner: ${BATCH_RUNNER}" >&2
   exit 1
 fi
 
-if [[ ! -f "${EXPORT_SCRIPT}" ]]; then
-  echo "Error: missing export script: ${EXPORT_SCRIPT}" >&2
-  exit 1
-fi
-
-if [[ ! -f "${CONFIG_JSON}" ]]; then
-  echo "Error: missing config: ${CONFIG_JSON}" >&2
-  exit 1
-fi
-
-mkdir -p "${EXPORT_DIR}"
-
-echo "[weekly-title] Stage 1/2: classification"
-"${CLASSIFY_RUNNER}" "$@"
-
-MODEL="${OPENAI_MODEL:-gpt-5-mini}"
-PROMPT_VERSION="$(Rscript -e "x <- jsonlite::fromJSON('${CONFIG_JSON}'); cat(x[['prompt_version']])" | tail -n 1 | tr -d '\r')"
-TAXONOMY_VERSION="$(Rscript -e "x <- jsonlite::fromJSON('${CONFIG_JSON}'); cat(x[['taxonomy_version']])" | tail -n 1 | tr -d '\r')"
-STAMP="$(date -u +"%Y%m%d_%H%M%S")"
-OUT_CSV="${EXPORT_DIR}/classification_export_${MODEL}_${PROMPT_VERSION}_${TAXONOMY_VERSION}_${STAMP}.csv"
-
-echo "[weekly-title] Stage 2/2: export"
-Rscript "${EXPORT_SCRIPT}" \
-  --model "${MODEL}" \
-  --prompt-version "${PROMPT_VERSION}" \
-  --taxonomy-version "${TAXONOMY_VERSION}" \
-  --out "${OUT_CSV}"
-
-echo "[weekly-title] Complete"
-echo "[weekly-title] Export: ${OUT_CSV}"
+"${BATCH_RUNNER}" "$@"

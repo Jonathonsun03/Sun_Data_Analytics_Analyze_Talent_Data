@@ -1,6 +1,30 @@
 # Classification Shell Wrappers
 
+## `run_title_classification_batch.sh`
+Preferred runner for production title classification.
+
+This creates OpenAI Batch API jobs using the current compiled prompt bundle from
+`classification/config/talent_profiles.json` and `classification/prompts/`.
+Batch jobs are asynchronous and cheaper than synchronous API calls.
+
+### Build pending batch
+`bin/linux/classification/run_title_classification_batch.sh --run-id "title_v7_$(date +%Y-%m-%d_%H-%M-%S)" -- --batch-size 25`
+
+### Build and submit a full reclassification with current definitions
+`bin/linux/classification/run_title_classification_batch.sh --run-id "title_v7_full_$(date +%Y-%m-%d_%H-%M-%S)" --execute -- --batch-size 25 --force-reclassify`
+
+### Check and retrieve completed output
+`bin/linux/classification/run_title_classification_batch.sh --mode check --run-dir "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/batch_runs/<run_id>" --retrieve-output`
+
+### Apply retrieved output and refresh current/archive CSVs
+`bin/linux/classification/run_title_classification_batch.sh --mode apply --run-dir "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/batch_runs/<run_id>"`
+
+Windows users can call:
+`bin\windows\classification\run_title_classification_batch.bat`
+
 ## `run_title_classification.sh`
+Legacy synchronous runner.
+
 Wrapper for:
 `r_scripts/run/Title_classification/title_classification/07_run_weekly_classification.R`
 
@@ -16,6 +40,9 @@ From repo root:
 ### Smoke test (5 rows per talent)
 `bin/linux/classification/run_title_classification.sh --limit-per-talent 5`
 
+### Slow API run
+`bin/linux/classification/run_title_classification.sh --timeout-seconds 300 --batch-size 10`
+
 ### Force rerun (prompt testing)
 `bin/linux/classification/run_title_classification.sh --limit-per-talent 5 --force-reclassify`
 
@@ -23,12 +50,16 @@ From repo root:
 `bin/linux/classification/run_title_classification.sh --talent "Leia_Memoria_Variance_Project"`
 
 ## `run_title_classification_weekly.sh`
-Pipeline wrapper that runs:
-- `run_title_classification.sh`
-- `r_scripts/run/Title_classification/title_classification/05_export_results_csv.R`
+Compatibility wrapper around the Batch API runner.
 
 Exports to:
-`classification/output/title_classifications`
+Current export:
+`/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/current/classification_export_current.csv`
+
+Archived timestamped exports:
+`/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/archived/`
+
+Set `TITLE_CLASSIFICATIONS_DIR` to override the export folder for a one-off run.
 
 ### Run (classification + export)
 `bin/linux/classification/run_title_classification_weekly.sh`

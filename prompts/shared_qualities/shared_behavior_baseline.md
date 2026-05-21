@@ -39,7 +39,7 @@ Why this workflow exists:
 - This workflow should create the comparative baseline that later personality-profile workflows can use to decide whether a trait is shared, distinctive-in-form, or truly unique.
 
 Maintained Python implementation:
-- Use `py_scripts/run/stream_summaries/personality/build_shared_behavior_baseline.py` for this workflow when possible.
+- Use `py_scripts/run/stream_summaries/streamer_personality/build_shared_behavior_baseline.py` for this workflow when possible.
 - Use `py_scripts/lib/shared_interactions_eligibility.py` as the source of truth for eligible talent discovery.
 - Eligibility defaults:
   - direct child talent folders under `/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data`

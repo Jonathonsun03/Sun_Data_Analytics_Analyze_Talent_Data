@@ -153,17 +153,42 @@ bin/linux/classification/run_title_classification_weekly.sh \
   --published-at-col "Published At"
 ```
 
-If an OpenAI batch times out, rerun the same `run_title_classification_weekly.sh`
-command without `--force-reclassify`. The classifier is idempotent by default
-and only processes pending rows for the same model, taxonomy version, and prompt
-version.
-
-The weekly wrapper writes a timestamped export under
-`classification/output/title_classifications/`. Bundle report wrappers can use
-that specific export by setting `BUNDLE_A_TITLE_CLASSIFICATIONS_PATH`:
+For production runs, prefer the Batch API wrapper:
 
 ```bash
-BUNDLE_A_TITLE_CLASSIFICATIONS_PATH="classification/output/title_classifications/<export-file>.csv" \
+bin/linux/classification/run_title_classification_batch.sh \
+  --run-id "title_v7_full_$(date +%Y-%m-%d_%H-%M-%S)" \
+  --execute \
+  -- \
+  --batch-size 25 \
+  --force-reclassify
+```
+
+This uses the current compiled prompt definitions from
+`classification/config/talent_profiles.json` and `classification/prompts/`.
+After the OpenAI Batch job completes, retrieve and apply it:
+
+```bash
+bin/linux/classification/run_title_classification_batch.sh \
+  --mode check \
+  --run-dir "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/batch_runs/<run_id>" \
+  --retrieve-output
+
+bin/linux/classification/run_title_classification_batch.sh \
+  --mode apply \
+  --run-dir "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/batch_runs/<run_id>"
+```
+
+The weekly wrapper writes a timestamped export under
+`/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/archived/`
+and refreshes the stable current export at
+`/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/current/classification_export_current.csv`.
+Set `TITLE_CLASSIFICATIONS_DIR` to override the folder for a one-off run.
+Bundle report wrappers can use
+the current export or any archived export by setting `BUNDLE_A_TITLE_CLASSIFICATIONS_PATH`:
+
+```bash
+BUNDLE_A_TITLE_CLASSIFICATIONS_PATH="/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/current/classification_export_current.csv" \
 bin/linux/render_reports/bundle_A/run_bundle_A_artifacts.sh --talent "Nova Aokami Ch"
 ```
 
@@ -173,7 +198,7 @@ If you are building a demo talent for client-facing sample reports, do not appen
 Preferred approach:
 - Keep the synthetic talent's title classifications in a separate CSV.
 - Point Bundle report renders at that isolated file with `--titles-path`.
-- This keeps demo-only labels out of `classification/output/title_classifications/*.csv`.
+- This keeps demo-only labels out of production title-classification exports.
 
 The current synthetic demo dataset generator writes its isolated classification file to:
 - `<datalake_root>/<demo_talent>/reports/demo_inputs/demo_title_classifications.csv`

@@ -28,6 +28,7 @@ Options:
   --model NAME                   Model override (default: gpt-5-mini)
   --batch-size N                 Batch size (default: 25)
   --max-retries N                Retries per batch (default: 2)
+  --timeout-seconds N            OpenAI request timeout per attempt (default: 120)
   --force-reclassify             Reclassify even if rows already classified
   -h, --help                     Show this help
 

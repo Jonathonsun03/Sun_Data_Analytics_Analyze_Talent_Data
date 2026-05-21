@@ -163,7 +163,7 @@ Rscript r_scripts/run/bundle_B/render_bundle_B.R \
 
 Notes:
 
-- `--titles-path` keeps demo classifications out of the production `classification/output/title_classifications/` exports.
+- `--titles-path` keeps demo classifications out of the production `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/` exports.
 - The render scripts now accept `--titles-path` directly and forward that file into the Bundle A/B title join step.
 - Generated demo HTML reports are written to the normal per-talent report folders under `<datalake_root>/<talent>/reports/bundle_A/` and `<datalake_root>/<talent>/reports/bundle_B/`.
 

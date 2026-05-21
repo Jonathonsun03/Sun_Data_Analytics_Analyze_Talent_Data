@@ -136,6 +136,23 @@ rows$tags <- tags
 rows$primary_reference <- primary_reference
 rows$referenced_entities <- referenced_entities
 
+format_csv_date <- function(x) {
+  parsed <- suppressWarnings(as.POSIXct(x, tz = "UTC"))
+  ifelse(is.na(parsed), as.character(x), format(parsed, "%m-%d-%Y"))
+}
+
+format_csv_datetime <- function(x) {
+  parsed <- suppressWarnings(as.POSIXct(x, tz = "UTC"))
+  ifelse(is.na(parsed), as.character(x), format(parsed, "%m-%d-%Y %H:%M:%S"))
+}
+
+if ("published_at" %in% names(rows)) {
+  rows$published_at <- format_csv_date(rows$published_at)
+}
+if ("created_at" %in% names(rows)) {
+  rows$created_at <- format_csv_datetime(rows$created_at)
+}
+
 cols_front <- c(
   "video_id", "talent_name", "talent_profile", "model", "confidence",
   "title_raw", "content_type", "published_at",

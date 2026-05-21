@@ -1,6 +1,40 @@
-resolve_latest_title_classifications_path <- function(
-  export_dir = file.path("classification", "output", "title_classifications")
+default_title_classifications_export_dir <- function() {
+  override <- trimws(Sys.getenv("TITLE_CLASSIFICATIONS_DIR", unset = ""))
+  if (nzchar(override)) {
+    return(override)
+  }
+
+  if (.Platform$OS.type == "windows") {
+    return("Z:/DataLake/Sun_Data_Analytics/Processed/Title_classification")
+  }
+
+  datalake_dir <- "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification"
+  if (dir.exists(dirname(datalake_dir))) {
+    return(datalake_dir)
+  }
+
+  file.path("classification", "output", "title_classifications")
+}
+
+current_title_classifications_path <- function(
+  export_dir = default_title_classifications_export_dir()
 ) {
+  file.path(export_dir, "current", "classification_export_current.csv")
+}
+
+resolve_latest_title_classifications_path <- function(
+  export_dir = default_title_classifications_export_dir()
+) {
+  current_path <- current_title_classifications_path(export_dir)
+  if (file.exists(current_path)) {
+    return(current_path)
+  }
+
+  archive_dir <- file.path(export_dir, "archived")
+  if (dir.exists(archive_dir)) {
+    export_dir <- archive_dir
+  }
+
   if (!dir.exists(export_dir)) {
     stop("Title-classification export directory does not exist: ", export_dir)
   }

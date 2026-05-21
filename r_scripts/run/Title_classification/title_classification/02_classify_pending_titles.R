@@ -396,6 +396,82 @@ classify_batch <- function(
   )
 }
 
+classify_batch_resilient <- function(
+    batch_df,
+    user_prompt_template,
+    schema_text,
+    schema,
+    system_prompt,
+    model,
+    max_retries,
+    classification_timeout_seconds,
+    talent_name,
+    talent_profile,
+    definition_fields
+) {
+  tryCatch(
+    classify_batch(
+      batch_df = batch_df,
+      user_prompt_template = user_prompt_template,
+      schema_text = schema_text,
+      schema = schema,
+      system_prompt = system_prompt,
+      model = model,
+      max_retries = max_retries,
+      classification_timeout_seconds = classification_timeout_seconds,
+      talent_name = talent_name,
+      talent_profile = talent_profile,
+      definition_fields = definition_fields
+    ),
+    error = function(e) {
+      if (nrow(batch_df) <= 1L) {
+        stop(e)
+      }
+
+      split_at <- floor(nrow(batch_df) / 2L)
+      message(
+        "Batch failed after retries; splitting ",
+        nrow(batch_df),
+        " rows into ",
+        split_at,
+        " and ",
+        nrow(batch_df) - split_at,
+        " rows. Cause: ",
+        conditionMessage(e)
+      )
+
+      first <- classify_batch_resilient(
+        batch_df = batch_df[seq_len(split_at), , drop = FALSE],
+        user_prompt_template = user_prompt_template,
+        schema_text = schema_text,
+        schema = schema,
+        system_prompt = system_prompt,
+        model = model,
+        max_retries = max_retries,
+        classification_timeout_seconds = classification_timeout_seconds,
+        talent_name = talent_name,
+        talent_profile = talent_profile,
+        definition_fields = definition_fields
+      )
+      second <- classify_batch_resilient(
+        batch_df = batch_df[(split_at + 1L):nrow(batch_df), , drop = FALSE],
+        user_prompt_template = user_prompt_template,
+        schema_text = schema_text,
+        schema = schema,
+        system_prompt = system_prompt,
+        model = model,
+        max_retries = max_retries,
+        classification_timeout_seconds = classification_timeout_seconds,
+        talent_name = talent_name,
+        talent_profile = talent_profile,
+        definition_fields = definition_fields
+      )
+
+      dplyr::bind_rows(first, second)
+    }
+  )
+}
+
 insert_classification_batch <- function(
     con,
     rows,
@@ -474,7 +550,7 @@ if (nrow(pending) == 0) {
     end_i <- min(start_i + batch_size - 1L, nrow(pending))
     batch_df <- pending[start_i:end_i, , drop = FALSE]
 
-    batch_result <- classify_batch(
+    batch_result <- classify_batch_resilient(
       batch_df = batch_df,
       user_prompt_template = user_prompt_template,
       schema_text = schema_text,

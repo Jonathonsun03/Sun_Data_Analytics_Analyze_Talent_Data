@@ -23,9 +23,9 @@ Usage:
 Options:
   --talent NAME       Run for the exact talent folder NAME.
   --summary-limit N   Process at most N missing/empty per-stream summaries.
-  --recent-months N   Pass a rolling date focus to the personality pipeline.
-  --since DATE        Pass a start date focus to the personality pipeline (YYYY-MM-DD).
-  --until DATE        Pass an end date focus to the personality pipeline (YYYY-MM-DD).
+  --recent-months N   Pass a rolling date focus to the streamer personality pipeline.
+  --since DATE        Pass a start date focus to the streamer personality pipeline (YYYY-MM-DD).
+  --until DATE        Pass an end date focus to the streamer personality pipeline (YYYY-MM-DD).
   --skip-summaries    Skip per-stream summary generation.
   --skip-overall      Skip overall channel summary / summary classification.
   --skip-monetary     Skip money timestamps and monetary analysis.
@@ -38,7 +38,7 @@ Pipeline order:
   2. overall_themes/overall_channel_summary.sh
   3. monetary/money_timestamps_incremental.sh
   4. monetary/monetary_summary_classification.sh
-  5. personality_pipeline/run_personality_pipeline.sh
+  5. streamer_personality_pipeline/run_streamer_personality_pipeline.sh
 
 Notes:
   - The old "summary classification" layer is now represented by
@@ -205,9 +205,9 @@ if [[ "$SKIP_PERSONALITY" -eq 0 ]]; then
   if [[ "$DRY_RUN" -eq 1 ]]; then
     personality_args+=(--dry-run)
   fi
-  run_step "personality pipeline" "$CODEX_PROMPTS_DIR/personality_pipeline/run_personality_pipeline.sh" "${personality_args[@]}"
+  run_step "streamer personality pipeline" "$CODEX_PROMPTS_DIR/streamer_personality_pipeline/run_streamer_personality_pipeline.sh" "${personality_args[@]}"
 else
-  echo "Skipping personality pipeline."
+  echo "Skipping streamer personality pipeline."
 fi
 
 echo

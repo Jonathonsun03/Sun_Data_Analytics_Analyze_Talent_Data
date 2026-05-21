@@ -24,7 +24,7 @@ list.files(here("r_scripts", "lib", "import_data"), pattern = "[rR]$", full.name
   walk(source)
 source(here::here("r_scripts", "lib", "clean_data", "CleanData.R"))
 
-root <- get_staging_root()
+root <- get_datalake_root()
 talent_root <- select_talent("all", root = root)
 
 titles <- lapply(talent_root, function(talent_path) {

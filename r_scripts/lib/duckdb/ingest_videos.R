@@ -10,17 +10,27 @@ build_to_ingest <- function(Classification, talent_id, talent_name) {
     stop("Package `digest` is required.")
   }
 
+  normalized_titles <- normalize_title(Classification$Title)
+  title_hashes <- vapply(
+    normalized_titles,
+    function(title_norm) {
+      digest::digest(
+        paste(talent_id, title_norm, sep = "||"),
+        algo = "xxhash64"
+      )
+    },
+    FUN.VALUE = character(1),
+    USE.NAMES = FALSE
+  )
+
   Classification %>%
     dplyr::transmute(
       video_id = as.character(`Video ID`),
       talent_id = talent_id,
       talent_name = talent_name,
       title_raw = as.character(Title),
-      title_norm = normalize_title(Title),
-      title_hash = digest::digest(
-        paste(talent_id, normalize_title(Title), sep = "||"),
-        algo = "xxhash64"
-      ),
+      title_norm = normalized_titles,
+      title_hash = title_hashes,
       content_type = as.character(`Content Type`),
       published_at = as.POSIXct(`Published At`, tz = "UTC")
     )

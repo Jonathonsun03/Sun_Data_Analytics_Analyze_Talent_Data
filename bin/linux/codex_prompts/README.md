@@ -7,12 +7,18 @@ Each prompt category should document its local naming and archive rules with a n
 
 Use the scripts inside the category folders as the real run targets:
 
-- `personality_pipeline/run_personality_pipeline.sh`
-- `personality/personality_open_coding.sh`
+- `streamer_personality_pipeline/run_streamer_personality_pipeline.sh`
+- `streamer_personality/streamer_personality_open_coding.sh`
 - `shared_qualities/shared_behavior_baseline.sh`
-- `personality/personality_qualitative_codebook.sh`
-- `personality/personality_unique_features.sh`
-- `personality/personality_profile.sh`
+- `streamer_personality/streamer_personality_qualitative_codebook.sh`
+- `streamer_personality/streamer_personality_unique_features.sh`
+- `streamer_personality/streamer_personality_profile.sh`
+- `chat_personality_pipeline/run_chat_personality_pipeline.sh`
+- `chat_personality/chat_personality_open_coding.sh`
+- `chat_personality/chat_shared_behavior_baseline.sh`
+- `chat_personality/chat_personality_unique_features.sh`
+- `chat_personality/chat_personality_qualitative_codebook.sh`
+- `chat_personality/chat_personality_profile.sh`
 - `overall_themes/overall_channel_summary.sh`
 - `summaries/stream_summary_codex.sh`
 - `summaries/stream_summary_codex_scheduled.sh`
@@ -32,7 +38,7 @@ That runner calls:
 2. `overall_themes/overall_channel_summary.sh`
 3. `monetary/money_timestamps_incremental.sh`
 4. `monetary/monetary_summary_classification.sh`
-5. `personality_pipeline/run_personality_pipeline.sh`
+5. `streamer_personality_pipeline/run_streamer_personality_pipeline.sh`
 
 Useful options:
 
@@ -42,22 +48,22 @@ Useful options:
 
 The old `summary_classification` naming is now represented by `overall_channel_summary` outputs. Downstream scripts still know how to fall back to legacy summary-classification paths where they exist.
 
-## Personality pipeline
+## Streamer personality pipeline
 
 The personality workflow is designed as a staged qualitative pipeline rather than a single summary pass.
 
 Start with the full runner when you want the complete workflow:
 
-- `personality_pipeline/run_personality_pipeline.sh --talent "<exact talent folder name>"`
+- `streamer_personality_pipeline/run_streamer_personality_pipeline.sh --talent "<exact talent folder name>"`
 
 The dedicated runner docs are in:
 
-- `personality_pipeline/README.md`
+- `streamer_personality_pipeline/README.md`
 
 ### 1. Talent-local open coding
 
 Run:
-- `personality/personality_open_coding.sh`
+- `streamer_personality/streamer_personality_open_coding.sh`
 
 What it does:
 - builds each talent's retained open codes
@@ -91,7 +97,7 @@ Typical outputs:
 ### 3. Talent-unique features
 
 Run:
-- `personality/personality_unique_features.sh`
+- `streamer_personality/streamer_personality_unique_features.sh`
 
 What it does:
 - compares each talent's open-coded patterns against the shared baseline
@@ -108,7 +114,7 @@ Typical outputs:
 ### 4. Cross-talent qualitative code log
 
 Run:
-- `personality/personality_qualitative_codebook.sh`
+- `streamer_personality/streamer_personality_qualitative_codebook.sh`
 
 What it does:
 - maintains a cumulative cross-talent qualitative code log
@@ -125,7 +131,7 @@ Typical outputs:
 ### 5. Broader personality profile
 
 Run:
-- `personality/personality_profile.sh`
+- `streamer_personality/streamer_personality_profile.sh`
 
 What it does:
 - produces the broader monthly and overall personality synthesis
@@ -137,6 +143,34 @@ Why it exists:
 
 Typical outputs:
 - `/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/<talent>/stream_summaries/overall_themes/personality_profile/...`
+
+## Chat personality profile
+
+Start with the full runner when you want the complete workflow:
+
+Run:
+- `chat_personality_pipeline/run_chat_personality_pipeline.sh`
+
+That runner calls:
+
+1. `chat_personality/chat_personality_open_coding.sh`
+2. `chat_personality/chat_shared_behavior_baseline.sh`
+3. `chat_personality/chat_personality_unique_features.sh`
+4. `chat_personality/chat_personality_qualitative_codebook.sh`
+5. `chat_personality/chat_personality_profile.sh`
+
+Run:
+- `chat_personality/chat_personality_profile.sh`
+
+What it does:
+- analyzes the chat community's visible interaction style around each talent
+- keeps chat personality separate from streamer personality
+- uses streamer/subtitle rows only as local context for what chat is responding to
+
+Typical outputs:
+- `/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/<talent>/qualitative coding/chat data/chat_personality_profile.md`
+- `/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/<talent>/qualitative coding/chat data/chat_personality_evidence_log.csv`
+- `/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/<talent>/qualitative coding/chat data/chat_personality_state.json`
 
 ## Why this design works
 
@@ -190,9 +224,14 @@ All wrappers write logs to the datalake under:
 - `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/codex_prompts/`
 
 The log directory mirrors this `bin/linux/codex_prompts/` tree, with one folder per shell entry point:
-- `personality/personality_open_coding/`
-- `personality/personality_profile/`
-- `personality/personality_unique_features/`
+- `streamer_personality/streamer_personality_open_coding/`
+- `streamer_personality/streamer_personality_profile/`
+- `streamer_personality/streamer_personality_unique_features/`
+- `chat_personality/chat_personality_profile/`
+- `chat_personality/chat_personality_open_coding/`
+- `chat_personality/chat_shared_behavior_baseline/`
+- `chat_personality/chat_personality_unique_features/`
+- `chat_personality/chat_personality_qualitative_codebook/`
 - `overall_themes/overall_channel_summary/`
 - `shared_qualities/shared_behavior_baseline/`
 - `summaries/stream_summary_codex/`
@@ -205,4 +244,4 @@ Codex-driven wrappers also write a final-message markdown file alongside the `.l
 ## Maintenance rule
 
 Keep only the categorized scripts in this directory tree as the maintained entry points.
-Use dedicated workflow folders, such as `personality_pipeline/`, for multi-step runners that coordinate scripts from more than one category.
+Use dedicated workflow folders, such as `streamer_personality_pipeline/`, for multi-step runners that coordinate scripts from more than one category.
