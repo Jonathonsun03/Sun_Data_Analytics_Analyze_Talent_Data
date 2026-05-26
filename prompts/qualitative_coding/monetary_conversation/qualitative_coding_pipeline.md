@@ -8,13 +8,13 @@ Do not create a separate JSON output file as the final product. The final produc
 Input paths:
 
 Codebook root:
-Z:\DataLake\Sun_Data_Analytics\Processed\Talent_Data\Qualitative Codebook
+Z:\DataLake\Sun_Data_Analytics\Processed\Talent_Data\Qualitative Codebooks\concept_areas\definitions\monetary_personality
 
 Default current codebook:
-Z:\DataLake\Sun_Data_Analytics\Processed\Talent_Data\Qualitative Codebook\current\personality_qualitative_code_log.csv
+Z:\DataLake\Sun_Data_Analytics\Processed\Talent_Data\Qualitative Codebooks\concept_areas\definitions\monetary_personality\current\personality_qualitative_code_log.csv
 
 Snapshot folder:
-Z:\DataLake\Sun_Data_Analytics\Processed\Talent_Data\Qualitative Codebook\snapshots
+Z:\DataLake\Sun_Data_Analytics\Processed\Talent_Data\Qualitative Codebooks\concept_areas\definitions\monetary_personality\snapshots
 
 Transcript folder example:
 Z:\DataLake\Sun_Data_Analytics\Talent_data\Avaritia Hawthorne 【Variance Project】\qualitative coding\monetary conversation codes

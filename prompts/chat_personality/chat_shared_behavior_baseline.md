@@ -4,7 +4,7 @@ You are working in this data root:
 
 Processed output root:
 
-/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/chat_shared_interactions
+/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/chat_shared
 
 Run logging rules:
 - The canonical shell entry point for this workflow is `bin/linux/codex_prompts/chat_personality/chat_shared_behavior_baseline.sh`.
@@ -24,15 +24,15 @@ Eligibility:
 - If `TALENT_SLUG` is provided, use it only to focus review notes; the baseline itself should compare all eligible talents unless the user explicitly asks for a single-talent diagnostic.
 
 Output paths:
-1) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/chat_shared_interactions/current/chat_shared_behavior_baseline.md`
-2) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/chat_shared_interactions/current/chat_shared_behavior_codebook.csv`
-3) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/chat_shared_interactions/current/talent_chat_behavior_matrix.csv`
-4) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/chat_shared_interactions/current/chat_shared_behavior_evidence.csv`
-5) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/chat_shared_interactions/current/chat_shared_behavior_state.json`
+1) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/chat_shared/current/chat_shared_behavior_baseline.md`
+2) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/chat_shared/current/chat_shared_behavior_codebook.csv`
+3) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/chat_shared/current/talent_chat_behavior_matrix.csv`
+4) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/chat_shared/current/chat_shared_behavior_evidence.csv`
+5) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/chat_shared/current/chat_shared_behavior_state.json`
 
 Optional snapshots:
 - On material changes, write a dated markdown snapshot under:
-  - `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/chat_shared_interactions/snapshots/`
+  - `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/chat_shared/snapshots/`
 
 Analytic standard:
 - Identify patterns shared across multiple talent chat communities.

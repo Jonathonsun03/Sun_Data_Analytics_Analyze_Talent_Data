@@ -4,7 +4,7 @@ You are working in this data root:
 
 Processed output root:
 
-/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Chat Qualitative Codebook
+/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/definitions/chat_personality
 
 Run logging rules:
 - The canonical shell entry point for this workflow is `bin/linux/codex_prompts/chat_personality/chat_personality_qualitative_codebook.sh`.
@@ -21,16 +21,16 @@ Inputs:
   - `<talent>/qualitative coding/chat data/chat_personality_unique_features/current/unique_chat_personality_profile.md`
   - `<talent>/qualitative coding/chat data/chat_personality_unique_features/current/unique_chat_personality_evidence_log.csv`
 - Shared chat baseline:
-  - `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/chat_shared_interactions/current/...`
+  - `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/chat_shared/current/...`
 
 Output paths:
-1) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Chat Qualitative Codebook/current/chat_personality_qualitative_code_log.csv`
-2) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Chat Qualitative Codebook/current/chat_personality_qualitative_code_log.md`
-3) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Chat Qualitative Codebook/current/chat_personality_qualitative_code_log_state.json`
+1) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/definitions/chat_personality/current/chat_personality_qualitative_code_log.csv`
+2) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/definitions/chat_personality/current/chat_personality_qualitative_code_log.md`
+3) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/definitions/chat_personality/current/chat_personality_qualitative_code_log_state.json`
 
 Optional snapshots:
 - On material changes, write a dated markdown snapshot under:
-  - `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Chat Qualitative Codebook/snapshots/`
+  - `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/definitions/chat_personality/snapshots/`
 
 Codebook standard:
 - This is a chat-side codebook only.

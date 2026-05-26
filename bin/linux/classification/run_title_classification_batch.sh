@@ -35,6 +35,9 @@ Wrapper options:
   --retrieve-output    Check mode: download output/error JSONL when available.
   -h, --help           Show this help.
 
+Apply options after --:
+  --allow-failures     Continue and refresh exports when some responses failed validation.
+
 Build options after --:
   --csv PATH
   --talent NAME
@@ -145,7 +148,7 @@ case "$MODE" in
       echo "Error: --run-dir or --run-id is required for apply mode." >&2
       exit 1
     fi
-    Rscript "${APPLY_SCRIPT}" --run-dir "$RUN_DIR"
+    Rscript "${APPLY_SCRIPT}" --run-dir "$RUN_DIR" "${CLASSIFY_ARGS[@]}"
     refresh_exports
     ;;
   *)

@@ -27,7 +27,12 @@ arg_value <- function(flag, default = NULL) {
   args[[pos]]
 }
 
+has_flag <- function(flag) {
+  any(args == flag)
+}
+
 run_dir <- arg_value("--run-dir", "")
+allow_failures <- has_flag("--allow-failures")
 if (!nzchar(run_dir)) {
   stop("--run-dir is required.")
 }
@@ -159,6 +164,8 @@ message("Inserted rows: ", inserted_total)
 message("Failed responses: ", length(failed))
 message("Apply summary: ", summary_path)
 
-if (length(failed) > 0) {
+if (length(failed) > 0 && !allow_failures) {
   stop("Some batch responses failed validation. See: ", summary_path)
+} else if (length(failed) > 0) {
+  warning("Some batch responses failed validation; continuing because --allow-failures was set. See: ", summary_path)
 }

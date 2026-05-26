@@ -33,7 +33,7 @@ from utils.repo_paths import find_repo_root
 REPO_ROOT = find_repo_root(Path(__file__))
 DATA_ROOT = Path("/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data")
 BASELINE_ROOT = Path(
-    "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/shared_interactions/current"
+    "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared/current"
 )
 PROMPT_PATH = (
     REPO_ROOT

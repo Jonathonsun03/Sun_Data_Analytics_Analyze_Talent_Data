@@ -14,8 +14,8 @@ list.files(here("r_scripts", "lib", "import_data"), pattern = "[rR]$", full.name
   walk(source)
 list.files(here("r_scripts", "lib", "report_tables"), pattern = "[rR]$", full.names = TRUE) %>%
   walk(source)
-source(here("r_scripts","lib","plots","PlottingThemes.R"))
-source(here::here("r_scripts","lib","clean_data","CleanData.R"))
+source(here("r_scripts", "lib", "plots", "PlottingThemes.R"))
+source(here::here("r_scripts", "lib", "clean_data", "CleanData.R"))
 
 parse_bundle_a_optional_date <- function(x) {
   if (is.null(x) || !nzchar(trimws(x))) {

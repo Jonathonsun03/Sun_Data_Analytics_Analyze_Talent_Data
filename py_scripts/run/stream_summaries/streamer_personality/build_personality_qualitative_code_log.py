@@ -15,8 +15,9 @@ from zoneinfo import ZoneInfo
 
 TALENT_ROOT = Path("/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data")
 PROCESSED_ROOT = Path("/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data")
-SHARED_ROOT = PROCESSED_ROOT / "shared_interactions" / "current"
-OUTPUT_ROOT = PROCESSED_ROOT / "Qualitative Codebook"
+QUALITATIVE_CODEBOOKS_ROOT = PROCESSED_ROOT / "Qualitative Codebooks"
+SHARED_ROOT = QUALITATIVE_CODEBOOKS_ROOT / "interaction_views" / "monetary_personality_shared" / "current"
+OUTPUT_ROOT = QUALITATIVE_CODEBOOKS_ROOT / "definitions" / "monetary_personality"
 CURRENT_DIR = OUTPUT_ROOT / "current"
 SNAPSHOT_DIR = OUTPUT_ROOT / "snapshots"
 TIMEZONE = ZoneInfo("America/New_York")

@@ -42,7 +42,7 @@ The prep stage:
 - Reads the current qualitative codebook from:
 
 ```text
-/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebook/current/personality_qualitative_code_log.csv
+/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/definitions/monetary_personality/current/personality_qualitative_code_log.csv
 ```
 
 - Derives one `code_*` column per code ID.
@@ -110,13 +110,13 @@ The successful first live test:
 Codebook folder:
 
 ```text
-/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebook/current
+/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/definitions/monetary_personality/current
 ```
 
 Codebook snapshots:
 
 ```text
-/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebook/snapshots
+/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/definitions/monetary_personality/snapshots
 ```
 
 Avaritia prepared transcript folder:

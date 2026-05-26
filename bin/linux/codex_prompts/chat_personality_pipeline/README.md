@@ -50,6 +50,6 @@ bin/linux/codex_prompts/chat_personality_pipeline/run_chat_personality_pipeline.
 ## Shared Output Roots
 
 ```text
-/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/chat_shared_interactions/
-/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Chat Qualitative Codebook/
+/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/chat_shared/
+/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/definitions/chat_personality/
 ```

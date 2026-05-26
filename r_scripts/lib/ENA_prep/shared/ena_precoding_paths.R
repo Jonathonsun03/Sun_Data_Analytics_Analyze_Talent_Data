@@ -52,7 +52,10 @@ ena_precoding_codebook_path <- function(codebook_path = NULL, talent_data_root =
   }
   file.path(
     ena_precoding_processed_root(talent_data_root),
-    "Qualitative Codebook",
+    "Qualitative Codebooks",
+    "concept_areas",
+    "definitions",
+    "monetary_personality",
     "current",
     "personality_qualitative_code_log.csv"
   )

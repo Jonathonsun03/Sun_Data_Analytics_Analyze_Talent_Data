@@ -24,7 +24,7 @@ The goal is to preserve the current transcript prep stage and the existing prepa
 Known input paths:
 
 Codebook folder:
-/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebook/current
+/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/definitions/monetary_personality/current
 
 Avaritia transcript folder:
 /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Avaritia Hawthorne 【Variance Project】/qualitative coding/monetary conversation codes

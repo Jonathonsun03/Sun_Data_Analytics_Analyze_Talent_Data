@@ -20,7 +20,7 @@ from shared_interactions_eligibility import discover_shared_interaction_eligibil
 PROMPT_PATH = REPO_ROOT / "prompts" / "shared_qualities" / "shared_behavior_baseline.md"
 TALENT_ROOT = Path("/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data")
 OUTPUT_ROOT = Path(
-    "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/shared_interactions"
+    "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared"
 )
 CURRENT_DIR = OUTPUT_ROOT / "current"
 SNAPSHOT_DIR = OUTPUT_ROOT / "snapshots"

@@ -31,7 +31,7 @@ from utils.repo_paths import find_repo_root
 REPO_ROOT = find_repo_root(Path(__file__))
 TALENT_ROOT = Path("/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data")
 BASELINE_ROOT = Path(
-    "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/chat_shared_interactions/current"
+    "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/chat_shared/current"
 )
 TIMEZONE = ZoneInfo("America/New_York")
 

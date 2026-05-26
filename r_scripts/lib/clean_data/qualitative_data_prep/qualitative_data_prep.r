@@ -38,7 +38,10 @@ list_qualitative_prep_files <- function(talent_data_root = NULL,
 qualitative_codebook_root <- function(talent_data_root = NULL) {
   file.path(
     ena_precoding_processed_root(talent_data_root),
-    "Qualitative Codebook"
+    "Qualitative Codebooks",
+    "concept_areas",
+    "definitions",
+    "monetary_personality"
   )
 }
 

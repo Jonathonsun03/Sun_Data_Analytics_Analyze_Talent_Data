@@ -5,7 +5,7 @@ Run a small immediate qualitative coding test named `code_test`.
 
 Use the selected `code_test` codebook:
 
-/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/qualitative_code_library/selections/code_test/code_test_codebook.csv
+/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/library/selections/code_test/code_test_codebook.csv
 
 The final output should be the updated prepared transcript CSV. Do not create a separate JSON output file as the final product.
 

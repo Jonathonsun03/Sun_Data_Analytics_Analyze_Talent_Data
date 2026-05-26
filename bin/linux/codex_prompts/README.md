@@ -92,7 +92,7 @@ Why it exists:
 - without a shared baseline, downstream profiles tend to overstate generic traits as unique
 
 Typical outputs:
-- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/shared_interactions/current/...`
+- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared/current/...`
 
 ### 3. Talent-unique features
 
@@ -126,7 +126,7 @@ Why it exists:
 - it preserves continuity while still allowing recoding when better structure emerges
 
 Typical outputs:
-- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebook/...`
+- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/definitions/monetary_personality/...`
 
 ### 5. Broader personality profile
 

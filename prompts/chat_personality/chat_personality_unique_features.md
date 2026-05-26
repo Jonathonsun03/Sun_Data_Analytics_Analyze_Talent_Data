@@ -15,10 +15,10 @@ Inputs per talent:
 - `<talent>/qualitative coding/chat data/chat_personality_open_coding/current/chat_open_coding_memo.md`
 
 Shared baseline inputs:
-- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/chat_shared_interactions/current/chat_shared_behavior_baseline.md`
-- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/chat_shared_interactions/current/chat_shared_behavior_codebook.csv`
-- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/chat_shared_interactions/current/talent_chat_behavior_matrix.csv`
-- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/chat_shared_interactions/current/chat_shared_behavior_evidence.csv`
+- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/chat_shared/current/chat_shared_behavior_baseline.md`
+- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/chat_shared/current/chat_shared_behavior_codebook.csv`
+- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/chat_shared/current/talent_chat_behavior_matrix.csv`
+- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/chat_shared/current/chat_shared_behavior_evidence.csv`
 
 Output root:
 - `<talent>/qualitative coding/chat data/chat_personality_unique_features/current/`

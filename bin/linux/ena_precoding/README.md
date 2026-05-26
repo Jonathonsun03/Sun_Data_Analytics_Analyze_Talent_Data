@@ -53,6 +53,7 @@ Folder layout:
 <run_id>/
   README.md
   candidate_rows.csv
+  run_code_set.csv
   batch_input.jsonl
   compiled_codebook.json
   manifest.json
@@ -69,6 +70,12 @@ Folder layout:
     prepared_transcripts_index.csv
   backups/
     *.before_apply.csv           # after apply execute
+```
+
+Each build also writes a central copy of the exact selected code set here:
+
+```text
+/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/run_code_sets/<run_id>/run_code_set.csv
 ```
 
 The actual prepared transcript CSV is still edited in place under:
@@ -98,6 +105,7 @@ Options after `--` are passed to the coding stage:
 
 - `--talent-query VALUE`: flexible talent selector such as `Avaritia`.
 - `--transcript VALUE`: full path, exact basename, partial basename, or video id.
+- `--selected-transcripts-csv PATH`: manifest CSV with a `source_path` column; prepares and builds exactly those streams, including multiple talents.
 - `--limit N`: maximum number of prepared transcript CSVs to code.
 - `--row-limit N`: maximum number of pending rows per selected CSV.
 - `--coding-folder VALUE`: folder under `qualitative coding`; default is `monetary conversation codes`.
@@ -107,6 +115,84 @@ Options after `--` are passed to the coding stage:
 - `--model VALUE`: pass a Codex model override.
 
 ## Internal Tools
+
+## Manifest Runs
+
+For selected stream sets, use a manifest CSV with `source_path` pointing at the
+raw `text_playback` CSVs:
+
+```bash
+bin/linux/ena_precoding/run_qualitative_coding_batch.sh \
+  --mode build \
+  --run-id "money_chat_40stream_$(date +%Y%m%d_%H%M%S)" \
+  -- \
+  --selected-transcripts-csv "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/qualitative_coding/selected_transcripts/20260522_223950_money_chat_quantile_selection/selected_transcripts.csv" \
+  --codebook "path:/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/library/selections/<selection>/<selected_codebook>.csv" \
+  --coding-folder "monetary conversation codes" \
+  --row-limit 0 \
+  --batch-size 50 \
+  --context-rows 4 \
+  --model gpt-5-mini
+```
+
+The build step prepares only the manifest rows, then writes one Batch API run
+folder. It does not submit unless you use `--mode full --execute` or submit the
+run folder later.
+
+### Chat Monetary Growth 40-Stream Run
+
+The 40 selected streams used for the chat monetary growth ENA workflow live here:
+
+```text
+/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/qualitative_coding/selected_transcripts/20260522_223950_money_chat_quantile_selection/
+```
+
+For Batch API work, that selection was split into four 10-transcript manifests:
+
+```text
+/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/qualitative_coding/selected_transcripts/20260522_223950_money_chat_quantile_selection/chat_monetary_growth_batches/batch_001_selected_transcripts.csv
+/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/qualitative_coding/selected_transcripts/20260522_223950_money_chat_quantile_selection/chat_monetary_growth_batches/batch_002_selected_transcripts.csv
+/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/qualitative_coding/selected_transcripts/20260522_223950_money_chat_quantile_selection/chat_monetary_growth_batches/batch_003_selected_transcripts.csv
+/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/qualitative_coding/selected_transcripts/20260522_223950_money_chat_quantile_selection/chat_monetary_growth_batches/batch_004_selected_transcripts.csv
+```
+
+The current recommended codebook is:
+
+```text
+/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/library/selections/chat_monetary_growth/batch_002/batch_002_codebook.csv
+```
+
+Use one tmux session per batch and run only one or two large batches at a time.
+These transcript batches can be very large: 10 transcripts expanded into roughly
+30k-55k candidate rows during the first run. `--batch-size 50` chunks the rows
+into 50-row OpenAI requests; it does not limit the total rows coded.
+
+Example for batch 003:
+
+```bash
+tmux new-session -d -s chat_monetary_growth_batch_003_retry \
+'cd /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data && \
+bin/linux/ena_precoding/run_qualitative_coding_batch.sh \
+  --mode full \
+  --execute \
+  --run-id "chat_monetary_growth_batch_003_retry_$(date +%Y%m%d_%H%M%S)" \
+  --poll-interval 300 \
+  --max-wait 90000 \
+  -- \
+  --selected-transcripts-csv "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/qualitative_coding/selected_transcripts/20260522_223950_money_chat_quantile_selection/chat_monetary_growth_batches/batch_003_selected_transcripts.csv" \
+  --codebook "path:/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/library/selections/chat_monetary_growth/batch_002/batch_002_codebook.csv" \
+  --coding-folder "chat monetary growth ena codes" \
+  --row-limit 0 \
+  --batch-size 50 \
+  --context-rows 4 \
+  --model gpt-5-mini'
+```
+
+If OpenAI rejects a run with `token_limit_exceeded`, that batch did not process
+any rows. Confirm this in `batch_status.json`: rejected jobs have
+`request_counts.total = 0`, no `output_file_id`, no `batch_output.jsonl`, and no
+`coding_review.csv`. Retry later with a fresh run id after other in-progress
+batches complete.
 
 ## Saving Coded Datasets
 

@@ -106,11 +106,14 @@ load_title_classifications <- function(
       titles <- exact_match
     } else if (length(talent_keys) == 1 && nzchar(talent_keys[[1]])) {
       q <- talent_keys[[1]]
-      fuzzy_match <- dplyr::filter(
-        titles,
-        grepl(q, .data$.talent_key, fixed = TRUE) |
-          grepl(.data$.talent_key, q, fixed = TRUE)
-      )
+      talent_key_values <- titles$.talent_key
+      fuzzy_keep <- grepl(q, talent_key_values, fixed = TRUE) |
+        vapply(
+          talent_key_values,
+          function(k) nzchar(k) && grepl(k, q, fixed = TRUE),
+          logical(1)
+        )
+      fuzzy_match <- titles[fuzzy_keep %in% TRUE, , drop = FALSE]
       if (nrow(fuzzy_match) > 0) {
         titles <- fuzzy_match
       } else {
@@ -132,9 +135,33 @@ load_title_classifications <- function(
   if (isTRUE(latest_per_video)) {
     if ("created_at" %in% names(titles)) {
       has_conf <- "confidence" %in% names(titles)
+      parse_title_created_at <- function(x) {
+        x <- trimws(as.character(x))
+        x[!nzchar(x)] <- NA_character_
+        out <- rep(as.POSIXct(NA_real_, origin = "1970-01-01", tz = "UTC"), length(x))
+        formats <- c(
+          "%Y-%m-%d %H:%M:%OS",
+          "%Y-%m-%dT%H:%M:%OS",
+          "%Y-%m-%dT%H:%M:%OSZ",
+          "%Y-%m-%d",
+          "%m/%d/%Y %H:%M:%OS",
+          "%m/%d/%Y"
+        )
+
+        for (fmt in formats) {
+          missing <- is.na(out) & !is.na(x)
+          if (!any(missing)) {
+            break
+          }
+          parsed <- suppressWarnings(as.POSIXct(x[missing], format = fmt, tz = "UTC"))
+          out[missing] <- parsed
+        }
+
+        out
+      }
       titles <- titles %>%
         dplyr::mutate(
-          .created_at = suppressWarnings(as.POSIXct(.data$created_at, tz = "UTC"))
+          .created_at = parse_title_created_at(.data$created_at)
         ) %>%
         dplyr::arrange(
           dplyr::desc(.data$.created_at),

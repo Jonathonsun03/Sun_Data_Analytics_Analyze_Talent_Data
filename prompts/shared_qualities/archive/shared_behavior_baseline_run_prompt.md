@@ -2,7 +2,7 @@ Primary talent data root:
 - `/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data`
 
 Cross-talent processed output root:
-- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/shared_interactions`
+- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared`
 
 Objective:
 Build a cross-streamer shared-behavior baseline that identifies what is common across the streamers in this dataset before later workflows attempt to identify what makes each streamer unique.
@@ -150,16 +150,16 @@ Evidence rules:
 - Do not fabricate evidence, counts, or contrasts.
 
 Write outputs to these exact paths:
-1) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/shared_interactions/current/shared_behavior_baseline_codex.md`
-2) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/shared_interactions/current/shared_behavior_codebook.csv`
-3) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/shared_interactions/current/talent_shared_behavior_matrix.csv`
-4) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/shared_interactions/current/shared_behavior_evidence.csv`
-5) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/shared_interactions/current/shared_behavior_state.json`
-6) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/shared_interactions/snapshots/shared_behavior_baseline_YYYY-MM-DD_HH-MM-SS_±HHMM.md`
+1) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared/current/shared_behavior_baseline_codex.md`
+2) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared/current/shared_behavior_codebook.csv`
+3) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared/current/talent_shared_behavior_matrix.csv`
+4) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared/current/shared_behavior_evidence.csv`
+5) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared/current/shared_behavior_state.json`
+6) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared/snapshots/shared_behavior_baseline_YYYY-MM-DD_HH-MM-SS_±HHMM.md`
 
 Folder organization rules:
-- Keep live outputs only in `shared_interactions/current/`.
-- Keep dated markdown snapshots only in `shared_interactions/snapshots/`.
+- Keep live outputs only in `Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared/current/`.
+- Keep dated markdown snapshots only in `Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared/snapshots/`.
 - Do not write cross-talent baseline outputs into individual talent folders.
 
 Incremental / rerun rules:
@@ -271,7 +271,7 @@ Required structure for `shared_behavior_state.json`:
 - `notes`
 
 Snapshot rules:
-- On each run that writes or refreshes the current markdown, also write a dated markdown snapshot in `shared_interactions/snapshots/`.
+- On each run that writes or refreshes the current markdown, also write a dated markdown snapshot in `Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared/snapshots/`.
 - The snapshot must include:
   - the snapshot date/time
   - the full current markdown content

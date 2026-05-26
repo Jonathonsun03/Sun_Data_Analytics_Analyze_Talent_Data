@@ -75,11 +75,11 @@ Main runner:
 - `/home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/bin/linux/codex_prompts/shared_qualities/shared_behavior_baseline.sh`
 
 Primary outputs:
-- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/shared_interactions/current/shared_behavior_baseline_codex.md`
-- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/shared_interactions/current/shared_behavior_codebook.csv`
-- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/shared_interactions/current/talent_shared_behavior_matrix.csv`
-- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/shared_interactions/current/shared_behavior_evidence.csv`
-- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/shared_interactions/current/shared_behavior_state.json`
+- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared/current/shared_behavior_baseline_codex.md`
+- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared/current/shared_behavior_codebook.csv`
+- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared/current/talent_shared_behavior_matrix.csv`
+- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared/current/shared_behavior_evidence.csv`
+- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared/current/shared_behavior_state.json`
 
 ### 3. Unique Personality Features
 
@@ -112,12 +112,12 @@ Main runner:
 - `/home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/bin/linux/codex_prompts/personality/personality_qualitative_codebook.sh`
 
 Primary outputs:
-- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebook/current/personality_qualitative_code_log.csv`
-- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebook/current/personality_qualitative_code_log_codex.md`
-- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebook/current/personality_qualitative_code_log_state.json`
+- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/definitions/monetary_personality/current/personality_qualitative_code_log.csv`
+- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/definitions/monetary_personality/current/personality_qualitative_code_log_codex.md`
+- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/definitions/monetary_personality/current/personality_qualitative_code_log_state.json`
 
 Snapshot outputs:
-- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebook/snapshots/personality_qualitative_code_log_YYYY-MM-DD_HH-MM-SS_±HHMM.md`
+- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/definitions/monetary_personality/snapshots/personality_qualitative_code_log_YYYY-MM-DD_HH-MM-SS_±HHMM.md`
 
 Code-log structure:
 - `Primary Code ID`

@@ -14,8 +14,9 @@ from zoneinfo import ZoneInfo
 
 TALENT_ROOT = Path("/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data")
 PROCESSED_ROOT = Path("/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data")
-SHARED_ROOT = PROCESSED_ROOT / "chat_shared_interactions" / "current"
-OUTPUT_ROOT = PROCESSED_ROOT / "Chat Qualitative Codebook"
+QUALITATIVE_CODEBOOKS_ROOT = PROCESSED_ROOT / "Qualitative Codebooks"
+SHARED_ROOT = QUALITATIVE_CODEBOOKS_ROOT / "interaction_views" / "chat_shared" / "current"
+OUTPUT_ROOT = QUALITATIVE_CODEBOOKS_ROOT / "definitions" / "chat_personality"
 CURRENT_DIR = OUTPUT_ROOT / "current"
 SNAPSHOT_DIR = OUTPUT_ROOT / "snapshots"
 CURRENT_CSV = CURRENT_DIR / "chat_personality_qualitative_code_log.csv"

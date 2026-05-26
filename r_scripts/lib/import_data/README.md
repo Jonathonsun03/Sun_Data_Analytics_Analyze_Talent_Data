@@ -25,3 +25,21 @@ A list (one element per input folder) where each element is a list of data frame
 
 - Missing paths are warned and skipped.
 - The `date` column is parsed from the first `YYYY-MM-DD` found in the filename; if not found, `date` is `NA`.
+
+## Text Playback Stream Lookup
+
+Defined in `text_playback_streams.R`.
+
+Use `list_text_playback_streams()` to join `text_playback/*.csv` files to title metadata by `Video ID`. Use `find_text_playback_streams()` when you know a title fragment and want the matching replay CSV path.
+
+```r
+source(here::here("r_scripts", "lib", "clean_data", "CleanData.R"))
+source(here::here("r_scripts", "lib", "import_data", "text_playback_streams.R"))
+
+matches <- find_text_playback_streams(
+  "GSSR",
+  talent = "Nova"
+)
+
+replay <- read_text_playback_stream(matches, row = 1)
+```

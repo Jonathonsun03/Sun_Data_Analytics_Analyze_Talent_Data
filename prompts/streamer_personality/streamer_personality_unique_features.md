@@ -4,7 +4,7 @@ Primary talent data root:
 - `/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data`
 
 Cross-talent baseline root:
-- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/shared_interactions`
+- `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared`
 
 Run logging rules:
 - The canonical shell entry point for this workflow is `bin/linux/codex_prompts/streamer_personality/streamer_personality_unique_features.sh`.
@@ -105,11 +105,11 @@ Talent discovery rules:
 - Process every eligible talent found at runtime.
 
 Primary cross-talent baseline inputs:
-1) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/shared_interactions/current/shared_behavior_baseline_codex.md`
-2) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/shared_interactions/current/shared_behavior_codebook.csv`
-3) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/shared_interactions/current/talent_shared_behavior_matrix.csv`
-4) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/shared_interactions/current/shared_behavior_evidence.csv`
-5) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/shared_interactions/current/shared_behavior_state.json`
+1) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared/current/shared_behavior_baseline_codex.md`
+2) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared/current/shared_behavior_codebook.csv`
+3) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared/current/talent_shared_behavior_matrix.csv`
+4) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared/current/shared_behavior_evidence.csv`
+5) `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/monetary_personality_shared/current/shared_behavior_state.json`
 
 Primary talent-specific inputs per talent: `personality_open_coding`
 - Prefer the newest available open-coding set in this order:

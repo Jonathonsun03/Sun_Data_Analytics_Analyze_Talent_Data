@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 
 TALENT_ROOT = Path("/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data")
 OUTPUT_ROOT = Path(
-    "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/chat_shared_interactions"
+    "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/interaction_views/chat_shared"
 )
 CURRENT_DIR = OUTPUT_ROOT / "current"
 SNAPSHOT_DIR = OUTPUT_ROOT / "snapshots"

@@ -138,7 +138,7 @@ discover_sources <- function(talent_data_root = NULL) {
   add_source(
     "streamer_current",
     "Current streamer/personality qualitative codebook",
-    file.path(processed_root, "Qualitative Codebook", "current", "personality_qualitative_code_log.csv")
+    file.path(processed_root, "Qualitative Codebooks", "concept_areas", "definitions", "monetary_personality", "current", "personality_qualitative_code_log.csv")
   )
   add_source(
     "streamer_compiled_current",
@@ -148,12 +148,12 @@ discover_sources <- function(talent_data_root = NULL) {
   add_source(
     "chat_current",
     "Current cumulative chat qualitative codebook",
-    file.path(processed_root, "Chat Qualitative Codebook", "current", "chat_personality_qualitative_code_log.csv")
+    file.path(processed_root, "Qualitative Codebooks", "concept_areas", "definitions", "chat_personality", "current", "chat_personality_qualitative_code_log.csv")
   )
   add_source(
     "chat_shared_baseline",
     "Current shared chat behavior baseline codebook",
-    file.path(processed_root, "chat_shared_interactions", "current", "chat_shared_behavior_codebook.csv")
+    file.path(processed_root, "Qualitative Codebooks", "concept_areas", "interaction_views", "chat_shared", "current", "chat_shared_behavior_codebook.csv")
   )
 
   talent_codebooks <- list.files(
@@ -277,7 +277,8 @@ main <- function() {
   processed_root <- ena_precoding_processed_root(talent_data_root)
   output_dir <- args$output_dir %||% file.path(
     processed_root,
-    "qualitative_code_library",
+    "Qualitative Codebooks",
+    "library",
     "current"
   )
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)

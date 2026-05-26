@@ -144,6 +144,49 @@ ENA_points <- function(ENA_set, filter_col = NULL, filter_val = NULL) {
   return(lineweight)
 }
 
+ena_group_centroids <- function(ena_set,
+                                group_col = "talent_name",
+                                dims = c("SVD1", "SVD2")) {
+  points <- tibble::as_tibble(ena_set$points)
+  missing_cols <- setdiff(c(group_col, dims), names(points))
+
+  if (length(missing_cols) > 0L) {
+    stop(
+      "Missing column(s) in ENA_set$points: ",
+      paste(missing_cols, collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  points %>%
+    dplyr::filter(!is.na(.data[[group_col]])) %>%
+    dplyr::group_by(group = .data[[group_col]]) %>%
+    dplyr::summarise(
+      dplyr::across(dplyr::all_of(dims), ~ mean(.x, na.rm = TRUE)),
+      n_points = dplyr::n(),
+      .groups = "drop"
+    )
+}
+
+ena_centroids_to_point_list <- function(centroids,
+                                        group_col = "group",
+                                        dims = c("SVD1", "SVD2")) {
+  missing_cols <- setdiff(c(group_col, dims), names(centroids))
+
+  if (length(missing_cols) > 0L) {
+    stop(
+      "Missing column(s) in centroid table: ",
+      paste(missing_cols, collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  centroids %>%
+    dplyr::select(dplyr::all_of(c(group_col, dims))) %>%
+    split(.[[group_col]]) %>%
+    purrr::map(~ as.matrix(.x[, dims, drop = FALSE]))
+}
+
 add_ena_point_groups <- function(
     base_plot,
     point_list,
@@ -207,5 +250,4 @@ add_ena_point_groups <- function(
   
   plot
 }
-
 

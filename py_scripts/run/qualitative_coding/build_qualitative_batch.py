@@ -23,7 +23,14 @@ from py_scripts.lib.qualitative_coding.prepared_transcripts import (
     row_needs_coding,
 )
 from py_scripts.lib.qualitative_coding.text import squish
-from py_scripts.lib.utils.paths import REPO_ROOT, default_talent_root, qualitative_batch_runs_root, resolve_talent_paths
+from py_scripts.lib.utils.paths import (
+    REPO_ROOT,
+    default_talent_root,
+    qualitative_batch_runs_root,
+    qualitative_run_code_sets_root,
+    resolve_talent_paths,
+)
+from py_scripts.lib.utils.paths import TalentPaths, talent_slugify, translate_datalake_path
 
 
 DEFAULT_MODEL = "gpt-5-mini"
@@ -98,11 +105,11 @@ def load_selection_metadata(codebook_path: Path) -> dict[str, dict[str, str]]:
         code_id = squish(row.get("code_id", ""))
         if not code_id:
             continue
-        metadata[code_id] = {
-            "analytic_object": squish(row.get("analytic_object", "")) or "streamer",
-            "row_source_scope": squish(row.get("row_source_scope", "")) or "subtitle",
+        row_metadata = {
+            "row_source_scope": squish(row.get("row_source_scope", "")),
             "source_group": squish(row.get("source_group", "")),
         }
+        metadata[code_id] = {key: value for key, value in row_metadata.items() if value}
     return metadata
 
 
@@ -178,13 +185,8 @@ def codebook_payload(code_defs: list[CodeDef], selection_metadata: dict[str, dic
         item = code.compact_dict()
         metadata = selection_metadata.get(code.code_id, {})
         if metadata:
-            item["analytic_object"] = metadata.get("analytic_object", "")
-            item["row_source_scope"] = metadata.get("row_source_scope", "")
-            item["source_group"] = metadata.get("source_group", "")
-        else:
-            item["analytic_object"] = "streamer"
-            item["row_source_scope"] = "subtitle"
-            item["source_group"] = ""
+            item.update(metadata)
+        item = {key: value for key, value in item.items() if value != ""}
         payload.append(item)
     return payload
 
@@ -236,11 +238,10 @@ def build_request(
                         "You are a qualitative coding assistant. Return structured coding decisions only. "
                         "Work as a qualitative analyst reading transcript rows in chronological order. Code every "
                         "row listed in target_rows, including rows with no positive codes. Context rows are evidence "
-                        "only and must never be returned as coded_rows. Use each code's row_source_scope: codes with "
-                        "row_source_scope=chat apply only to current_row.source=chat, codes with "
-                        "row_source_scope=subtitle apply only to current_row.source=subtitle, and codes with "
-                        "row_source_scope=both may apply to either. Do not apply streamer-only codes to chat rows or "
-                        "chat-only codes to subtitle rows. For monetary-conversation coding, prior context may establish "
+                        "only and must never be returned as coded_rows. Use the supplied code definitions as the "
+                        "authority for what part of the stream interaction each code analyzes. If a code explicitly "
+                        "includes row_source_scope, use it as a hard source restriction; otherwise do not infer a "
+                        "streamer-only or chat-only restriction from metadata. For monetary-conversation coding, prior context may establish "
                         "that the current row is interactionally adjacent to a paid event, gift, membership, goal, donor "
                         "action, or streamer monetary acknowledgment. If the current row performs a supplied code's "
                         "interactional function in response to that established event, code it even when the current row "
@@ -266,9 +267,8 @@ def build_request(
                             "instructions": {
                                 "code_only_target_rows": True,
                                 "do_not_code_previous_context_rows": True,
-                                "use_code_row_source_scope": True,
-                                "streamer_codes_apply_to_subtitle_rows_only": True,
-                                "chat_codes_apply_to_chat_rows_only": True,
+                                "use_code_row_source_scope_only_when_explicit": True,
+                                "do_not_infer_source_restrictions_from_metadata": True,
                                 "do_not_send_original_full_transcript": True,
                                 "request_contains_only_target_rows_and_requested_context_rows": True,
                                 "return_each_target_row_id_exactly_once": True,
@@ -305,6 +305,60 @@ def inspect_targets(paths: list[Path], code_columns: list[str]) -> list[TargetFi
     return [inspect_target(path, code_columns) for path in paths]
 
 
+def infer_talent_from_source_path(source_path: Path, talent_root: Path, coding_folder: str) -> TalentPaths:
+    try:
+        relative = source_path.resolve().relative_to(talent_root.resolve())
+    except ValueError as exc:
+        raise SystemExit(f"Selected transcript source_path is not under talent root: {source_path}") from exc
+    parts = relative.parts
+    if len(parts) < 3 or parts[1] != "text_playback":
+        raise SystemExit(f"Selected transcript source_path must point under <talent>/text_playback: {source_path}")
+    talent_path = talent_root / parts[0]
+    talent_name = talent_path.name
+    return TalentPaths(
+        talent_name=talent_name,
+        talent_slug=talent_slugify(talent_name),
+        talent_path=talent_path,
+        text_playback_path=talent_path / "text_playback",
+        qualitative_coding_root=talent_path / "qualitative coding",
+        qualitative_prep_dir=talent_path / "qualitative coding" / coding_folder,
+    )
+
+
+def selected_manifest_targets(path: Path, talent_root: Path, coding_folder: str) -> tuple[list[TalentPaths], list[Path], list[str]]:
+    fields, rows = read_csv_dicts(path)
+    if "source_path" not in fields:
+        raise SystemExit(f"Selected transcripts CSV must contain source_path: {path}")
+    talents_by_path: dict[Path, TalentPaths] = {}
+    prepared_paths: list[Path] = []
+    source_paths: list[str] = []
+    seen: set[Path] = set()
+    for row in rows:
+        raw_source = row.get("source_path", "")
+        if not raw_source.strip():
+            continue
+        source_path = translate_datalake_path(raw_source, talent_root).resolve()
+        if source_path in seen:
+            continue
+        seen.add(source_path)
+        if not source_path.exists():
+            raise SystemExit(f"Selected transcript source_path does not exist: {source_path}")
+        talent = infer_talent_from_source_path(source_path, talent_root, coding_folder)
+        talents_by_path[talent.talent_path] = talent
+        prepared_paths.append(talent.qualitative_prep_dir / source_path.name)
+        source_paths.append(str(source_path))
+    if not prepared_paths:
+        raise SystemExit(f"No source_path rows found in selected transcripts CSV: {path}")
+    missing_prepared = [str(path) for path in prepared_paths if not path.exists()]
+    if missing_prepared:
+        raise SystemExit(
+            "Prepared transcript CSVs are missing. Run without --skip-prepare first. Missing: "
+            + "; ".join(missing_prepared[:10])
+        )
+    talents = sorted(talents_by_path.values(), key=lambda talent: talent.talent_name)
+    return talents, prepared_paths, source_paths
+
+
 def write_qa_summary(path: Path, manifest: dict[str, object]) -> None:
     lines = [
         "# Qualitative Batch Build Summary",
@@ -317,6 +371,7 @@ def write_qa_summary(path: Path, manifest: dict[str, object]) -> None:
         f"- candidate_rows: {manifest['candidate_row_count']}",
         f"- auto_zero_rows: {manifest['auto_zero_row_count']}",
         f"- request_count: {manifest['request_count']}",
+        f"- run_code_set: {manifest['artifacts']['run_code_set_csv']}",
         f"- batch_input: {manifest['artifacts']['batch_input_jsonl']}",
         "",
         "No API job was submitted by this build step.",
@@ -329,6 +384,7 @@ def main() -> int:
     parser.add_argument("--talent-query", default="Avaritia")
     parser.add_argument("--coding-folder", default="monetary conversation codes")
     parser.add_argument("--codebook", default="current")
+    parser.add_argument("--selected-transcripts-csv", type=Path, default=None)
     parser.add_argument("--transcript", default="")
     parser.add_argument("--limit", type=int, default=0, help="Maximum number of prepared transcript CSVs to include.")
     parser.add_argument("--row-limit", type=int, default=25, help="Maximum pending rows per selected transcript.")
@@ -357,8 +413,16 @@ def main() -> int:
     selection_metadata = load_selection_metadata(codebook_path)
     compact_codebook = codebook_payload(code_defs, selection_metadata)
 
-    talents = resolve_talent_paths(args.talent_query, talent_root, coding_folder=args.coding_folder)
-    transcript_files = filter_transcripts(list_prepared_transcript_files(talents), args.transcript or None, talent_root)
+    selected_source_paths: list[str] = []
+    if args.selected_transcripts_csv:
+        talents, transcript_files, selected_source_paths = selected_manifest_targets(
+            args.selected_transcripts_csv,
+            talent_root,
+            args.coding_folder,
+        )
+    else:
+        talents = resolve_talent_paths(args.talent_query, talent_root, coding_folder=args.coding_folder)
+        transcript_files = filter_transcripts(list_prepared_transcript_files(talents), args.transcript or None, talent_root)
     targets = inspect_targets(transcript_files, code_columns)
     pending_targets = [target for target in targets if args.reprocess or target.pending_rows > 0]
     if args.limit > 0:
@@ -379,7 +443,7 @@ def main() -> int:
     request_rows = []
     custom_id_map: dict[str, dict[str, object]] = {}
     compact_batches = chunked(candidate_rows, args.batch_size)
-    talent_slug = talents[0].talent_slug if talents else "talent"
+    talent_slug = "multi_talent" if args.selected_transcripts_csv else (talents[0].talent_slug if talents else "talent")
     for part_number, candidate_batch in enumerate(compact_batches, start=1):
         custom_id = custom_id_for(talent_slug, candidate_batch, run_id, part_number)
         request = build_request(custom_id, args.model, args.endpoint, compact_codebook, candidate_batch)
@@ -391,6 +455,7 @@ def main() -> int:
         }
 
     compiled_codebook_path = run_dir / "compiled_codebook.json"
+    run_code_set_path = run_dir / "run_code_set.csv"
     candidate_rows_path = run_dir / "candidate_rows.csv"
     auto_zero_path = run_dir / "auto_zero_candidates.csv"
     batch_input_path = run_dir / "batch_input.jsonl"
@@ -399,6 +464,24 @@ def main() -> int:
     qa_summary_path = run_dir / "qa_summary.md"
 
     write_json(compiled_codebook_path, compact_codebook)
+    code_set_fields = [
+        "source_group",
+        "row_source_scope",
+        "code_id",
+        "code_column",
+        "primary_code_id",
+        "primary_code",
+        "secondary_code_id",
+        "secondary_code",
+        "parent_code_id",
+        "definition",
+        "examples_from_text",
+    ]
+    write_csv(run_code_set_path, code_set_fields, compact_codebook)
+    central_code_set_dir = qualitative_run_code_sets_root(talent_root) / run_id
+    central_code_set_dir.mkdir(parents=True, exist_ok=args.allow_existing_run_dir)
+    central_run_code_set_path = central_code_set_dir / "run_code_set.csv"
+    write_csv(central_run_code_set_path, code_set_fields, compact_codebook)
     write_csv(
         candidate_rows_path,
         [
@@ -446,6 +529,7 @@ def main() -> int:
         "created_at": datetime.now(ZoneInfo("America/New_York")).isoformat(),
         "repo_root": str(REPO_ROOT),
         "talent_query": args.talent_query,
+        "selected_transcripts_csv": str(args.selected_transcripts_csv or ""),
         "resolved_talents": [
             {
                 "talent_name": talent.talent_name,
@@ -459,6 +543,7 @@ def main() -> int:
         "transcript_selector": args.transcript,
         "selected_transcript_count": len(pending_targets),
         "selected_transcripts": [str(target.path) for target in pending_targets],
+        "selected_source_transcripts": selected_source_paths,
         "codebook_selector": args.codebook,
         "resolved_codebook_path": str(codebook_path),
         "selection_metadata_path": str(selection_metadata_path(codebook_path) or ""),
@@ -485,7 +570,7 @@ def main() -> int:
             "chronological_chunking": True,
             "rows_per_request": args.batch_size,
             "cost_optimization_strategy": "batch API plus larger chronological chunks; minimal request rows; no duplicate reuse or auto-zero",
-            "code_applicability": "row_source_scope metadata controls whether codes apply to chat, subtitle, or both",
+            "code_applicability": "code definitions control applicability; row_source_scope is a hard restriction only when explicitly provided",
         },
         "request_count": len(request_rows),
         "row_count_total": sum(target.row_count for target in pending_targets),
@@ -501,6 +586,8 @@ def main() -> int:
         "artifacts": {
             "manifest": str(manifest_path),
             "compiled_codebook": str(compiled_codebook_path),
+            "run_code_set_csv": str(run_code_set_path),
+            "central_run_code_set_csv": str(central_run_code_set_path),
             "candidate_rows_csv": str(candidate_rows_path),
             "auto_zero_candidates_csv": str(auto_zero_path),
             "batch_input_jsonl": str(batch_input_path),

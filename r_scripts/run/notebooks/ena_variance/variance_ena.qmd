@@ -1,0 +1,1832 @@
+---
+title: "Variance Project: Qualitative Analysis"
+format:
+  html:
+    code-tools: false
+    embed-resources: true
+execute:
+  echo: false
+  message: false
+  warning: false
+---
+
+
+```{r libraries_and_utils}
+library(here)
+knitr::opts_knit$set(root.dir = here::here())
+setwd(here::here())
+
+library(readr)
+library(dplyr)
+library(purrr)
+library(rENA)
+
+source(here::here("r_scripts", "lib", "utils", "source_dir.r"))
+source(here::here("r_scripts", "lib", "utils", "datalake_root.r"))
+source(here::here("r_scripts", "lib", "utils", "talent_select.R"))
+source(here::here("r_scripts", "lib", "import_data", "talent_files.R"))
+source(here::here("r_scripts", "lib", "clean_data", "CleanData.R"))
+source(here::here("r_scripts", "lib", "clean_data", "qualitative_data_prep", "qualitative_data_prep.r"))
+source_dir("r_scripts", "lib", "ENA_prep", "analysis_helpers")
+source(here::here("r_scripts", "lib", "clean_data", "title_classification_join.R"))
+source(here::here("r_scripts", "lib", "transcript_analysis", "qualitative_codes.R"))
+source(here::here("r_scripts", "lib", "transcript_analysis", "money_stream_selection.R"))
+source(here::here("r_scripts", "lib", "plots", "PlottingThemes.R"))
+source(here::here("r_scripts", "lib", "utils", "detect_decimals.R"))
+source(here::here("r_scripts", "lib", "utils", "dt_utils.R"))
+source(here::here("r_scripts", "lib", "stream_classification", "classification_definitions.R"))
+```
+
+```{r helpful_functions}
+#datatable formatting functions
+safe_min <- function(x) if (all(is.na(x))) NA_real_ else min(x, na.rm = TRUE)
+safe_max <- function(x) if (all(is.na(x))) NA_real_ else max(x, na.rm = TRUE)
+safe_mean <- function(x) if (all(is.na(x))) NA_real_ else mean(x, na.rm = TRUE)
+safe_median <- function(x) if (all(is.na(x))) NA_real_ else median(x, na.rm = TRUE)
+
+```
+
+
+```{r import_paths}
+
+codebook <- resolve_datalake_path(
+  r"(Z:\DataLake\Sun_Data_Analytics\Processed\Talent_Data\Qualitative Codebooks\library\selections\chat_monetary_growth\batch_002\batch_002_codebook.csv)"
+)
+
+coded_data_dir <- resolve_datalake_path(
+  r"(Z:\DataLake\Sun_Data_Analytics\Processed\Talent_Data\saved_outputs\chat_monetary_052526\coded_data)"
+)
+```
+
+```{r importing_qualitative_data}
+batch_review_paths <- sort(list.files(coded_data_dir, pattern = "\\.csv$", full.names = TRUE))
+
+import_data <- batch_review_paths %>%
+  purrr::set_names(tools::file_path_sans_ext(basename(.))) %>%
+  purrr::map_dfr(
+    ~ readr::read_csv(.x, show_col_types = FALSE),
+    .id = "batch_run"
+  ) %>%
+  mutate(talent_name = sub("_data$", "", .data$batch_run)) %>%
+  select(
+    batch_run,
+    talent_name,
+    request_custom_id,
+    source_file,
+    video_id,
+    row_number,
+    timecode,
+    source,
+    speaker,
+    paid_amount_text,
+    paid_amount_value,
+    paid_currency,
+    message_type,
+    text,
+    positive_codes,
+    starts_with("code_")
+  )
+```
+
+## Introduction
+
+Exploring use qualitative ENA with Variance talents. 
+
+## Methods
+1. Filtered all the talents streams for streams where there were donations
+1. Plotted a distribution for all the talents to see understand the spread
+1. For each talent, selected the 10 of the median streams. This means that I in regards to monetary donations, I took the 10 most average streams. The key thing here is that I'm trying to understand if there's a relationship between the streamer and chat in regards to giving. Thus, if I take the 10 most average streams, I should ideally be able to find something. The reason for this criteria, is that this is already a decent amount of data, and it's expensive to qualitative code this data, whether that be my time or running this through GPT. 
+1. From these data I developed 2 broad sets of codes
+    1. Codes that were focused directly on the chat
+    1. Codes that were focused on the streamer and how they interact
+
+# Descriptive Statistics
+
+```{r}
+title_classifications <- load_title_classifications() %>%
+  dplyr::rename(video_id = `Video ID`) %>%
+  dplyr::select(
+    -dplyr::any_of(c(
+      "talent_name",
+      "confidence"
+    ))
+  )
+
+df <- import_data %>%
+  dplyr::left_join(title_classifications, by = "video_id") %>%
+  normalize_text_playback_paid_amounts() %>%
+  dplyr::mutate(
+    paid_amount_value = paid_amount_native,
+    paid_currency = paid_currency_norm,
+    gave_money = !is.na(paid_amount_value) & paid_amount_value > 0
+  ) %>%
+  dplyr::select(
+    -dplyr::any_of(c(
+      "paid_amount_native",
+      "paid_currency_norm",
+      "usd_per_unit"
+    ))
+  )
+
+```
+
+## Videos included in the analysis
+
+Table below includes definitions for each of the genres
+```{r classification definitions}
+
+classification_definitions <- read_classification_definitions_table()
+classification_definitions <- classification_definitions %>%
+                                select(field_name, definition)
+
+DTSettings(
+  classification_definitions,
+  options = list(pageLength = 10)
+)
+```
+
+```{r}
+video_titles <- df %>%
+  dplyr::select(
+    source_file,
+    talent_name,
+    video_id,
+    primary_reference,
+    content_type,
+    published_at,
+    topic,
+    tags,
+    collaborative_energy,
+    community_milestones,
+    interactive_entertainment,
+    meme_viral,
+    monetization,
+    narrative_serialization,
+    performance_artistry,
+    personality_conversation
+  ) %>%
+  dplyr::distinct() %>%
+  dplyr::arrange(talent_name, primary_reference) %>%
+  tidyr::pivot_longer(
+    cols = c(
+      collaborative_energy,
+      community_milestones,
+      interactive_entertainment,
+      meme_viral,
+      monetization,
+      narrative_serialization,
+      performance_artistry,
+      personality_conversation
+    ),
+    names_to = "content_category",
+    values_to = "category_value"
+  ) %>%
+  filter(category_value == TRUE) %>%
+  select(-category_value)
+```
+
+The table shows the distribution of different types of content from the sample. 
+```{r}
+classification_counts <- video_titles %>%
+  dplyr::count(talent_name, content_category, name = "n_videos") %>%
+  dplyr::group_by(talent_name) %>%
+  dplyr::mutate(
+    pct_videos = n_videos / sum(n_videos)
+  ) %>%
+  dplyr::ungroup() %>%
+  dplyr::arrange(talent_name, desc(n_videos))
+
+DTSettings(
+  classification_counts,
+  scroll_x = TRUE,
+  percent_cols = "pct_videos",
+  options = list(pageLength = 10)
+)
+```
+
+## Lines of text associated with each genre
+
+```{r}
+video_summary <- df %>%
+  mutate(
+    stream_title = dplyr::coalesce(.data$title_raw, .data$primary_reference, .data$source_file),
+    donation_amount = if_else(
+      !is.na(paid_amount_usd) & paid_amount_usd > 0,
+      paid_amount_usd,
+      NA_real_
+    )
+  ) %>%
+  group_by(talent_name, video_id, stream_title) %>%
+  summarise(
+    total_lines_of_text = n(),
+    n_donations = sum(!is.na(donation_amount)),
+    total_donations = sum(donation_amount, na.rm = TRUE),
+    min_donation = safe_min(donation_amount),
+    max_donation = safe_max(donation_amount),
+    avg_donation = safe_mean(donation_amount),
+    median_donation = safe_median(donation_amount),
+    .groups = "drop"
+  ) %>%
+  mutate(stream_title = gsub("\n", "<br>", stringr::str_wrap(.data$stream_title, width = 55))) %>%
+  select(-video_id) %>%
+  arrange(desc(total_donations), desc(n_donations))
+
+DTSettings(
+  video_summary,
+  scroll_x = TRUE,
+  options = list(pageLength = 10),
+  escape = FALSE,
+  currency_cols = c(
+    "total_donations",
+    "min_donation",
+    "max_donation",
+    "avg_donation",
+    "median_donation"
+  )
+)
+```
+
+## Amount of Money by each stream and streamer
+Note that this is a check to deteremine that there is an average range. The assumption was that I picked streams that at least had money in them, so none of these streams had $0.
+
+```{r}
+donation_stream_summary <- df %>%
+  group_by(talent_name, video_id) %>%
+  summarize(
+    total_donations = sum(paid_amount_usd, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+donation_histogram <- donation_stream_summary %>%
+  ggplot(aes(x = total_donations)) +
+  geom_histogram(
+    fill = sun_data_brand_colors()[["blue"]],
+    color = "white",
+    bins = 30
+  ) +
+  facet_wrap(~talent_name, scales = "free_y") +
+  scale_y_continuous(breaks = scales::breaks_width(1)) +
+  scale_x_continuous(labels = scales::label_dollar()) +
+  labs(
+    x = "Total donations per stream",
+    y = "Stream count",
+    title = "Distribution of Stream Donation Totals"
+  ) +
+  theme_nyt()
+
+plotly::ggplotly(donation_histogram) %>%
+  plotly::layout(
+    hoverlabel = list(bgcolor = "white"),
+    margin = list(t = 70)
+  )
+```
+
+# Qualitative Analysis: Epistemic Network Analysis
+
+## Qualitative Codebook
+
+These codes are a combination of chat specific codes focusing on generalized chat behvaior, while focusing on generalized streamer responses. These are intended to be broad behvaiors to identify if there's a simpler solution to understanding the relationship between streamer and chat.
+
+```{r qualitative codebook}
+codebook_data <- readr::read_csv(codebook, show_col_types = FALSE)
+
+codebook_display <- codebook_data %>%
+  dplyr::mutate(
+    code_id = dplyr::if_else(
+      is.na(.data[["Secondary Code ID"]]) | !nzchar(trimws(.data[["Secondary Code ID"]])),
+      .data[["Primary Code ID"]],
+      .data[["Secondary Code ID"]]
+    ),
+    code_label = dplyr::if_else(
+      is.na(.data[["Secondary Code"]]) | !nzchar(trimws(.data[["Secondary Code"]])),
+      .data[["Primary Code"]],
+      .data[["Secondary Code"]]
+    )
+  ) %>%
+  dplyr::select(
+    code_id,
+    code_label,
+    definition = .data[["Definition"]]
+  ) %>%
+  dplyr::arrange(.data$code_id)
+
+DTSettings(
+  codebook_display,
+  scroll_x = TRUE,
+  options = list(pageLength = 10)
+)
+
+```
+
+## Code Selection
+```{r code selection}
+code_column_lookup <- build_code_column_lookup(codebook_data)
+import_data_named <- rename_code_columns(import_data, code_column_lookup)
+
+code_window_size_back <- 4L
+```
+
+```{r code_descriptive}
+code_pair_counts <- count_code_pairs_by_window(
+  import_data,
+  window_size_back = code_window_size_back
+)
+
+top_code_pairs <- code_pair_counts %>%
+  dplyr::slice_head(n = 6)
+```
+
+
+
+The table below identifies the qualitative codes that will be carried forward into the ENA model. First, each transcript row is scanned with a rolling window of the current row plus the previous four rows from the same stream. Codes that appear within the same window are counted as co-occurring pairs. `pair_participation_count` is the total number of windowed co-occurrences involving that code, while `distinct_pair_count` is the number of different code relationships that code participates in. Codes are ranked by these counts, then parent/child duplicates are removed so the selected set favors the more specific secondary code when both a primary and secondary code appear.
+
+```{r code counts and pairs}
+code_counts <- code_pair_counts %>%
+  dplyr::select(code = code_1, window_pair_count) %>%
+  dplyr::bind_rows(
+    code_pair_counts %>%
+      dplyr::select(code = code_2, window_pair_count)
+  ) %>%
+  dplyr::group_by(.data$code) %>%
+  dplyr::summarise(
+    pair_participation_count = sum(.data$window_pair_count),
+    distinct_pair_count = dplyr::n(),
+    .groups = "drop"
+  ) %>%
+  dplyr::arrange(
+    dplyr::desc(.data$pair_participation_count),
+    dplyr::desc(.data$distinct_pair_count)
+  )
+
+code_counts_display <- code_counts %>%
+  dplyr::left_join(codebook_display, by = c("code" = "code_id")) %>%
+  dplyr::select(
+    code,
+    code_label,
+    pair_participation_count,
+    distinct_pair_count,
+    dplyr::everything(),
+    -definition
+  )
+
+top_code_hierarchy_preference <- "secondary"
+
+top_code_selection <- select_top_hierarchy_codes(
+  code_counts = code_counts,
+  codebook = codebook_data,
+  available_code_cols = names(import_data),
+  n = 8,
+  prefer = top_code_hierarchy_preference
+)
+
+top_codes <- top_code_selection$selected
+hierarchy_excluded_codes <- top_code_selection$excluded
+top_code_cols <- top_codes$code_col
+
+selected_code_table <- code_counts_display %>%
+  dplyr::semi_join(top_codes, by = "code")
+
+DTSettings(
+  selected_code_table,
+  scroll_x = TRUE,
+  options = list(pageLength = 8)
+)
+```
+
+Next rather than looking at individual codes, I also examined code pairs to determine which sets of code pairs were the most common. This is because ENA is ultimately looking at code co-occurence, so understanding which codes are commonly co-occuring can be helpful for understanding the data and validating the code selection. The table below shows the most common code pairs, which again validates the code selection as these pairs are made up of the codes that were selected for the model.
+
+```{r frequency_codepairs}
+code_pair_frequency_table <- code_pair_counts %>%
+  dplyr::left_join(
+    codebook_display %>%
+      dplyr::select(code_1 = code_id, code_1_label = code_label),
+    by = "code_1"
+  ) %>%
+  dplyr::left_join(
+    codebook_display %>%
+      dplyr::select(code_2 = code_id, code_2_label = code_label),
+    by = "code_2"
+  ) %>%
+  dplyr::mutate(
+    code_pair = paste(.data$code_1, .data$code_2, sep = " + "),
+    code_pair_label = paste(.data$code_1_label, .data$code_2_label, sep = " + "),
+    pct_pair_windows = .data$window_pair_count / sum(.data$window_pair_count)
+  ) %>%
+  dplyr::select(
+    code_pair,
+    code_pair_label,
+    window_pair_count,
+    pct_pair_windows,
+    code_1,
+    code_1_label,
+    code_2,
+    code_2_label
+  ) %>%
+  dplyr::arrange(dplyr::desc(.data$window_pair_count))
+
+DTSettings(
+  code_pair_frequency_table,
+  scroll_x = TRUE,
+  percent_cols = "pct_pair_windows",
+  options = list(pageLength = 10)
+)
+```
+
+## ENA Prep
+```{r ENA_Set}
+ena_input_data <- df %>%
+  dplyr::mutate(
+    ena_line_id = paste(.data$video_id, .data$row_number, sep = "_"),
+    stream_title = dplyr::coalesce(.data$title_raw, .data$primary_reference, .data$source_file),
+    gave_money = dplyr::coalesce(.data$gave_money, FALSE)
+  )
+
+ena_code_cols <- c(top_code_cols, "gave_money")
+
+ENA <- ENA_setup(
+  df = ena_input_data,
+  units_col = c("talent_name", "video_id"),
+  conversation_cols = c("source_file", "video_id"),
+  codes_cols = dplyr::all_of(ena_code_cols),
+  metadata_cols = c("talent_name", "video_id", "stream_title", "source_file")
+)
+
+ENA_accum <- ENA_accumulate_from_prep(
+  ENA,
+  window.size.back = code_window_size_back
+)
+
+ENA_set <- rENA::ena.make.set(ENA_accum)
+```
+
+```{r components}
+ENA_lineweights <- as.matrix(ENA_set$line.weights)
+mean_network <- colMeans(ENA_lineweights, na.rm = TRUE)
+```
+
+```{r stream_lineweight_helper}
+get_stream_code_pair_weights <- function(ena_set) {
+  metadata <- tibble::as_tibble(ena_set$meta.data) %>%
+    dplyr::mutate(dplyr::across(dplyr::everything(), as.vector))
+  lineweights <- as.matrix(ena_set$line.weights)
+
+  if (nrow(metadata) != nrow(lineweights)) {
+    stop("ENA metadata and lineweights do not have the same number of rows.", call. = FALSE)
+  }
+
+  lineweight_table <- tibble::as_tibble(lineweights) %>%
+    dplyr::mutate(.stream_row = dplyr::row_number()) %>%
+    tidyr::pivot_longer(
+      cols = -.data$.stream_row,
+      names_to = "code_pair",
+      values_to = "lineweight"
+    )
+
+  metadata$stream_label <- as.character(metadata$video_id)
+
+  if ("source_file" %in% names(metadata)) {
+    metadata$stream_label <- dplyr::coalesce(
+      as.character(metadata$source_file),
+      metadata$stream_label
+    )
+  }
+
+  if ("stream_title" %in% names(metadata)) {
+    metadata$stream_label <- dplyr::coalesce(
+      as.character(metadata$stream_title),
+      metadata$stream_label
+    )
+  }
+
+  metadata %>%
+    dplyr::mutate(.stream_row = dplyr::row_number()) %>%
+    dplyr::select(
+      ".stream_row",
+      "talent_name",
+      "video_id",
+      "stream_label",
+      dplyr::any_of("source_file")
+    ) %>%
+    dplyr::left_join(lineweight_table, by = ".stream_row") %>%
+    dplyr::select(-".stream_row") %>%
+    dplyr::arrange(
+      .data$talent_name,
+      .data$video_id,
+      dplyr::desc(abs(.data$lineweight))
+    )
+}
+
+plot_stream_network <- function(ena_set,
+                                video_id_value,
+                                talent_label = NULL,
+                                edge_multiplier = 5,
+                                color = sun_data_brand_colors()[["blue"]]) {
+  metadata <- tibble::as_tibble(ena_set$meta.data) %>%
+    dplyr::mutate(dplyr::across(dplyr::everything(), as.vector))
+  row_filter <- as.character(metadata$video_id) == as.character(video_id_value)
+
+  if (!is.null(talent_label)) {
+    row_filter <- row_filter & tolower(metadata$talent_name) == tolower(talent_label)
+  }
+
+  if (!any(row_filter, na.rm = TRUE)) {
+    stop("No ENA stream row found for video_id: ", video_id_value, call. = FALSE)
+  }
+
+  stream_label <- dplyr::coalesce(
+    if ("stream_title" %in% names(metadata)) metadata$stream_title[row_filter][[1]] else NA_character_,
+    if ("source_file" %in% names(metadata)) metadata$source_file[row_filter][[1]] else NA_character_,
+    as.character(video_id_value)
+  )
+  stream_lineweights <- as.matrix(ena_set$line.weights)[row_filter, , drop = FALSE]
+
+  plot(ena_set, title = stringr::str_trunc(stream_label, width = 80)) |>
+    add_network(
+      wh = stream_lineweights,
+      colors = color,
+      edge.multiplier = edge_multiplier
+    )
+}
+
+stream_code_pair_weights <- get_stream_code_pair_weights(ENA_set)
+```
+
+
+```{r overall_plot}
+talent_centroids <- ena_group_centroids(
+  ENA_set,
+  group_col = "talent_name"
+)
+
+talent_centroid_points <- ena_centroids_to_point_list(talent_centroids)
+talent_colors <- setNames(
+  sun_data_palette(length(talent_centroid_points), variant = "brand"),
+  names(talent_centroid_points)
+)
+
+ena_plot_with_centroids <- plot(ENA_set, title = "ENA Plot") |>
+  add_network(colors = sun_data_brand_colors()[["blue"]], edge.multiplier = 5) |>
+  add_ena_point_groups(
+    point_list = talent_centroid_points,
+    colors = talent_colors,
+    shape = "square",
+    label.offset = "top right"
+  )
+
+ena_plot_with_centroids
+```
+
+```{r talent_network_helper}
+plot_talent_mean_network <- function(ena_set,
+                                     talent_label,
+                                     edge_multiplier = 5,
+                                     color = sun_data_brand_colors()[["blue"]]) {
+  metadata <- tibble::as_tibble(ena_set$meta.data)
+
+  if (!"talent_name" %in% names(metadata)) {
+    stop("ENA_set$meta.data does not include talent_name.", call. = FALSE)
+  }
+
+  talent_name <- unique(metadata$talent_name)[
+    tolower(unique(metadata$talent_name)) == tolower(talent_label)
+  ]
+
+  if (length(talent_name) < 1L) {
+    stop("No ENA rows found for talent: ", talent_label, call. = FALSE)
+  }
+
+  talent_lineweights <- as.matrix(ena_set$line.weights)[
+    metadata$talent_name == talent_name[[1]],
+    ,
+    drop = FALSE
+  ]
+
+  plot(ena_set, title = paste(talent_label, "Mean ENA Network")) |>
+    add_network(
+      wh = talent_lineweights,
+      colors = color,
+      edge.multiplier = edge_multiplier
+    )
+}
+```
+
+## Ava
+```{r ava_network}
+plot <- plot_talent_mean_network(ENA_set, "Ava")
+plot$plot
+```
+
+## Katya
+```{r katya_network}
+plot <- plot_talent_mean_network(ENA_set, "Katya")
+plot$plot
+```
+
+## Leia
+```{r leia_network}
+plot <- plot_talent_mean_network(ENA_set, "Leia")
+plot$plot
+```
+
+# Linear Regression Analysis
+
+```{r stream_regression_data}
+stream_regression_data <- stream_code_pair_weights %>%
+  dplyr::filter(!stringr::str_detect(.data$code_pair, "(^|[^A-Za-z0-9])gave_money([^A-Za-z0-9]|$)")) %>%
+  dplyr::mutate(
+    code_pair_variable = paste0(
+      "lw_",
+      stringr::str_replace_all(.data$code_pair, "[^A-Za-z0-9]+", "_")
+    )
+  ) %>%
+  dplyr::select(
+    "talent_name",
+    "video_id",
+    "stream_label",
+    dplyr::any_of("source_file"),
+    "code_pair_variable",
+    "lineweight"
+  ) %>%
+  dplyr::group_by(dplyr::across(dplyr::any_of(c(
+    "talent_name",
+    "video_id",
+    "stream_label",
+    "source_file",
+    "code_pair_variable"
+  )))) %>%
+  dplyr::summarise(
+    lineweight = mean(.data$lineweight, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  tidyr::pivot_wider(
+    names_from = "code_pair_variable",
+    values_from = "lineweight",
+    values_fill = list(lineweight = 0)
+  ) %>%
+  dplyr::mutate(
+    dplyr::across(dplyr::any_of(c(
+      "talent_name",
+      "video_id",
+      "stream_label",
+      "source_file"
+    )), as.character)
+  )
+```
+
+```{r regression_data_prep}
+
+stream_revenue_data <- df %>%
+  dplyr::mutate(
+    donation_amount = dplyr::if_else(
+      !is.na(.data$paid_amount_usd) & .data$paid_amount_usd > 0,
+      .data$paid_amount_usd,
+      NA_real_
+    )
+  ) %>%
+  dplyr::group_by(.data$talent_name, .data$video_id) %>%
+  dplyr::summarise(
+    total_lines_of_text = dplyr::n(),
+    n_donations = sum(!is.na(.data$donation_amount)),
+    total_donations = sum(.data$donation_amount, na.rm = TRUE),
+    avg_donation = safe_mean(.data$donation_amount),
+    median_donation = safe_median(.data$donation_amount),
+    .groups = "drop"
+  ) %>%
+  dplyr::mutate(
+    dplyr::across(dplyr::any_of(c("talent_name", "video_id")), as.character)
+  )
+
+analytics_talent_paths <- unique(stream_regression_data$talent_name) %>%
+  purrr::map_chr(~ select_talent(.x, root = get_datalake_root()))
+
+analytics_talent_files <- TalentFiles(analytics_talent_paths)
+
+stream_analytics_data <- purrr::map_dfr(
+  seq_along(analytics_talent_files),
+  ~ video_analytics_prep(
+    files = analytics_talent_files,
+    talent = safe_basename(analytics_talent_paths[[.x]]),
+    talent_index = .x
+  ) %>%
+    dplyr::mutate(analytics_talent_name = safe_basename(analytics_talent_paths[[.x]]))
+) %>%
+  dplyr::transmute(
+    video_id = as.character(.data$`Video ID`),
+    analytics_talent_name = as.character(.data$analytics_talent_name),
+    analytics_views = as.numeric(.data$views),
+    analytics_estimated_minutes_watched = as.numeric(.data$estimatedMinutesWatched),
+    analytics_average_view_duration = as.numeric(.data$averageViewDuration),
+    analytics_average_view_percentage = as.numeric(.data$averageViewPercentage),
+    analytics_subscribers_gained = as.numeric(.data$subscribersGained),
+    analytics_subscribers_lost = as.numeric(.data$subscribersLost),
+    analytics_duration_minutes = as.numeric(.data$duration_minutes),
+    analytics_publish_hour_sin = as.numeric(.data$publish_hour_sin),
+    analytics_publish_hour_cos = as.numeric(.data$publish_hour_cos),
+    analytics_is_weekend = as.integer(.data$is_weekend)
+  ) %>%
+  dplyr::distinct(.data$video_id, .keep_all = TRUE)
+
+stream_model_data <- stream_regression_data %>%
+  dplyr::left_join(
+    stream_revenue_data,
+    by = c("talent_name", "video_id")
+  ) %>%
+  dplyr::left_join(
+    stream_analytics_data,
+    by = "video_id"
+  ) %>%
+  dplyr::left_join(
+    title_classifications,
+    by = "video_id",
+    suffix = c("_ena", "_title")
+  )
+```
+
+## Predictive Modeling Goal
+
+The goal of this section is predictive rather than causal. The question is whether stream activity, content classifications, and ENA lineweight features help predict stream-level donations. Because there are only about 30 streams, the workflow keeps the unregularized linear models small and uses penalized regression for the ENA-heavy models.
+
+Donation-count and donation-size summaries are excluded from the main predictors because they mechanically summarize the outcome. The main outcome is `log1p(total_donations)`, which reduces the influence of highly skewed stream revenue. The expanded baseline includes stream analytics such as views, watch time, retention, subscriber change, duration, and publish timing.
+
+```{r lm_packages}
+required_modeling_packages <- c("broom", "forcats", "glmnet", "ggplot2", "plotly", "readr", "tibble", "tidyr")
+missing_modeling_packages <- required_modeling_packages[
+  !vapply(required_modeling_packages, requireNamespace, logical(1), quietly = TRUE)
+]
+
+if (length(missing_modeling_packages) > 0L) {
+  stop(
+    "Install required modeling package(s): ",
+    paste(missing_modeling_packages, collapse = ", "),
+    call. = FALSE
+  )
+}
+```
+
+```{r modeling_paths}
+modeling_output_dir <- file.path(dirname(coded_data_dir), "stream_predictive_modeling")
+dir.create(modeling_output_dir, recursive = TRUE, showWarnings = FALSE)
+write_modeling_outputs <- TRUE
+
+```
+
+```{r modeling_setup_modules}
+classification_vars <- c(
+  "collaborative_energy",
+  "community_milestones",
+  "interactive_entertainment",
+  "meme_viral",
+  "monetization",
+  "narrative_serialization",
+  "performance_artistry",
+  "personality_conversation",
+  "personality_conversations"
+)
+
+safe_metric_r_squared <- function(observed, predicted) {
+  sst <- sum((observed - mean(observed, na.rm = TRUE))^2, na.rm = TRUE)
+  if (is.na(sst) || sst == 0) {
+    return(NA_real_)
+  }
+  1 - sum((observed - predicted)^2, na.rm = TRUE) / sst
+}
+
+calculate_prediction_metrics <- function(predictions) {
+  predictions %>%
+    dplyr::group_by(.data$model_id, .data$model_family) %>%
+    dplyr::summarise(
+      n_streams = dplyr::n(),
+      rmse_log = sqrt(mean((.data$observed_log - .data$predicted_log)^2, na.rm = TRUE)),
+      mae_log = mean(abs(.data$observed_log - .data$predicted_log), na.rm = TRUE),
+      r_squared_log = safe_metric_r_squared(.data$observed_log, .data$predicted_log),
+      rmse_dollars = sqrt(mean((.data$observed_dollars - .data$predicted_dollars)^2, na.rm = TRUE)),
+      mae_dollars = mean(abs(.data$observed_dollars - .data$predicted_dollars), na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    dplyr::arrange(.data$rmse_log, .data$mae_log)
+}
+
+make_model_matrix <- function(data, predictors) {
+  predictors <- unlist(predictors, use.names = FALSE)
+  rhs <- paste(predictors, collapse = " + ")
+  matrix <- stats::model.matrix(
+    stats::as.formula(paste("~", rhs)),
+    data = data,
+    na.action = stats::na.pass
+  )
+
+  nonfinite_columns <- colnames(matrix)[
+    colSums(!is.finite(matrix)) > 0
+  ]
+
+  if (length(nonfinite_columns) > 0L) {
+    stop(
+      "Model matrix contains NA/NaN/Inf in column(s): ",
+      paste(nonfinite_columns, collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  matrix
+}
+
+fit_loocv_linear_model <- function(data, predictors, model_id) {
+  x <- make_model_matrix(data, predictors)
+  y <- data$outcome_log
+
+  purrr::map_dfr(seq_len(nrow(data)), function(test_index) {
+    train_index <- setdiff(seq_len(nrow(data)), test_index)
+    fit <- stats::lm.fit(x = x[train_index, , drop = FALSE], y = y[train_index])
+    coefficients <- stats::coef(fit)
+    coefficients[is.na(coefficients)] <- 0
+    predicted_log <- as.numeric(x[test_index, , drop = FALSE] %*% coefficients)
+
+    tibble::tibble(
+      model_id = model_id,
+      model_family = "linear_lm",
+      talent_name = data$talent_name[[test_index]],
+      video_id = data$video_id[[test_index]],
+      observed_log = y[[test_index]],
+      predicted_log = predicted_log,
+      observed_dollars = data$total_donations[[test_index]],
+      predicted_dollars = pmax(expm1(predicted_log), 0)
+    )
+  })
+}
+
+fit_loocv_glmnet_model <- function(data, predictors, model_id, alpha) {
+  x <- make_model_matrix(data, predictors)
+  x <- x[, colnames(x) != "(Intercept)", drop = FALSE]
+  y <- data$outcome_log
+
+  purrr::map_dfr(seq_len(nrow(data)), function(test_index) {
+    train_index <- setdiff(seq_len(nrow(data)), test_index)
+    n_folds <- min(5L, length(train_index))
+
+    fit <- glmnet::cv.glmnet(
+      x = x[train_index, , drop = FALSE],
+      y = y[train_index],
+      alpha = alpha,
+      nfolds = n_folds,
+      standardize = TRUE
+    )
+
+    predicted_log <- as.numeric(stats::predict(
+      fit,
+      newx = x[test_index, , drop = FALSE],
+      s = "lambda.min"
+    ))
+
+    tibble::tibble(
+      model_id = model_id,
+      model_family = paste0("glmnet_alpha_", alpha),
+      talent_name = data$talent_name[[test_index]],
+      video_id = data$video_id[[test_index]],
+      observed_log = y[[test_index]],
+      predicted_log = predicted_log,
+      observed_dollars = data$total_donations[[test_index]],
+      predicted_dollars = pmax(expm1(predicted_log), 0)
+    )
+  })
+}
+
+fit_final_glmnet_model <- function(data, predictors, alpha) {
+  x <- make_model_matrix(data, predictors)
+  x <- x[, colnames(x) != "(Intercept)", drop = FALSE]
+
+  glmnet::cv.glmnet(
+    x = x,
+    y = data$outcome_log,
+    alpha = alpha,
+    nfolds = min(5L, nrow(data)),
+    standardize = TRUE
+  )
+}
+
+extract_glmnet_coefficients <- function(fit) {
+  coefficient_matrix <- as.matrix(stats::coef(fit, s = "lambda.min"))
+
+  tibble::tibble(
+    predictor = rownames(coefficient_matrix),
+    coefficient = as.numeric(coefficient_matrix[, 1])
+  ) %>%
+    dplyr::filter(.data$predictor != "(Intercept)") %>%
+    dplyr::filter(.data$coefficient != 0) %>%
+    dplyr::mutate(abs_coefficient = abs(.data$coefficient)) %>%
+    dplyr::arrange(dplyr::desc(.data$abs_coefficient))
+}
+
+model_predictor_formula <- function(predictors, outcome = "outcome_log") {
+  predictors <- unlist(predictors, use.names = FALSE)
+  stats::as.formula(paste(outcome, "~", paste(predictors, collapse = " + ")))
+}
+
+classify_predictor_group <- function(predictor) {
+  dplyr::case_when(
+    predictor == "(Intercept)" ~ "intercept",
+    stringr::str_detect(predictor, "gave_money") ~ "donation-linked ENA lineweight",
+    stringr::str_detect(predictor, "^lw_") ~ "ENA lineweight",
+    stringr::str_detect(predictor, "^topic_lumped") ~ "topic",
+    predictor %in% content_predictors ~ "content classification",
+    TRUE ~ "baseline/control"
+  )
+}
+
+fit_selected_model <- function(data, model_spec) {
+  predictors <- unlist(model_spec$predictors[[1]], use.names = FALSE)
+
+  if (identical(model_spec$model_type[[1]], "linear")) {
+    return(stats::lm(model_predictor_formula(predictors), data = data))
+  }
+
+  fit_final_glmnet_model(
+    data = data,
+    predictors = predictors,
+    alpha = model_spec$alpha[[1]]
+  )
+}
+
+extract_selected_model_predictors <- function(fit, model_spec) {
+  if (identical(model_spec$model_type[[1]], "linear")) {
+    return(
+      broom::tidy(fit, conf.int = TRUE) %>%
+        dplyr::rename(
+          predictor = .data$term,
+          coefficient = .data$estimate
+        ) %>%
+        dplyr::mutate(
+          abs_coefficient = abs(.data$coefficient),
+          predictor_group = classify_predictor_group(.data$predictor),
+          coefficient_direction = dplyr::case_when(
+            .data$coefficient > 0 ~ "positive",
+            .data$coefficient < 0 ~ "negative",
+            TRUE ~ "zero"
+          )
+        ) %>%
+        dplyr::arrange(dplyr::desc(.data$abs_coefficient))
+    )
+  }
+
+  extract_glmnet_coefficients(fit) %>%
+    dplyr::mutate(
+      predictor_group = classify_predictor_group(.data$predictor),
+      coefficient_direction = dplyr::case_when(
+        .data$coefficient > 0 ~ "positive",
+        .data$coefficient < 0 ~ "negative",
+        TRUE ~ "zero"
+      )
+    )
+}
+
+fit_bootstrap_selected_model <- function(data, model_spec, n_bootstrap = 250, seed = 20260526) {
+  set.seed(seed)
+  predictors <- unlist(model_spec$predictors[[1]], use.names = FALSE)
+
+  purrr::map_dfr(seq_len(n_bootstrap), function(iteration) {
+    boot_index <- sample(seq_len(nrow(data)), size = nrow(data), replace = TRUE)
+    boot_data <- data[boot_index, , drop = FALSE]
+
+    if (identical(model_spec$model_type[[1]], "linear")) {
+      fit <- stats::lm(model_predictor_formula(predictors), data = boot_data)
+      coefficients <- stats::coef(fit)
+    } else {
+      x <- make_model_matrix(boot_data, predictors)
+      x <- x[, colnames(x) != "(Intercept)", drop = FALSE]
+      fit <- glmnet::cv.glmnet(
+        x = x,
+        y = boot_data$outcome_log,
+        alpha = model_spec$alpha[[1]],
+        nfolds = min(5L, nrow(boot_data)),
+        standardize = TRUE
+      )
+      coefficient_matrix <- as.matrix(stats::coef(fit, s = "lambda.min"))
+      coefficients <- stats::setNames(
+        as.numeric(coefficient_matrix[, 1]),
+        rownames(coefficient_matrix)
+      )
+    }
+
+    tibble::tibble(
+      bootstrap_iteration = iteration,
+      predictor = names(coefficients),
+      coefficient = as.numeric(coefficients)
+    ) %>%
+      dplyr::filter(.data$predictor != "(Intercept)")
+  })
+}
+
+summarise_bootstrap_stability <- function(bootstrap_coefficients) {
+  bootstrap_coefficients %>%
+    dplyr::mutate(
+      retained = !is.na(.data$coefficient) & .data$coefficient != 0,
+      positive = .data$coefficient > 0,
+      negative = .data$coefficient < 0
+    ) %>%
+    dplyr::group_by(.data$predictor) %>%
+    dplyr::summarise(
+      predictor_group = classify_predictor_group(dplyr::first(.data$predictor)),
+      selection_frequency = mean(.data$retained, na.rm = TRUE),
+      mean_coefficient = mean(.data$coefficient, na.rm = TRUE),
+      median_coefficient = stats::median(.data$coefficient, na.rm = TRUE),
+      coefficient_sign_consistency = max(
+        mean(.data$positive, na.rm = TRUE),
+        mean(.data$negative, na.rm = TRUE)
+      ),
+      bootstrap_lower_bound = stats::quantile(.data$coefficient, 0.025, na.rm = TRUE),
+      bootstrap_upper_bound = stats::quantile(.data$coefficient, 0.975, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    dplyr::arrange(dplyr::desc(.data$selection_frequency), dplyr::desc(abs(.data$mean_coefficient)))
+}
+```
+
+## Modeling Data Preparation
+
+The modeling dataset keeps one row per stream. Sparse topics are collapsed into an `Other` category so that the small sample does not create unstable one-observation dummy variables. Logical classification columns are converted to numeric 0/1 predictors. ENA lineweights are already numeric and are standardized internally by `glmnet`.
+
+```{r predictive_modeling_data}
+ena_lineweight_vars <- names(stream_model_data) %>%
+  stringr::str_subset("^lw_") %>%
+  stringr::str_subset("gave_money", negate = TRUE)
+
+available_classification_vars <- intersect(classification_vars, names(stream_model_data))
+
+available_analytics_vars <- intersect(
+  c(
+    "analytics_views",
+    "analytics_estimated_minutes_watched",
+    "analytics_average_view_duration",
+    "analytics_average_view_percentage",
+    "analytics_subscribers_gained",
+    "analytics_subscribers_lost",
+    "analytics_duration_minutes",
+    "analytics_publish_hour_sin",
+    "analytics_publish_hour_cos",
+    "analytics_is_weekend"
+  ),
+  names(stream_model_data)
+)
+
+modeling_data <- stream_model_data %>%
+  dplyr::distinct(.data$talent_name, .data$video_id, .keep_all = TRUE) %>%
+  dplyr::mutate(
+    topic_model = trimws(dplyr::coalesce(as.character(.data$topic), "Unknown")),
+    topic_model = dplyr::if_else(.data$topic_model == "", "Unknown", .data$topic_model),
+    topic_lumped = forcats::fct_lump_min(factor(.data$topic_model), min = 3, other_level = "Other"),
+    topic_lumped = forcats::fct_na_value_to_level(.data$topic_lumped, level = "Unknown"),
+    total_donations = as.numeric(.data$total_donations),
+    total_lines_of_text = as.numeric(.data$total_lines_of_text),
+    outcome_log = log1p(.data$total_donations),
+    log_lines_of_text = log1p(.data$total_lines_of_text),
+    log_analytics_views = log1p(dplyr::coalesce(as.numeric(.data$analytics_views), 0)),
+    log_analytics_estimated_minutes_watched = log1p(dplyr::coalesce(as.numeric(.data$analytics_estimated_minutes_watched), 0)),
+    log_analytics_average_view_duration = log1p(dplyr::coalesce(as.numeric(.data$analytics_average_view_duration), 0)),
+    log_analytics_duration_minutes = log1p(dplyr::coalesce(as.numeric(.data$analytics_duration_minutes), 0)),
+    analytics_average_view_percentage = dplyr::coalesce(as.numeric(.data$analytics_average_view_percentage), 0),
+    analytics_subscribers_gained = dplyr::coalesce(as.numeric(.data$analytics_subscribers_gained), 0),
+    analytics_subscribers_lost = dplyr::coalesce(as.numeric(.data$analytics_subscribers_lost), 0),
+    analytics_publish_hour_sin = dplyr::coalesce(as.numeric(.data$analytics_publish_hour_sin), 0),
+    analytics_publish_hour_cos = dplyr::coalesce(as.numeric(.data$analytics_publish_hour_cos), 0),
+    analytics_is_weekend = dplyr::coalesce(as.integer(.data$analytics_is_weekend), 0),
+    dplyr::across(dplyr::all_of(available_classification_vars), ~ as.integer(dplyr::coalesce(.x, FALSE))),
+    dplyr::across(dplyr::all_of(ena_lineweight_vars), ~ dplyr::coalesce(as.numeric(.x), 0))
+  ) %>%
+  dplyr::filter(
+    is.finite(.data$outcome_log),
+    is.finite(.data$log_lines_of_text)
+  )
+
+original_baseline_predictors <- c("log_lines_of_text", "topic_lumped")
+analytics_predictors <- c(
+  "log_analytics_views",
+  "log_analytics_estimated_minutes_watched",
+  "log_analytics_average_view_duration",
+  "analytics_average_view_percentage",
+  "analytics_subscribers_gained",
+  "analytics_subscribers_lost",
+  "log_analytics_duration_minutes",
+  "analytics_publish_hour_sin",
+  "analytics_publish_hour_cos",
+  "analytics_is_weekend"
+)
+baseline_predictors <- c(original_baseline_predictors, analytics_predictors)
+content_predictors <- available_classification_vars
+ena_predictors <- ena_lineweight_vars
+
+model_specs <- tibble::tribble(
+  ~model_id, ~model_type, ~alpha, ~predictors,
+  "A0. Original baseline", "linear", NA_real_, list(original_baseline_predictors),
+  "A. Analytics baseline", "linear", NA_real_, list(baseline_predictors),
+  "B. Analytics baseline + content classifications", "linear", NA_real_, list(c(baseline_predictors, content_predictors)),
+  "C. Analytics baseline + ENA ridge", "glmnet", 0, list(c(baseline_predictors, ena_predictors)),
+  "C. Analytics baseline + ENA elastic net", "glmnet", 0.5, list(c(baseline_predictors, ena_predictors)),
+  "C. Analytics baseline + ENA lasso", "glmnet", 1, list(c(baseline_predictors, ena_predictors)),
+  "D. Full ridge", "glmnet", 0, list(c(baseline_predictors, content_predictors, ena_predictors)),
+  "D. Full elastic net", "glmnet", 0.5, list(c(baseline_predictors, content_predictors, ena_predictors)),
+  "D. Full lasso", "glmnet", 1, list(c(baseline_predictors, content_predictors, ena_predictors))
+)
+```
+
+## Model Comparison
+
+The models are evaluated with leave-one-out cross-validation. This is more defensible for a small sample than in-sample fit statistics, though the results should still be interpreted as exploratory because each fold is trained on a very small dataset.
+
+```{r predictive_modeling_fit}
+model_predictions <- purrr::pmap_dfr(
+  model_specs,
+  function(model_id, model_type, alpha, predictors) {
+    if (identical(model_type, "linear")) {
+      fit_loocv_linear_model(modeling_data, predictors, model_id)
+    } else {
+      fit_loocv_glmnet_model(modeling_data, predictors, model_id, alpha)
+    }
+  }
+)
+
+model_performance <- calculate_prediction_metrics(model_predictions)
+
+#readr::write_csv(
+#  model_performance,
+#  file.path(modeling_output_dir, "model_performance.csv")
+#)
+
+DTSettings(
+  model_performance,
+  scroll_x = TRUE,
+  currency_cols = c("rmse_dollars", "mae_dollars"),
+  options = list(pageLength = 10)
+)
+```
+
+## Strongest Predictors
+
+The ENA-heavy models use penalization because there are many lineweight predictors relative to the number of streams. Elastic net is the preferred ENA specification because ENA lineweights are likely correlated, but the table below uses whichever penalized model has the best leave-one-out RMSE on the log donation outcome.
+
+```{r strongest_predictors}
+best_penalized_model <- model_performance %>%
+  dplyr::filter(stringr::str_detect(.data$model_family, "^glmnet")) %>%
+  dplyr::slice_min(.data$rmse_log, n = 1, with_ties = FALSE)
+
+best_penalized_spec <- model_specs %>%
+  dplyr::filter(.data$model_id == best_penalized_model$model_id[[1]])
+
+best_penalized_fit <- fit_final_glmnet_model(
+  modeling_data,
+  predictors = unlist(best_penalized_spec$predictors[[1]], use.names = FALSE),
+  alpha = best_penalized_spec$alpha[[1]]
+)
+
+best_penalized_coefficients <- extract_glmnet_coefficients(best_penalized_fit)
+
+#readr::write_csv(
+#  best_penalized_coefficients,
+#  file.path(modeling_output_dir, "best_penalized_coefficients.csv")
+#)
+
+DTSettings(
+  best_penalized_coefficients,
+  scroll_x = TRUE,
+  options = list(pageLength = 20)
+)
+```
+
+## Diagnostic Plots
+
+These plots show predictive behavior for the best-performing model. They are checks on prediction quality, not evidence of causal effects. The interactive versions are helpful for identifying which specific streams are driving errors or unusual coefficient patterns.
+
+```{r predictive_diagnostic_setup}
+best_model_id <- model_performance$model_id[[1]]
+best_model_predictions <- model_predictions %>%
+  dplyr::filter(.data$model_id == best_model_id) %>%
+  dplyr::left_join(
+    modeling_data %>%
+      dplyr::select(
+        "talent_name",
+        "video_id",
+        dplyr::any_of(c("stream_label", "topic_lumped", "total_lines_of_text"))
+      ),
+    by = c("talent_name", "video_id")
+  ) %>%
+  dplyr::mutate(
+    residual_log = .data$observed_log - .data$predicted_log,
+    hover_label = paste0(
+      "Talent: ", .data$talent_name,
+      "<br>Video ID: ", .data$video_id,
+      if ("stream_label" %in% names(.)) paste0("<br>Stream: ", .data$stream_label) else "",
+      if ("topic_lumped" %in% names(.)) paste0("<br>Topic: ", .data$topic_lumped) else "",
+      "<br>Observed: ", scales::dollar(.data$observed_dollars),
+      "<br>Predicted: ", scales::dollar(.data$predicted_dollars),
+      "<br>Log residual: ", round(.data$residual_log, 3)
+    )
+  )
+```
+
+### Observed vs Predicted Donations
+
+This plot checks whether the best model is generally close to the donation totals it is trying to predict. Points near the dashed line are better predictions. Points far above the line are over-predictions, and points far below the line are under-predictions.
+
+```{r observed_vs_predicted_plot}
+observed_vs_predicted_plot <- best_model_predictions %>%
+  ggplot2::ggplot(ggplot2::aes(
+    x = observed_dollars,
+    y = predicted_dollars,
+    text = hover_label
+  )) +
+  ggplot2::geom_abline(slope = 1, intercept = 0, color = "gray60", linetype = "dashed") +
+  ggplot2::geom_point(color = sun_data_brand_colors()[["blue"]], size = 2.5, alpha = 0.8) +
+  ggplot2::scale_x_continuous(labels = scales::label_dollar()) +
+  ggplot2::scale_y_continuous(labels = scales::label_dollar()) +
+  ggplot2::labs(
+    title = "Observed vs Predicted Stream Donations",
+    subtitle = best_model_id,
+    x = "Observed total donations",
+    y = "Predicted total donations"
+  ) +
+  theme_nyt()
+
+observed_vs_predicted_interactive <- plotly::ggplotly(
+  observed_vs_predicted_plot,
+  tooltip = "text"
+)
+
+observed_vs_predicted_interactive
+```
+
+### Residuals vs Fitted Values
+
+This plot checks whether prediction errors are randomly scattered across the range of fitted values. A strong curve, funnel shape, or cluster of large residuals would suggest the model is missing structure or struggling with a subset of streams.
+
+```{r residuals_vs_fitted_plot}
+residuals_vs_fitted_plot <- best_model_predictions %>%
+  ggplot2::ggplot(ggplot2::aes(
+    x = predicted_log,
+    y = residual_log,
+    text = hover_label
+  )) +
+  ggplot2::geom_hline(yintercept = 0, color = "gray60", linetype = "dashed") +
+  ggplot2::geom_point(color = sun_data_brand_colors()[["blue"]], size = 2.5, alpha = 0.8) +
+  ggplot2::labs(
+    title = "Residuals vs Fitted Values",
+    subtitle = best_model_id,
+    x = "Predicted log donations",
+    y = "Residual on log donations"
+  ) +
+  theme_nyt()
+
+residuals_vs_fitted_interactive <- plotly::ggplotly(
+  residuals_vs_fitted_plot,
+  tooltip = "text"
+)
+
+residuals_vs_fitted_interactive
+```
+
+### Retained Predictors
+
+This plot shows the non-zero predictors retained by the best penalized model. Larger absolute coefficients indicate stronger predictive weight in the penalized model, but with this sample size they should be treated as hypothesis-generating rather than stable causal estimates.
+
+```{r retained_predictor_plot}
+coefficient_plot <- best_penalized_coefficients %>%
+  dplyr::slice_max(.data$abs_coefficient, n = 20, with_ties = FALSE) %>%
+  dplyr::mutate(
+    predictor = forcats::fct_reorder(.data$predictor, .data$coefficient)
+  ) %>%
+  ggplot2::ggplot(ggplot2::aes(x = coefficient, y = predictor)) +
+  ggplot2::geom_vline(xintercept = 0, color = "gray60", linetype = "dashed") +
+  ggplot2::geom_col(fill = sun_data_brand_colors()[["blue"]]) +
+  ggplot2::labs(
+    title = "Retained Predictors in Best Penalized Model",
+    subtitle = best_penalized_model$model_id[[1]],
+    x = "Coefficient",
+    y = NULL
+  ) +
+  theme_nyt()
+
+coefficient_plot_interactive <- plotly::ggplotly(coefficient_plot)
+
+coefficient_plot_interactive
+```
+
+```{r write_diagnostic_plot_files}
+if (isTRUE(write_modeling_outputs)) {
+  ggplot2::ggsave(
+    file.path(modeling_output_dir, "observed_vs_predicted_total_donations.png"),
+    observed_vs_predicted_plot,
+    width = 8,
+    height = 5,
+    dpi = 300
+  )
+
+  ggplot2::ggsave(
+    file.path(modeling_output_dir, "residuals_vs_fitted_log_donations.png"),
+    residuals_vs_fitted_plot,
+    width = 8,
+    height = 5,
+    dpi = 300
+  )
+
+  ggplot2::ggsave(
+    file.path(modeling_output_dir, "best_penalized_coefficients.png"),
+    coefficient_plot,
+    width = 8,
+    height = 6,
+    dpi = 300
+  )
+}
+```
+
+## Validity Checks
+
+These checks build on the selected best model from the model comparison table. They ask whether the model appears meaningfully predictive, whether the retained predictors are stable under resampling, and whether any follow-up interpretation is warranted. The framing remains exploratory and predictive, not causal.
+
+### Best Model Summary
+
+The best model is selected using the same criterion as the main comparison: lowest leave-one-out cross-validated RMSE on the log-transformed donation outcome. This keeps the validity checks aligned with the model selection workflow rather than assuming in advance that lasso, ridge, elastic net, or a linear model should win.
+
+```{r validity_best_model_summary}
+selected_best_model <- model_performance %>%
+  dplyr::slice_min(.data$rmse_log, n = 1, with_ties = FALSE)
+
+selected_best_model_spec <- model_specs %>%
+  dplyr::filter(.data$model_id == selected_best_model$model_id[[1]])
+
+selected_best_model_fit <- fit_selected_model(modeling_data, selected_best_model_spec)
+selected_best_model_predictors <- unlist(selected_best_model_spec$predictors[[1]], use.names = FALSE)
+selected_best_model_retained_predictors <- extract_selected_model_predictors(
+  selected_best_model_fit,
+  selected_best_model_spec
+)
+
+best_model_summary <- selected_best_model %>%
+  dplyr::mutate(
+    predictor_set = paste(selected_best_model_predictors, collapse = ", "),
+    n_retained_predictors = if (identical(selected_best_model_spec$model_type[[1]], "linear")) {
+      sum(selected_best_model_retained_predictors$predictor != "(Intercept)", na.rm = TRUE)
+    } else {
+      nrow(selected_best_model_retained_predictors)
+    }
+  ) %>%
+  dplyr::rename(
+    selected_model_id = "model_id",
+    number_of_streams = "n_streams"
+  ) %>%
+  dplyr::select(
+    "selected_model_id",
+    "model_family",
+    "predictor_set",
+    "number_of_streams",
+    "rmse_log",
+    "mae_log",
+    "r_squared_log",
+    "rmse_dollars",
+    "mae_dollars",
+    "n_retained_predictors"
+  )
+
+if (isTRUE(write_modeling_outputs)) {
+  readr::write_csv(model_performance, file.path(modeling_output_dir, "model_performance.csv"))
+  readr::write_csv(best_model_summary, file.path(modeling_output_dir, "best_model_summary.csv"))
+}
+
+DTSettings(
+  best_model_summary,
+  scroll_x = TRUE,
+  currency_cols = c("rmse_dollars", "mae_dollars"),
+  options = list(pageLength = 5)
+)
+```
+
+The selected model is the one with the lowest leave-one-out RMSE on `log1p(total_donations)`. This means it performed best in the current predictive comparison, but it should not be read as a causal explanation of why streams received donations.
+
+### Predictive Validity Checks
+
+These diagnostics focus on the selected model's predictions. The goal is to see whether errors are small enough to be useful and whether certain streams, topics, or talents are consistently missed.
+
+```{r validity_prediction_errors}
+best_model_predictions_for_validity <- model_predictions %>%
+  dplyr::filter(.data$model_id == selected_best_model$model_id[[1]]) %>%
+  dplyr::left_join(
+    modeling_data %>%
+      dplyr::select(
+        "talent_name",
+        "video_id",
+        dplyr::any_of(c("stream_label", "topic", "topic_lumped"))
+      ),
+    by = c("talent_name", "video_id")
+  ) %>%
+  dplyr::mutate(
+    prediction_error = .data$observed_dollars - .data$predicted_dollars,
+    absolute_prediction_error = abs(.data$prediction_error),
+    percent_error = dplyr::if_else(
+      .data$observed_dollars > 0,
+      .data$prediction_error / .data$observed_dollars,
+      NA_real_
+    ),
+    residual_log = .data$observed_log - .data$predicted_log,
+    hover_label = paste0(
+      "Talent: ", .data$talent_name,
+      "<br>Video ID: ", .data$video_id,
+      if ("stream_label" %in% names(.)) paste0("<br>Stream: ", .data$stream_label) else "",
+      if ("topic_lumped" %in% names(.)) paste0("<br>Topic: ", .data$topic_lumped) else "",
+      "<br>Observed: ", scales::dollar(.data$observed_dollars),
+      "<br>Predicted: ", scales::dollar(.data$predicted_dollars),
+      "<br>Error: ", scales::dollar(.data$prediction_error)
+    )
+  )
+
+largest_prediction_errors <- best_model_predictions_for_validity %>%
+  dplyr::arrange(dplyr::desc(.data$absolute_prediction_error)) %>%
+  dplyr::select(
+    "talent_name",
+    "video_id",
+    dplyr::any_of(c("stream_label", "topic", "topic_lumped")),
+    "observed_dollars",
+    "predicted_dollars",
+    "prediction_error",
+    "absolute_prediction_error",
+    "percent_error"
+  ) %>%
+  dplyr::rename(
+    observed_total_donations = "observed_dollars",
+    predicted_total_donations = "predicted_dollars"
+  )
+
+if (isTRUE(write_modeling_outputs)) {
+  readr::write_csv(
+    largest_prediction_errors,
+    file.path(modeling_output_dir, "best_model_predictions.csv")
+  )
+}
+
+DTSettings(
+  largest_prediction_errors,
+  scroll_x = TRUE,
+  currency_cols = c("observed_total_donations", "predicted_total_donations", "prediction_error", "absolute_prediction_error"),
+  percent_cols = "percent_error",
+  options = list(pageLength = 10)
+)
+```
+
+```{r validity_prediction_plots}
+observed_vs_predicted_log_plot <- best_model_predictions_for_validity %>%
+  ggplot2::ggplot(ggplot2::aes(x = observed_log, y = predicted_log, text = hover_label)) +
+  ggplot2::geom_abline(slope = 1, intercept = 0, color = "gray60", linetype = "dashed") +
+  ggplot2::geom_point(color = sun_data_brand_colors()[["blue"]], size = 2.5, alpha = 0.8) +
+  ggplot2::labs(
+    title = "Observed vs Predicted Donations on Log Scale",
+    subtitle = selected_best_model$model_id[[1]],
+    x = "Observed log donations",
+    y = "Predicted log donations"
+  ) +
+  theme_nyt()
+
+observed_vs_predicted_dollars_plot <- best_model_predictions_for_validity %>%
+  ggplot2::ggplot(ggplot2::aes(x = observed_dollars, y = predicted_dollars, text = hover_label)) +
+  ggplot2::geom_abline(slope = 1, intercept = 0, color = "gray60", linetype = "dashed") +
+  ggplot2::geom_point(color = sun_data_brand_colors()[["blue"]], size = 2.5, alpha = 0.8) +
+  ggplot2::scale_x_continuous(labels = scales::label_dollar()) +
+  ggplot2::scale_y_continuous(labels = scales::label_dollar()) +
+  ggplot2::labs(
+    title = "Observed vs Predicted Donations on Dollar Scale",
+    subtitle = selected_best_model$model_id[[1]],
+    x = "Observed total donations",
+    y = "Predicted total donations"
+  ) +
+  theme_nyt()
+
+validity_residuals_vs_fitted_plot <- best_model_predictions_for_validity %>%
+  ggplot2::ggplot(ggplot2::aes(x = predicted_log, y = residual_log, text = hover_label)) +
+  ggplot2::geom_hline(yintercept = 0, color = "gray60", linetype = "dashed") +
+  ggplot2::geom_point(color = sun_data_brand_colors()[["blue"]], size = 2.5, alpha = 0.8) +
+  ggplot2::labs(
+    title = "Residuals vs Fitted Values",
+    subtitle = selected_best_model$model_id[[1]],
+    x = "Predicted log donations",
+    y = "Residual on log donations"
+  ) +
+  theme_nyt()
+
+residual_distribution_plot <- best_model_predictions_for_validity %>%
+  ggplot2::ggplot(ggplot2::aes(x = residual_log)) +
+  ggplot2::geom_histogram(fill = sun_data_brand_colors()[["blue"]], color = "white", bins = 12) +
+  ggplot2::geom_vline(xintercept = 0, color = "gray60", linetype = "dashed") +
+  ggplot2::labs(
+    title = "Distribution of Prediction Residuals",
+    subtitle = selected_best_model$model_id[[1]],
+    x = "Residual on log donations",
+    y = "Stream count"
+  ) +
+  theme_nyt()
+
+plotly::ggplotly(observed_vs_predicted_log_plot, tooltip = "text")
+plotly::ggplotly(observed_vs_predicted_dollars_plot, tooltip = "text")
+plotly::ggplotly(validity_residuals_vs_fitted_plot, tooltip = "text")
+residual_distribution_plot
+
+if (isTRUE(write_modeling_outputs)) {
+  ggplot2::ggsave(file.path(modeling_output_dir, "observed_vs_predicted_log.png"), observed_vs_predicted_log_plot, width = 8, height = 5, dpi = 300)
+  ggplot2::ggsave(file.path(modeling_output_dir, "observed_vs_predicted_dollars.png"), observed_vs_predicted_dollars_plot, width = 8, height = 5, dpi = 300)
+  ggplot2::ggsave(file.path(modeling_output_dir, "residuals_vs_fitted.png"), validity_residuals_vs_fitted_plot, width = 8, height = 5, dpi = 300)
+  ggplot2::ggsave(file.path(modeling_output_dir, "residual_distribution.png"), residual_distribution_plot, width = 8, height = 5, dpi = 300)
+}
+```
+
+### Retained Predictor Interpretation
+
+For penalized models, retained predictors are non-zero coefficients from the selected predictive model. They are not conventional statistical-significance tests. For linear models, the coefficient table includes standard errors, p-values, and confidence intervals, but these are still exploratory because the model was selected after comparison.
+
+```{r validity_retained_predictors}
+best_model_retained_predictors <- selected_best_model_retained_predictors %>%
+  dplyr::mutate(
+    predictor_group = classify_predictor_group(.data$predictor),
+    abs_coefficient = abs(.data$coefficient)
+  ) %>%
+  dplyr::arrange(dplyr::desc(.data$abs_coefficient))
+
+retained_predictor_plot <- best_model_retained_predictors %>%
+  dplyr::filter(.data$predictor != "(Intercept)") %>%
+  dplyr::slice_max(.data$abs_coefficient, n = 20, with_ties = FALSE) %>%
+  dplyr::mutate(predictor = forcats::fct_reorder(.data$predictor, .data$coefficient)) %>%
+  ggplot2::ggplot(ggplot2::aes(x = coefficient, y = predictor, fill = predictor_group)) +
+  ggplot2::geom_vline(xintercept = 0, color = "gray60", linetype = "dashed") +
+  ggplot2::geom_col() +
+  ggplot2::labs(
+    title = "Retained Predictors in Selected Best Model",
+    subtitle = selected_best_model$model_id[[1]],
+    x = "Coefficient",
+    y = NULL,
+    fill = "Predictor group"
+  ) +
+  theme_nyt()
+
+if (isTRUE(write_modeling_outputs)) {
+  readr::write_csv(
+    best_model_retained_predictors,
+    file.path(modeling_output_dir, "best_model_retained_predictors.csv")
+  )
+  ggplot2::ggsave(file.path(modeling_output_dir, "retained_predictor_plot.png"), retained_predictor_plot, width = 8, height = 6, dpi = 300)
+}
+
+DTSettings(
+  best_model_retained_predictors,
+  scroll_x = TRUE,
+  options = list(pageLength = 20)
+)
+
+plotly::ggplotly(retained_predictor_plot)
+```
+
+### Stability Checks
+
+This bootstrap-style resampling check asks whether the selected predictors are stable or whether they change substantially depending on which streams are included. With a small sample, instability is expected; stable predictors should appear repeatedly across resamples with reasonably consistent coefficient direction.
+
+```{r validity_stability_checks}
+best_model_bootstrap_coefficients <- fit_bootstrap_selected_model(
+  data = modeling_data,
+  model_spec = selected_best_model_spec,
+  n_bootstrap = 250
+)
+
+best_model_stability <- summarise_bootstrap_stability(best_model_bootstrap_coefficients)
+
+predictor_stability_plot <- best_model_stability %>%
+  dplyr::slice_max(.data$selection_frequency, n = 20, with_ties = FALSE) %>%
+  dplyr::mutate(predictor = forcats::fct_reorder(.data$predictor, .data$selection_frequency)) %>%
+  ggplot2::ggplot(ggplot2::aes(x = selection_frequency, y = predictor, fill = predictor_group)) +
+  ggplot2::geom_col() +
+  ggplot2::scale_x_continuous(labels = scales::label_percent()) +
+  ggplot2::labs(
+    title = "Predictor Stability Across Bootstrap Resamples",
+    subtitle = selected_best_model$model_id[[1]],
+    x = "Selection frequency",
+    y = NULL,
+    fill = "Predictor group"
+  ) +
+  theme_nyt()
+
+if (isTRUE(write_modeling_outputs)) {
+  readr::write_csv(best_model_stability, file.path(modeling_output_dir, "best_model_stability.csv"))
+  ggplot2::ggsave(file.path(modeling_output_dir, "predictor_stability_plot.png"), predictor_stability_plot, width = 8, height = 6, dpi = 300)
+}
+
+DTSettings(
+  best_model_stability,
+  scroll_x = TRUE,
+  percent_cols = c("selection_frequency", "coefficient_sign_consistency"),
+  options = list(pageLength = 20)
+)
+
+plotly::ggplotly(predictor_stability_plot)
+```
+
+### Exploratory Inferential Follow-Up
+
+This follow-up is separate from the predictive model. It uses the best model and the stability check to choose a small number of candidate predictors, then fits a compact ordinary linear model. Because the same data selected the predictors and estimated the follow-up model, p-values should be treated as descriptive and exploratory, not confirmatory.
+
+```{r validity_inferential_followup}
+selected_design_matrix <- make_model_matrix(modeling_data, selected_best_model_predictors)
+selected_design_matrix <- selected_design_matrix[, colnames(selected_design_matrix) != "(Intercept)", drop = FALSE]
+selected_design_names <- make.names(colnames(selected_design_matrix), unique = TRUE)
+colnames(selected_design_matrix) <- selected_design_names
+
+candidate_lookup <- tibble::tibble(
+  predictor = colnames(make_model_matrix(modeling_data, selected_best_model_predictors))[-1],
+  predictor_safe = selected_design_names
+)
+
+candidate_predictors <- best_model_stability %>%
+  dplyr::inner_join(candidate_lookup, by = "predictor") %>%
+  dplyr::filter(.data$predictor != "log_lines_of_text") %>%
+  dplyr::arrange(dplyr::desc(.data$selection_frequency), dplyr::desc(abs(.data$mean_coefficient))) %>%
+  dplyr::slice_head(n = 5)
+
+followup_model_data <- dplyr::bind_cols(
+  modeling_data %>% dplyr::select(outcome_log),
+  tibble::as_tibble(selected_design_matrix)
+)
+
+followup_predictors <- unique(c(
+  "log_lines_of_text",
+  candidate_predictors$predictor_safe
+))
+followup_predictors <- intersect(followup_predictors, names(followup_model_data))
+
+exploratory_followup_model <- stats::lm(
+  stats::as.formula(paste("outcome_log ~", paste(followup_predictors, collapse = " + "))),
+  data = followup_model_data
+)
+
+exploratory_inference_followup <- broom::tidy(
+  exploratory_followup_model,
+  conf.int = TRUE
+) %>%
+  dplyr::left_join(candidate_lookup, by = c("term" = "predictor_safe")) %>%
+  dplyr::mutate(
+    predictor = dplyr::coalesce(.data$predictor, .data$term),
+    predictor_group = classify_predictor_group(.data$predictor)
+  ) %>%
+  dplyr::select(
+    predictor,
+    predictor_group,
+    estimate,
+    std.error,
+    statistic,
+    p.value,
+    conf.low,
+    conf.high,
+    dplyr::everything()
+  )
+
+followup_model_fit_stats <- broom::glance(exploratory_followup_model) %>%
+  dplyr::select(r.squared, adj.r.squared, sigma, statistic, p.value, df, df.residual)
+
+if (isTRUE(write_modeling_outputs)) {
+  readr::write_csv(
+    exploratory_inference_followup,
+    file.path(modeling_output_dir, "exploratory_inference_followup.csv")
+  )
+}
+
+DTSettings(
+  exploratory_inference_followup,
+  scroll_x = TRUE,
+  options = list(pageLength = 20)
+)
+
+DTSettings(
+  followup_model_fit_stats,
+  scroll_x = TRUE,
+  options = list(pageLength = 5)
+)
+```
+
+### Optional Non-Donation ENA Sensitivity Check
+
+This sensitivity check is only relevant if the selected best model uses ENA predictors that include `gave_money`. Those predictors are donation-linked and can leak information about the outcome. The current main workflow removes those predictors from ENA modeling, but this check documents whether the sensitivity condition applies.
+
+```{r validity_non_donation_ena_sensitivity}
+best_model_uses_gave_money_ena <- any(stringr::str_detect(best_model_retained_predictors$predictor, "gave_money"))
+
+non_donation_ena_sensitivity <- tibble::tibble(
+  comparison = c(
+    "best_overall_model",
+    "best_current_non_donation_ena_or_full_model",
+    "analytics_baseline_without_ena"
+  ),
+  model_id = c(
+    selected_best_model$model_id[[1]],
+    model_performance %>%
+      dplyr::filter(stringr::str_detect(.data$model_id, "ENA|Full")) %>%
+      dplyr::slice_min(.data$rmse_log, n = 1, with_ties = FALSE) %>%
+      dplyr::pull(.data$model_id),
+    "A. Analytics baseline"
+  ),
+  gave_money_ena_features_used = c(
+    best_model_uses_gave_money_ena,
+    FALSE,
+    FALSE
+  )
+) %>%
+  dplyr::left_join(model_performance, by = "model_id") %>%
+  dplyr::mutate(
+    note = dplyr::if_else(
+      best_model_uses_gave_money_ena,
+      "Selected model should be compared against non-donation ENA features.",
+      "Selected model does not use gave_money ENA predictors in the current workflow."
+    )
+  )
+
+if (isTRUE(write_modeling_outputs) && best_model_uses_gave_money_ena) {
+  readr::write_csv(
+    non_donation_ena_sensitivity,
+    file.path(modeling_output_dir, "non_donation_ena_sensitivity.csv")
+  )
+}
+
+DTSettings(
+  non_donation_ena_sensitivity,
+  scroll_x = TRUE,
+  currency_cols = c("rmse_dollars", "mae_dollars"),
+  options = list(pageLength = 5)
+)
+```
+
+### Written Interpretation Template
+
+```{r validity_interpretation_template}
+ena_best <- model_performance %>%
+  dplyr::filter(stringr::str_detect(.data$model_id, "ENA|Full")) %>%
+  dplyr::slice_min(.data$rmse_log, n = 1, with_ties = FALSE)
+
+baseline_best <- model_performance %>%
+  dplyr::filter(stringr::str_detect(.data$model_id, "baseline")) %>%
+  dplyr::slice_min(.data$rmse_log, n = 1, with_ties = FALSE)
+
+top_predictor_groups <- best_model_stability %>%
+  dplyr::slice_max(.data$selection_frequency, n = 10, with_ties = FALSE) %>%
+  dplyr::count(.data$predictor_group, sort = TRUE) %>%
+  dplyr::pull(.data$predictor_group) %>%
+  paste(collapse = ", ")
+
+validity_summary_lines <- c(
+  "# Validity Checks Summary",
+  "",
+  paste0("The best predictive model was: ", selected_best_model$model_id[[1]], "."),
+  paste0("Its leave-one-out RMSE on log donations was ", round(selected_best_model$rmse_log[[1]], 3), "."),
+  paste0(
+    "The best ENA/full model had RMSE ",
+    round(ena_best$rmse_log[[1]], 3),
+    " compared with ",
+    round(baseline_best$rmse_log[[1]], 3),
+    " for the best baseline model."
+  ),
+  paste0("The most stable predictor groups in the bootstrap check were: ", top_predictor_groups, "."),
+  if (best_model_uses_gave_money_ena) {
+    "The selected model used donation-linked ENA features, so non-donation ENA sensitivity should be emphasized."
+  } else {
+    "The selected model did not rely on gave_money ENA predictors in the current workflow."
+  },
+  "",
+  "Interpretation: these results provide predictive evidence and exploratory association patterns, not causal estimates. Retained glmnet predictors are not conventional statistical-significance results. The stability check helps show whether predictors recur across resampled streams, but the small sample means all findings should be treated cautiously."
+)
+
+if (isTRUE(write_modeling_outputs)) {
+  writeLines(
+    validity_summary_lines,
+    file.path(modeling_output_dir, "validity_checks_interpretation_template.md")
+  )
+}
+
+cat(paste(validity_summary_lines, collapse = "\n"))
+```
+
+## Findings Template
+
+```{r predictive_modeling_summary}
+summary_lines <- c(
+  "# Stream Donation Predictive Modeling Summary",
+  "",
+  "This analysis is predictive and exploratory. It does not estimate causal effects.",
+  "",
+  paste0("- Number of streams modeled: ", nrow(modeling_data)),
+  paste0("- Best cross-validated model on log donations: ", model_performance$model_id[[1]]),
+  paste0("- Best log-scale RMSE: ", round(model_performance$rmse_log[[1]], 3)),
+  paste0("- Best dollar-scale MAE: $", round(model_performance$mae_dollars[[1]], 2)),
+  "",
+  "Questions to answer from the tables above:",
+  "",
+  "1. Which model has the lowest leave-one-out RMSE and MAE?",
+  "2. Does the content-classification model improve on the baseline?",
+  "3. Do ENA lineweight models improve on metadata/content-only models?",
+  "4. Which retained ENA lineweights have the largest absolute coefficients?",
+  "",
+  "Interpretation note: with a sample of roughly 30 streams, coefficient direction and variable selection should be treated as hypothesis-generating rather than definitive."
+)
+
+writeLines(
+  summary_lines,
+  file.path(modeling_output_dir, "predictive_modeling_summary_template.md")
+)
+
+cat(paste(summary_lines, collapse = "\n"))
+```

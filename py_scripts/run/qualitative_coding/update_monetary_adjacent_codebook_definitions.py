@@ -7,7 +7,9 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 
-CODEBOOK_ROOT = Path("/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebook")
+CODEBOOK_ROOT = Path(
+    "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/Qualitative Codebooks/concept_areas/definitions/monetary_personality"
+)
 CURRENT_ROOT = CODEBOOK_ROOT / "current"
 SNAPSHOT_ROOT = CODEBOOK_ROOT / "snapshots"
 

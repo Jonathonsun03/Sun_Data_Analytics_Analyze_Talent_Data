@@ -51,6 +51,7 @@ Wrapper options:
 Batch build options after --:
   --talent-query VALUE
   --transcript VALUE
+  --selected-transcripts-csv PATH
   --limit N
   --row-limit N
   --coding-folder VALUE
@@ -169,6 +170,7 @@ Top-level files:
 
 - \`candidate_rows.csv\`: all transcript rows included in the batch input.
 - \`batch_input.jsonl\`: OpenAI Batch API request file.
+- \`run_code_set.csv\`: human-readable frozen copy of the exact codes used.
 - \`coding_review.csv\`: created after output retrieval/export.
 - \`compiled_codebook.json\`: codebook used for this run.
 - \`manifest.json\`: run metadata, selected transcripts, codebook, OpenAI batch ids, and artifact paths.
@@ -198,6 +200,7 @@ build_mode() {
   fi
   coding_folder="$(extract_arg_value "--coding-folder" "monetary conversation codes")"
   codebook="$(extract_arg_value "--codebook" "current")"
+  selected_transcripts_csv="$(extract_arg_value "--selected-transcripts-csv" "")"
 
   mkdir -p "$run_dir/logs" "$run_dir/metadata"
 
@@ -217,6 +220,9 @@ build_mode() {
       --codebook "$codebook"
       --prep-index "$run_dir/metadata/prepared_transcripts_index.csv"
     )
+    if [[ -n "$selected_transcripts_csv" ]]; then
+      prep_args+=(--selected-transcripts-csv "$selected_transcripts_csv")
+    fi
     if has_arg "--reprocess"; then
       prep_args+=(--reprocess)
     fi
@@ -236,6 +242,7 @@ build_mode() {
   echo "Batch run folder: $run_dir"
   echo "Review/input rows: $run_dir/candidate_rows.csv"
   echo "Batch API input: $run_dir/batch_input.jsonl"
+  echo "Run code set: $run_dir/run_code_set.csv"
   echo "Codebook JSON: $run_dir/compiled_codebook.json"
   echo "Manifest: $run_dir/manifest.json"
   echo "Next: review the folder, then submit with --mode submit --run-dir \"$run_dir\" --execute"

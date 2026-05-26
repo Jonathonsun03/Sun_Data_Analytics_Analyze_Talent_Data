@@ -52,11 +52,21 @@ def processed_root(talent_root: Path | None = None) -> Path:
 
 
 def qualitative_codebook_root(talent_root: Path | None = None) -> Path:
-    return processed_root(talent_root) / "Qualitative Codebook"
+    return (
+        processed_root(talent_root)
+        / "Qualitative Codebooks"
+        / "concept_areas"
+        / "definitions"
+        / "monetary_personality"
+    )
 
 
 def qualitative_batch_runs_root(talent_root: Path | None = None) -> Path:
     return processed_root(talent_root) / "qualitative_batch_runs"
+
+
+def qualitative_run_code_sets_root(talent_root: Path | None = None) -> Path:
+    return processed_root(talent_root) / "Qualitative Codebooks" / "run_code_sets"
 
 
 def translate_datalake_path(path_text: str, talent_root: Path | None = None) -> Path:
