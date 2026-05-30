@@ -31,6 +31,44 @@ gdrive_talent_bool <- function(x) {
   x %in% c("true", "t", "yes", "y", "1", "checked", "x")
 }
 
+gdrive_talent_window_days_key <- function(x, blank_as_lifetime = TRUE) {
+  raw <- gdrive_talent_chr(x)
+  out <- rep("", length(raw))
+
+  blank <- !nzchar(raw)
+  if (isTRUE(blank_as_lifetime)) {
+    out[blank] <- "lifetime"
+  }
+
+  lowered <- tolower(raw)
+  lowered <- gsub("[_-]+", " ", lowered)
+  lowered <- gsub("\\s+", " ", lowered)
+  lifetime <- lowered %in% c(
+    "lifetime",
+    "life time",
+    "all",
+    "all data",
+    "all available data",
+    "all available",
+    "full history",
+    "history"
+  )
+  out[lifetime] <- "lifetime"
+
+  numeric_value <- suppressWarnings(as.integer(raw))
+  numeric <- !is.na(numeric_value) & numeric_value > 0L & grepl("^[0-9]+$", raw)
+  out[numeric] <- as.character(numeric_value[numeric])
+
+  invalid <- !blank & !lifetime & !numeric
+  out[invalid] <- NA_character_
+  out
+}
+
+gdrive_talent_window_days_value <- function(x) {
+  key <- gdrive_talent_window_days_key(x)
+  suppressWarnings(as.integer(ifelse(key == "lifetime", NA_character_, key)))
+}
+
 gdrive_talent_safe_name <- function(x) {
   x <- gdrive_talent_chr(x)
   x <- gsub("[/\\\\:*?\"<>|]+", "_", x)

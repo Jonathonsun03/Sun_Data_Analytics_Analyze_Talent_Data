@@ -20,7 +20,7 @@ This directory contains the repository's maintained R code.
   - the maintained runner is `r_scripts/run/Text_Replay_Analysis/Text_replay_analysis_openAI`
   - shared summarization helpers live under `r_scripts/lib/stream_summaries/`
 - Report bundles
-  - renderers live under `r_scripts/run/bundle_A/` and `r_scripts/run/bundle_B/`
+  - renderers live under `r_scripts/run/bundle_A/`, `r_scripts/run/bundle_B/`, `r_scripts/run/bundle_e/`, and `r_scripts/run/bundle_f/`
 
 ## Python split
 

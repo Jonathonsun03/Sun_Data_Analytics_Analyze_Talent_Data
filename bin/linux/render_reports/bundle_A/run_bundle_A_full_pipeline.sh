@@ -11,6 +11,7 @@ REPORT_RUNNER="bin/linux/render_reports/bundle_A/run_bundle_A_render_only.sh"
 
 SKIP_INTERPRETATION="false"
 SKIP_EDITORIAL_REWRITE="false"
+NO_INTERPRETATIONS="false"
 
 declare -a PASS_ARGS=()
 
@@ -33,6 +34,7 @@ Notes:
 Extra option handled here:
   --skip-interpretation   Skip stage 2 and go straight from artifacts to render
   --skip-editorial-rewrite Skip stage 3 and render the generated text as-is
+  --no-interpretations    Render without existing generated interpretation text
 
 All other args are passed through to the stage wrappers, including:
   --talent / --talents / --talents-file / --all
@@ -51,6 +53,20 @@ while [[ $# -gt 0 ]]; do
     --skip-editorial-rewrite)
       SKIP_EDITORIAL_REWRITE="true"
       shift
+      ;;
+    --no-interpretations)
+      NO_INTERPRETATIONS="true"
+      shift
+      ;;
+    --window-days)
+      [[ $# -ge 2 ]] || { echo "Error: --window-days requires a value" >&2; exit 1; }
+      window_key="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]' | tr '_-' '  ' | sed 's/[[:space:]][[:space:]]*/ /g; s/^ //; s/ $//')"
+      if [[ "${window_key}" == "lifetime" || "${window_key}" == "life time" || "${window_key}" == "all" || "${window_key}" == "all data" || "${window_key}" == "all available data" || "${window_key}" == "all available" || "${window_key}" == "full history" || "${window_key}" == "history" ]]; then
+        shift 2
+      else
+        PASS_ARGS+=("$1" "$2")
+        shift 2
+      fi
       ;;
     -h|--help)
       usage
@@ -129,7 +145,11 @@ elif [[ "${SKIP_EDITORIAL_REWRITE}" == "true" ]]; then
 fi
 
 if [[ ${status} -eq 0 ]]; then
-  run_stage "Stage 4/4: Render report" "${REPORT_RUNNER}" "${PASS_ARGS[@]}"
+  declare -a REPORT_ARGS=("${PASS_ARGS[@]}")
+  if [[ "${NO_INTERPRETATIONS}" == "true" ]]; then
+    REPORT_ARGS+=(--no-interpretations)
+  fi
+  run_stage "Stage 4/4: Render report" "${REPORT_RUNNER}" "${REPORT_ARGS[@]}"
   rc_render=$?
   if [[ ${rc_render} -ne 0 ]]; then
     status=1

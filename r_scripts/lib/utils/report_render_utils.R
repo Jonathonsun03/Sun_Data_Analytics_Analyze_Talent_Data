@@ -85,6 +85,102 @@ rr_parse_optional_positive_int <- function(x, flag_name = "--value") {
   val
 }
 
+rr_render_quarto <- function(input, output_file, output_dir, params, quiet = FALSE) {
+  input <- normalizePath(input, winslash = "/", mustWork = TRUE)
+  input_dir <- dirname(input)
+  input_file <- basename(input)
+  output_path <- normalizePath(file.path(output_dir, output_file), winslash = "/", mustWork = FALSE)
+  input_dir_output_path <- normalizePath(file.path(input_dir, output_file), winslash = "/", mustWork = FALSE)
+  working_dir_output_path <- normalizePath(file.path(getwd(), output_file), winslash = "/", mustWork = FALSE)
+  candidate_output_paths <- unique(c(input_dir_output_path, working_dir_output_path))
+
+  for (candidate in candidate_output_paths) {
+    if (file.exists(candidate) && !identical(candidate, output_path)) {
+      unlink(candidate)
+    }
+  }
+
+  if (requireNamespace("quarto", quietly = TRUE)) {
+    old_wd <- setwd(input_dir)
+    on.exit(setwd(old_wd), add = TRUE)
+    quarto::quarto_render(
+      input = input_file,
+      output_file = output_file,
+      execute_params = params,
+      quiet = quiet
+    )
+    rendered_path <- rr_find_quarto_output(output_file, candidate_output_paths)
+    dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+    if (!file.copy(rendered_path, output_path, overwrite = TRUE)) {
+      stop("Could not copy rendered Quarto output to: ", output_path)
+    }
+    if (!identical(rendered_path, output_path)) {
+      unlink(rendered_path)
+    }
+    return(invisible(output_path))
+  }
+
+  quarto_bin <- Sys.which("quarto")
+  if (!nzchar(quarto_bin)) {
+    stop(
+      "Quarto is required to render .qmd reports. Install the Quarto CLI ",
+      "or the R package `quarto`, then rerun this report."
+    )
+  }
+  if (!requireNamespace("yaml", quietly = TRUE)) {
+    stop("Package `yaml` is required to pass parameters to Quarto CLI renders.")
+  }
+
+  params_file <- tempfile(fileext = ".yml")
+  on.exit(unlink(params_file), add = TRUE)
+  yaml::write_yaml(params, params_file)
+
+  args <- c(
+    "render",
+    input_file,
+    "--to",
+    "html",
+    "--output",
+    output_file,
+    "--execute-params",
+    params_file
+  )
+  if (isTRUE(quiet)) {
+    args <- c(args, "--quiet")
+  }
+
+  old_wd <- setwd(input_dir)
+  on.exit(setwd(old_wd), add = TRUE)
+  status <- system2(quarto_bin, args = args)
+  if (!identical(status, 0L)) {
+    stop("Quarto render failed with status ", status, ".")
+  }
+  rendered_path <- rr_find_quarto_output(output_file, candidate_output_paths)
+  dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+  if (!file.copy(rendered_path, output_path, overwrite = TRUE)) {
+    stop("Could not copy rendered Quarto output to: ", output_path)
+  }
+  if (!identical(rendered_path, output_path)) {
+    unlink(rendered_path)
+  }
+
+  invisible(output_path)
+}
+
+rr_find_quarto_output <- function(output_file, candidate_paths) {
+  hit <- candidate_paths[file.exists(candidate_paths)]
+  if (length(hit) > 0) {
+    return(hit[[1]])
+  }
+
+  stop(
+    "Quarto render completed, but expected output was not found for ",
+    output_file,
+    ". Checked: ",
+    paste(candidate_paths, collapse = ", ")
+  )
+}
+
 rr_render_for_talents <- function(
   talents,
   input_rmd,
@@ -95,8 +191,17 @@ rr_render_for_talents <- function(
   quiet_render = FALSE,
   label = "Rendering talent"
 ) {
-  if (!requireNamespace("rmarkdown", quietly = TRUE)) {
-    stop("Package `rmarkdown` is required.")
+  input_ext <- tolower(tools::file_ext(input_rmd))
+  if (identical(input_ext, "qmd")) {
+    can_render <- requireNamespace("quarto", quietly = TRUE) || nzchar(Sys.which("quarto"))
+    if (!can_render) {
+      stop(
+        "Quarto is required to render .qmd reports. Install the Quarto CLI ",
+        "or the R package `quarto`, then rerun this report."
+      )
+    }
+  } else if (!requireNamespace("rmarkdown", quietly = TRUE)) {
+    stop("Package `rmarkdown` is required to render .Rmd reports.")
   }
 
   resolve_output_dir <- function(talent, slug) {
@@ -130,14 +235,25 @@ rr_render_for_talents <- function(
 
     tryCatch(
       {
-        rmarkdown::render(
-          input = input_rmd,
-          output_file = output_file,
-          output_dir = render_dir,
-          params = build_params(talent, render_dir),
-          envir = new.env(parent = globalenv()),
-          quiet = quiet_render
-        )
+        render_params <- build_params(talent, render_dir)
+        if (identical(input_ext, "qmd")) {
+          rr_render_quarto(
+            input = input_rmd,
+            output_file = output_file,
+            output_dir = render_dir,
+            params = render_params,
+            quiet = quiet_render
+          )
+        } else {
+          rmarkdown::render(
+            input = input_rmd,
+            output_file = output_file,
+            output_dir = render_dir,
+            params = render_params,
+            envir = new.env(parent = globalenv()),
+            quiet = quiet_render
+          )
+        }
       },
       error = function(e) {
         ok <<- FALSE

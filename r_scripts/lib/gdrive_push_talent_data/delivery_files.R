@@ -3,7 +3,7 @@ gdrive_talent_raw_data_types <- function() {
 }
 
 gdrive_talent_bundle_types <- function() {
-  c("bundle_a", "bundle_b", "bundle_c", "bundle_e", "bundle_z")
+  c("bundle_a", "bundle_b", "bundle_c", "bundle_e", "bundle_f", "bundle_z")
 }
 
 gdrive_talent_is_bundle_type <- function(data_type) {
@@ -60,8 +60,18 @@ gdrive_talent_list_report_files <- function(source_dir, include_archive = FALSE)
 
 gdrive_talent_select_latest_report_file <- function(files, window_days = NA_real_) {
   if (length(files) == 0) return(character())
-  if (!is.na(window_days) && window_days > 0) {
-    window_pattern <- paste0("window_", as.integer(window_days), "d")
+  window_key <- if (length(window_days) == 1 && is.na(window_days)) {
+    NA_character_
+  } else {
+    gdrive_talent_window_days_key(window_days)
+  }
+  if (identical(window_key, "lifetime")) {
+    lifetime_files <- files[grepl("all_data", basename(files), ignore.case = TRUE)]
+    if (length(lifetime_files) > 0) {
+      files <- lifetime_files
+    }
+  } else if (!is.na(window_key)) {
+    window_pattern <- paste0("window_", as.integer(window_key), "d")
     window_files <- files[grepl(window_pattern, basename(files), ignore.case = TRUE)]
     if (length(window_files) > 0) {
       files <- window_files

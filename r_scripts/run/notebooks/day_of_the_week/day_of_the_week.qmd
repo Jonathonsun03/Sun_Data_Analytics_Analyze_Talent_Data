@@ -1,0 +1,694 @@
+---
+title: "Day of the week"
+format:
+  html:
+    code-tools: false
+    embed-resources: true
+execute:
+  echo: false
+  message: false
+  warning: false
+---
+
+```{r libraries_and_utils}
+library(here)
+knitr::opts_knit$set(root.dir = here::here())
+
+library(readr)
+library(dplyr)
+library(purrr)
+library(rENA)
+library(DT)
+
+source(here::here("r_scripts", "lib", "utils", "source_dir.r"))
+source(here::here("r_scripts", "lib", "utils", "datalake_root.r"))
+source(here::here("r_scripts", "lib", "utils", "talent_select.R"))
+source(here::here("r_scripts", "lib", "import_data", "talent_files.R"))
+source(here::here("r_scripts", "lib", "clean_data", "CleanData.R"))
+source_dir("r_scripts", "lib", "ENA_prep", "analysis_helpers")
+source(here::here("r_scripts", "lib", "clean_data", "title_classification_join.R"))
+source(here::here("r_scripts", "lib", "transcript_analysis", "money_stream_selection.R"))
+source(here::here("r_scripts", "lib", "plots", "PlottingThemes.R"))
+source(here::here("r_scripts", "lib", "utils", "detect_decimals.R"))
+source(here::here("r_scripts", "lib", "linear_regression", "day_of_week", "weekday_transform.R"))
+
+weekday_datatable <- function(df, caption, page_length = 10) {
+  DT::datatable(
+    df,
+    rownames = FALSE,
+    caption = caption,
+    options = list(
+      dom = "tip",
+      pageLength = page_length,
+      scrollX = TRUE
+    )
+  )
+}
+
+weekday_summary_datatable <- function(df, caption) {
+  weekday_datatable(df, caption, page_length = 7) %>%
+    DT::formatRound(
+      columns = c(
+        "mean_views",
+        "median_views",
+        "sd_views",
+        "se_views",
+        "ci_low",
+        "ci_high",
+        "min_views",
+        "max_views"
+      ),
+      digits = 0,
+      mark = ","
+    )
+}
+
+model_coefficient_table <- function(model) {
+  stats::coef(summary(model)) %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column("term") %>%
+    dplyr::rename(
+      estimate = "Estimate",
+      std_error = "Std. Error",
+      statistic = "t value",
+      p_value = "Pr(>|t|)"
+    )
+}
+
+model_anova_table <- function(model) {
+  stats::anova(model) %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column("term") %>%
+    dplyr::rename(
+      df = "Df",
+      sum_sq = "Sum Sq",
+      mean_sq = "Mean Sq",
+      f_value = "F value",
+      p_value = "Pr(>F)"
+    )
+}
+
+model_fit_table <- function(model) {
+  model_summary <- summary(model)
+  f_statistic <- model_summary$fstatistic
+  model_p_value <- stats::pf(
+    f_statistic[[1]],
+    f_statistic[[2]],
+    f_statistic[[3]],
+    lower.tail = FALSE
+  )
+
+  tibble::tibble(
+    metric = c(
+      "R-squared",
+      "Adjusted R-squared",
+      "Residual standard error",
+      "F-statistic",
+      "Model p-value"
+    ),
+    value = c(
+      model_summary$r.squared,
+      model_summary$adj.r.squared,
+      model_summary$sigma,
+      f_statistic[[1]],
+      model_p_value
+    )
+  )
+}
+
+model_coefficient_datatable <- function(model, caption) {
+  weekday_datatable(model_coefficient_table(model), caption) %>%
+    DT::formatRound(
+      columns = c("estimate", "std_error", "statistic"),
+      digits = 3
+    ) %>%
+    DT::formatSignif(columns = "p_value", digits = 3)
+}
+
+model_anova_datatable <- function(model, caption) {
+  weekday_datatable(model_anova_table(model), caption, page_length = 5) %>%
+    DT::formatRound(
+      columns = c("sum_sq", "mean_sq", "f_value"),
+      digits = 3
+    ) %>%
+    DT::formatSignif(columns = "p_value", digits = 3)
+}
+
+model_fit_datatable <- function(model, caption) {
+  weekday_datatable(model_fit_table(model), caption, page_length = 5) %>%
+    DT::formatSignif(columns = "value", digits = 4)
+}
+
+log_effects_datatable <- function(df, caption) {
+  weekday_datatable(df, caption) %>%
+    DT::formatRound(
+      columns = c("estimate", "approx_percent_change_from_reference"),
+      digits = 2
+    )
+}
+
+```
+
+```{r import_stream_data}
+talent_name <- "ava"
+
+talent_root <- get_datalake_root()
+talent_path <- select_talent(talent_name, root = talent_root)
+talent_folder <- basename(talent_path)
+
+title_classifications <- load_title_classifications(talent = talent_folder)
+talent_files <- TalentFiles(talent_path)[[1]]
+
+required_video_types <- c(
+  "video_analytics",
+  "video_monetary",
+  "video_demographics",
+  "video_geography"
+)
+
+missing_video_exports <- setdiff(required_video_types, names(talent_files))
+if (length(missing_video_exports) > 0L) {
+  stop(
+    "Missing required video export(s) for ",
+    talent_folder,
+    ": ",
+    paste(missing_video_exports, collapse = ", ")
+  )
+}
+
+stream_data <- video_preps_with_titles(
+  files = talent_files,
+  titles = title_classifications,
+  talent = talent_folder,
+  dedupe = TRUE
+)
+
+stream_analytics <- stream_data$analytics %>%
+  dplyr::mutate(talent_name = talent_folder)
+
+stream_monetary <- stream_data$monetary %>%
+  dplyr::mutate(talent_name = talent_folder)
+
+stream_demographics <- stream_data$demo %>%
+  dplyr::mutate(talent_name = talent_folder)
+
+stream_geography <- stream_data$geo %>%
+  dplyr::mutate(talent_name = talent_folder)
+
+stream_all_long <- dplyr::bind_rows(
+  analytics = stream_analytics,
+  monetary = stream_monetary,
+  demographics = stream_demographics,
+  geography = stream_geography,
+  .id = "data_source"
+)
+
+stream_video_level <- stream_analytics %>%
+  dplyr::select(-dplyr::any_of(c("Estimated Revenue", "CPM"))) %>%
+  dplyr::left_join(
+    stream_monetary %>%
+      dplyr::select(
+        dplyr::all_of("Video ID"),
+        dplyr::any_of(c(
+          "Estimated Revenue",
+          "CPM"
+        ))
+      ),
+    by = "Video ID"
+  )
+
+type <- unique(stream_video_level$`Content Type`)
+content <- lapply(type, function(type){
+    stream_video_level %>%
+        dplyr::filter(`Content Type` == type)
+})
+
+content <- setNames(content, type)
+
+```
+
+
+
+```{r}
+# Overview of Data
+glimpse(stream_video_level)
+weekday_datatable(
+  head(stream_video_level, 25),
+  "Stream video-level preview",
+  page_length = 10
+)
+
+tibble::tibble(content_type = names(content))
+```
+
+# Live Content
+
+```{r live_weekday_setup}
+live_df <- content$live
+
+#class(live_df$publish_wday)
+#is.ordered(live_df$publish_wday)
+#levels(live_df$publish_wday)
+
+live_weekday_df <- dow_prep(
+  live_df,
+  reference_day = "Monday"
+)
+
+#is.ordered(live_weekday_df$publish_wday)
+#contrasts(live_weekday_df$publish_wday)
+
+live_weekday_summary <- dow_summary(live_weekday_df)
+live_weekday_summary_by_median <- live_weekday_summary %>%
+  dplyr::arrange(dplyr::desc(.data$median_views))
+
+live_weekday_models <- dow_fit(live_weekday_df)
+live_weekday_plots <- dow_plot(live_weekday_df, live_weekday_summary)
+```
+
+## Live Weekday Summary
+
+This table describes live stream performance for each publish weekday. Use `n` to judge how much evidence there is for each day, compare `mean_views` and `median_views` for typical performance, and use the confidence interval columns as a rough guide to uncertainty around the mean.
+
+```{r live_weekday_summary_table}
+weekday_summary_datatable(
+  live_weekday_summary,
+  "Live streams: weekday summary"
+)
+```
+
+## Live Weekdays Ranked By Median Views
+
+This is the same weekday summary, sorted by `median_views` from highest to lowest. Median views are useful when a few unusually large or unusually small streams might distort the mean.
+
+```{r live_weekday_median_rank_table}
+weekday_summary_datatable(
+  live_weekday_summary_by_median,
+  "Live streams: weekday summary ranked by median views"
+)
+```
+
+## Raw Views Model Fit
+
+This table summarizes the linear model that predicts raw view counts from publish weekday. Higher R-squared values mean weekday explains more of the variation in views, while the model p-value tests whether the weekday model improves on a no-weekday baseline.
+
+```{r live_raw_model_fit_table}
+model_fit_datatable(
+  live_weekday_models$raw,
+  "Live streams: raw views model fit"
+)
+```
+
+## Raw Views Coefficients
+
+This table shows how each weekday compares with the reference weekday, Monday. The intercept is the estimated Monday view count; each weekday coefficient is the estimated raw-view difference from Monday, with the p-value indicating whether that difference is clearly distinguishable from zero in this model.
+
+```{r live_raw_model_coefficients_table}
+model_coefficient_datatable(
+  live_weekday_models$raw,
+  "Live streams: raw views model coefficients"
+)
+```
+
+## Raw Views ANOVA
+
+This table tests the overall weekday term for the raw-views model. The weekday row asks whether publish weekday, as a group of categories, explains a meaningful amount of raw-view variation.
+
+```{r live_raw_model_anova_table}
+model_anova_datatable(
+  live_weekday_models$raw,
+  "Live streams: raw views ANOVA"
+)
+```
+
+## Log Views Model Fit
+
+This table summarizes the model using log-transformed views, which reduces the influence of unusually large streams. Use this model when view counts are skewed and percentage-style differences are easier to interpret than raw count differences.
+
+```{r live_log_model_fit_table}
+model_fit_datatable(
+  live_weekday_models$log,
+  "Live streams: log views model fit"
+)
+```
+
+## Log Views Coefficients
+
+This table shows weekday differences on the log-view scale relative to Monday. Positive estimates suggest higher expected views than Monday; negative estimates suggest lower expected views, with p-values showing how strong the evidence is for each difference.
+
+```{r live_log_model_coefficients_table}
+model_coefficient_datatable(
+  live_weekday_models$log,
+  "Live streams: log views model coefficients"
+)
+```
+
+## Log Views ANOVA
+
+This table tests the overall weekday term for the log-views model. If the weekday p-value is small, weekday appears to explain differences in viewership after reducing the impact of extreme view counts.
+
+```{r live_log_model_anova_table}
+model_anova_datatable(
+  live_weekday_models$log,
+  "Live streams: log views ANOVA"
+)
+```
+
+## Approximate Percent Change From Monday
+
+This table converts the log-model coefficients into approximate percent changes from the reference weekday. Positive values indicate higher expected views than Monday, and negative values indicate lower expected views than Monday.
+
+```{r live_log_effects_table}
+log_effects_datatable(
+  live_weekday_models$log_effects,
+  "Live streams: approximate percent change from reference weekday"
+)
+```
+
+## Raw Views By Weekday
+
+This boxplot shows the distribution of live stream views for each publish weekday. Compare the median line and the spread within each box; wide boxes or long whiskers mean performance varies more on that day.
+
+```{r live_raw_views_boxplot}
+live_weekday_plots$boxplot_views
+```
+
+## Mean Views With Confidence Intervals
+
+This plot compares average live stream views by publish weekday. The vertical bars show 95% confidence intervals; overlapping intervals suggest the weekday averages may not be clearly different.
+
+```{r live_mean_ci_plot}
+live_weekday_plots$mean_ci_views
+```
+
+## Log Views By Weekday
+
+This boxplot shows the same weekday pattern on a log scale, which makes extreme high-view streams less dominant. Use it to compare typical performance when raw views are heavily skewed.
+
+```{r live_log_views_boxplot}
+live_weekday_plots$boxplot_log_views
+```
+
+# Video Content
+
+```{r video_weekday_setup}
+video_df <- if ("videos" %in% names(content)) {
+  content$videos
+} else {
+  content$video
+}
+
+#class(video_df$publish_wday)
+#is.ordered(video_df$publish_wday)
+#levels(video_df$publish_wday)
+
+video_weekday_df <- dow_prep(
+  video_df,
+  reference_day = "Monday"
+)
+
+#is.ordered(video_weekday_df$publish_wday)
+#contrasts(video_weekday_df$publish_wday)
+
+video_weekday_summary <- dow_summary(video_weekday_df)
+video_weekday_summary_by_median <- video_weekday_summary %>%
+  dplyr::arrange(dplyr::desc(.data$median_views))
+
+video_weekday_models <- dow_fit(video_weekday_df)
+video_weekday_plots <- dow_plot(video_weekday_df, video_weekday_summary)
+```
+
+## Video Weekday Summary
+
+This table describes video performance for each publish weekday. Use `n` to judge how many videos support each weekday estimate, compare `mean_views` and `median_views` for typical performance, and read the confidence interval columns as uncertainty around the mean.
+
+```{r video_weekday_summary_table}
+weekday_summary_datatable(
+  video_weekday_summary,
+  "Videos: weekday summary"
+)
+```
+
+## Video Weekdays Ranked By Median Views
+
+This is the same video weekday summary, sorted by `median_views` from highest to lowest. Median views are useful for ranking days when a small number of unusually strong or weak videos could pull the mean away from typical performance.
+
+```{r video_weekday_median_rank_table}
+weekday_summary_datatable(
+  video_weekday_summary_by_median,
+  "Videos: weekday summary ranked by median views"
+)
+```
+
+## Video Raw Views Model Fit
+
+This table summarizes the linear model that predicts raw video view counts from publish weekday. Higher R-squared values mean weekday explains more of the variation in views, while the model p-value tests whether the weekday model improves on a no-weekday baseline.
+
+```{r video_raw_model_fit_table}
+model_fit_datatable(
+  video_weekday_models$raw,
+  "Videos: raw views model fit"
+)
+```
+
+## Video Raw Views Coefficients
+
+This table shows how each weekday compares with the reference weekday, Monday. The intercept is the estimated Monday view count; each weekday coefficient is the estimated raw-view difference from Monday, with the p-value indicating whether that difference is clearly distinguishable from zero in this model.
+
+```{r video_raw_model_coefficients_table}
+model_coefficient_datatable(
+  video_weekday_models$raw,
+  "Videos: raw views model coefficients"
+)
+```
+
+## Video Raw Views ANOVA
+
+This table tests the overall weekday term for the raw-views model. The weekday row asks whether publish weekday, as a group of categories, explains a meaningful amount of raw-view variation.
+
+```{r video_raw_model_anova_table}
+model_anova_datatable(
+  video_weekday_models$raw,
+  "Videos: raw views ANOVA"
+)
+```
+
+## Video Log Views Model Fit
+
+This table summarizes the model using log-transformed views, which reduces the influence of unusually large videos. Use this model when view counts are skewed and percentage-style differences are easier to interpret than raw count differences.
+
+```{r video_log_model_fit_table}
+model_fit_datatable(
+  video_weekday_models$log,
+  "Videos: log views model fit"
+)
+```
+
+## Video Log Views Coefficients
+
+This table shows weekday differences on the log-view scale relative to Monday. Positive estimates suggest higher expected views than Monday; negative estimates suggest lower expected views, with p-values showing how strong the evidence is for each difference.
+
+```{r video_log_model_coefficients_table}
+model_coefficient_datatable(
+  video_weekday_models$log,
+  "Videos: log views model coefficients"
+)
+```
+
+## Video Log Views ANOVA
+
+This table tests the overall weekday term for the log-views model. If the weekday p-value is small, weekday appears to explain differences in viewership after reducing the impact of extreme view counts.
+
+```{r video_log_model_anova_table}
+model_anova_datatable(
+  video_weekday_models$log,
+  "Videos: log views ANOVA"
+)
+```
+
+## Video Approximate Percent Change From Monday
+
+This table converts the log-model coefficients into approximate percent changes from the reference weekday. Positive values indicate higher expected views than Monday, and negative values indicate lower expected views than Monday.
+
+```{r video_log_effects_table}
+log_effects_datatable(
+  video_weekday_models$log_effects,
+  "Videos: approximate percent change from reference weekday"
+)
+```
+
+## Video Raw Views By Weekday
+
+This boxplot shows the distribution of video views for each publish weekday. Compare the median line and the spread within each box; wide boxes or long whiskers mean performance varies more on that day.
+
+```{r video_raw_views_boxplot}
+video_weekday_plots$boxplot_views
+```
+
+## Video Mean Views With Confidence Intervals
+
+This plot compares average video views by publish weekday. The vertical bars show 95% confidence intervals; overlapping intervals suggest the weekday averages may not be clearly different.
+
+```{r video_mean_ci_plot}
+video_weekday_plots$mean_ci_views
+```
+
+## Video Log Views By Weekday
+
+This boxplot shows the same video weekday pattern on a log scale, which makes extreme high-view videos less dominant. Use it to compare typical performance when raw views are heavily skewed.
+
+```{r video_log_views_boxplot}
+video_weekday_plots$boxplot_log_views
+```
+
+# Short Content
+
+```{r short_weekday_setup}
+short_df <- if ("shorts" %in% names(content)) {
+  content$shorts
+} else {
+  content$short
+}
+
+#class(short_df$publish_wday)
+#is.ordered(short_df$publish_wday)
+#levels(short_df$publish_wday)
+
+short_weekday_df <- dow_prep(
+  short_df,
+  reference_day = "Monday"
+)
+
+#is.ordered(short_weekday_df$publish_wday)
+#contrasts(short_weekday_df$publish_wday)
+
+short_weekday_summary <- dow_summary(short_weekday_df)
+short_weekday_summary_by_median <- short_weekday_summary %>%
+  dplyr::arrange(dplyr::desc(.data$median_views))
+
+short_weekday_models <- dow_fit(short_weekday_df)
+short_weekday_plots <- dow_plot(short_weekday_df, short_weekday_summary)
+```
+
+## Shorts Weekday Summary
+
+This table describes Shorts performance for each publish weekday. Use `n` to judge how many Shorts support each weekday estimate, compare `mean_views` and `median_views` for typical performance, and read the confidence interval columns as uncertainty around the mean.
+
+```{r short_weekday_summary_table}
+weekday_summary_datatable(
+  short_weekday_summary,
+  "Shorts: weekday summary"
+)
+```
+
+## Shorts Weekdays Ranked By Median Views
+
+This is the same Shorts weekday summary, sorted by `median_views` from highest to lowest. Median views are useful for ranking days when a small number of unusually strong or weak Shorts could pull the mean away from typical performance.
+
+```{r short_weekday_median_rank_table}
+weekday_summary_datatable(
+  short_weekday_summary_by_median,
+  "Shorts: weekday summary ranked by median views"
+)
+```
+
+## Shorts Raw Views Model Fit
+
+This table summarizes the linear model that predicts raw Shorts view counts from publish weekday. Higher R-squared values mean weekday explains more of the variation in views, while the model p-value tests whether the weekday model improves on a no-weekday baseline.
+
+```{r short_raw_model_fit_table}
+model_fit_datatable(
+  short_weekday_models$raw,
+  "Shorts: raw views model fit"
+)
+```
+
+## Shorts Raw Views Coefficients
+
+This table shows how each weekday compares with the reference weekday, Monday. The intercept is the estimated Monday view count; each weekday coefficient is the estimated raw-view difference from Monday, with the p-value indicating whether that difference is clearly distinguishable from zero in this model.
+
+```{r short_raw_model_coefficients_table}
+model_coefficient_datatable(
+  short_weekday_models$raw,
+  "Shorts: raw views model coefficients"
+)
+```
+
+## Shorts Raw Views ANOVA
+
+This table tests the overall weekday term for the raw-views model. The weekday row asks whether publish weekday, as a group of categories, explains a meaningful amount of raw-view variation.
+
+```{r short_raw_model_anova_table}
+model_anova_datatable(
+  short_weekday_models$raw,
+  "Shorts: raw views ANOVA"
+)
+```
+
+## Shorts Log Views Model Fit
+
+This table summarizes the model using log-transformed views, which reduces the influence of unusually large Shorts. Use this model when view counts are skewed and percentage-style differences are easier to interpret than raw count differences.
+
+```{r short_log_model_fit_table}
+model_fit_datatable(
+  short_weekday_models$log,
+  "Shorts: log views model fit"
+)
+```
+
+## Shorts Log Views Coefficients
+
+This table shows weekday differences on the log-view scale relative to Monday. Positive estimates suggest higher expected views than Monday; negative estimates suggest lower expected views, with p-values showing how strong the evidence is for each difference.
+
+```{r short_log_model_coefficients_table}
+model_coefficient_datatable(
+  short_weekday_models$log,
+  "Shorts: log views model coefficients"
+)
+```
+
+## Shorts Log Views ANOVA
+
+This table tests the overall weekday term for the log-views model. If the weekday p-value is small, weekday appears to explain differences in viewership after reducing the impact of extreme view counts.
+
+```{r short_log_model_anova_table}
+model_anova_datatable(
+  short_weekday_models$log,
+  "Shorts: log views ANOVA"
+)
+```
+
+## Shorts Approximate Percent Change From Monday
+
+This table converts the log-model coefficients into approximate percent changes from the reference weekday. Positive values indicate higher expected views than Monday, and negative values indicate lower expected views than Monday.
+
+```{r short_log_effects_table}
+log_effects_datatable(
+  short_weekday_models$log_effects,
+  "Shorts: approximate percent change from reference weekday"
+)
+```
+
+## Shorts Raw Views By Weekday
+
+This boxplot shows the distribution of Shorts views for each publish weekday. Compare the median line and the spread within each box; wide boxes or long whiskers mean performance varies more on that day.
+
+```{r short_raw_views_boxplot}
+short_weekday_plots$boxplot_views
+```
+
+## Shorts Mean Views With Confidence Intervals
+
+This plot compares average Shorts views by publish weekday. The vertical bars show 95% confidence intervals; overlapping intervals suggest the weekday averages may not be clearly different.
+
+```{r short_mean_ci_plot}
+short_weekday_plots$mean_ci_views
+```
+
+## Shorts Log Views By Weekday
+
+This boxplot shows the same Shorts weekday pattern on a log scale, which makes extreme high-view Shorts less dominant. Use it to compare typical performance when raw views are heavily skewed.
+
+```{r short_log_views_boxplot}
+short_weekday_plots$boxplot_log_views
+```

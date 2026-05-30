@@ -237,9 +237,8 @@ bundle_e_ggplotly <- function(plot_obj, tooltip = NULL, rotate_y_axis_title = TR
     layout_args$height <- as.numeric(height)
   }
 
-  p %>%
-    do.call(plotly::layout, c(list(.), layout_args)) %>%
-    plotly::config(responsive = TRUE)
+  p <- do.call(plotly::layout, c(list(p = p), layout_args))
+  plotly::config(p, responsive = TRUE)
 }
 ```
 

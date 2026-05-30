@@ -1,0 +1,294 @@
+---
+title: "Bundle F: Day-of-Week Performance"
+format:
+  html:
+    code-fold: false
+    df-print: paged
+    embed-resources: true
+execute:
+  echo: false
+  message: false
+  warning: false
+params:
+  talent: "Ava"
+  data_source: "datalake"
+  data_root: null
+  render_generated_at: null
+  included_date_range: "All available dates"
+  render_cli: ""
+  render_output_dir: null
+  render_output_prefix: "Bundle_F"
+  window_days: null
+  start_date: null
+  end_date: null
+  reference_day: "Monday"
+  content_types:
+    - live
+    - video
+    - short
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+knitr::opts_knit$set(root.dir = normalizePath(file.path(getwd()), winslash = "/", mustWork = FALSE))
+
+library(here)
+library(readr)
+library(dplyr)
+library(purrr)
+library(DT)
+
+`%||%` <- function(x, y) {
+  if (is.null(x) || length(x) == 0 || (length(x) == 1 && !nzchar(x))) y else x
+}
+
+source(here::here("r_scripts", "lib", "utils", "source_dir.r"))
+source(here::here("r_scripts", "lib", "utils", "staging_root.R"))
+source(here::here("r_scripts", "lib", "utils", "datalake_root.r"))
+source(here::here("r_scripts", "lib", "utils", "talent_select.R"))
+source(here::here("r_scripts", "lib", "import_data", "talent_files.R"))
+source(here::here("r_scripts", "lib", "clean_data", "CleanData.R"))
+source(here::here("r_scripts", "lib", "clean_data", "title_classification_join.R"))
+source(here::here("r_scripts", "lib", "plots", "PlottingThemes.R"))
+source(here::here("r_scripts", "lib", "utils", "content_type_utils.R"))
+source(here::here("r_scripts", "lib", "linear_regression", "day_of_week", "weekday_transform.R"))
+source(here::here("r_scripts", "lib", "linear_regression", "day_of_week", "report_helpers.R"))
+
+resolve_bundle_f_data_root <- function(data_source, data_root) {
+  if (!is.null(data_root) && nzchar(trimws(data_root))) {
+    return(normalizePath(data_root, winslash = "/", mustWork = FALSE))
+  }
+  if (identical(tolower(data_source), "datalake")) {
+    return(normalizePath(get_datalake_root(), winslash = "/", mustWork = FALSE))
+  }
+  normalizePath(get_staging_root(), winslash = "/", mustWork = FALSE)
+}
+
+apply_bundle_f_publish_window <- function(df, start_date, end_date) {
+  if (!("publish_date" %in% names(df))) {
+    return(df)
+  }
+  if (!is.null(start_date) && nzchar(start_date)) {
+    df <- df %>% dplyr::filter(.data$publish_date >= as.Date(start_date))
+  }
+  if (!is.null(end_date) && nzchar(end_date)) {
+    df <- df %>% dplyr::filter(.data$publish_date <= as.Date(end_date))
+  }
+  df
+}
+
+canonical_bundle_f_content_types <- function(x) {
+  if (is.null(x) || length(x) == 0) {
+    return(c("live", "video", "short"))
+  }
+  x <- tolower(trimws(as.character(unlist(x))))
+  x <- x[nzchar(x)]
+  x <- dplyr::recode(
+    x,
+    videos = "video",
+    shorts = "short",
+    all = "all",
+    .default = x
+  )
+  if ("all" %in% x) {
+    return(c("live", "video", "short"))
+  }
+  unique(x)
+}
+
+data_root <- resolve_bundle_f_data_root(params$data_source, params$data_root)
+talent_path <- select_talent(params$talent, root = data_root)
+talent_folder <- basename(talent_path)
+title_classifications <- load_title_classifications(talent = talent_folder)
+talent_files <- TalentFiles(talent_path)[[1]]
+
+required_video_types <- c(
+  "video_analytics",
+  "video_monetary",
+  "video_demographics",
+  "video_geography"
+)
+missing_video_exports <- setdiff(required_video_types, names(talent_files))
+if (length(missing_video_exports) > 0L) {
+  stop(
+    "Missing required video export(s) for ",
+    talent_folder,
+    ": ",
+    paste(missing_video_exports, collapse = ", ")
+  )
+}
+
+stream_data <- video_preps_with_titles(
+  files = talent_files,
+  titles = title_classifications,
+  talent = talent_folder,
+  dedupe = TRUE
+)
+
+stream_video_level <- stream_data$analytics %>%
+  dplyr::select(-dplyr::any_of(c("Estimated Revenue", "CPM"))) %>%
+  dplyr::left_join(
+    stream_data$monetary %>%
+      dplyr::select(
+        dplyr::all_of("Video ID"),
+        dplyr::any_of(c("Estimated Revenue", "CPM"))
+      ),
+    by = "Video ID"
+  ) %>%
+  dplyr::mutate(talent_name = talent_folder) %>%
+  apply_bundle_f_publish_window(params$start_date, params$end_date)
+
+content_types <- canonical_bundle_f_content_types(params$content_types)
+available_content_types <- sort(unique(tolower(trimws(as.character(stream_video_level$`Content Type`)))))
+content_types <- intersect(content_types, available_content_types)
+if (length(content_types) == 0L) {
+  stop("No requested content types are available after filtering.")
+}
+
+content <- purrr::map(
+  content_types,
+  ~ stream_video_level %>%
+    dplyr::filter(tolower(trimws(as.character(.data$`Content Type`))) == .x)
+)
+names(content) <- content_types
+```
+
+## Report Scope
+
+```{r report_scope}
+dow_report_datatable(
+  tibble::tibble(
+    field = c(
+      "Talent",
+      "Data source",
+      "Data root",
+      "Included publish date range",
+      "Reference weekday",
+      "Content types",
+      "Generated"
+    ),
+    value = c(
+      talent_folder,
+      params$data_source,
+      data_root,
+      params$included_date_range,
+      params$reference_day,
+      paste(dow_report_content_label(content_types), collapse = ", "),
+      params$render_generated_at %||% as.character(Sys.time())
+    )
+  ),
+  "Bundle F render scope",
+  page_length = 7
+)
+```
+
+```{r content_type_overview}
+stream_video_level %>%
+  dplyr::count(`Content Type`, name = "videos") %>%
+  dplyr::arrange(`Content Type`) %>%
+  dow_report_datatable("Available content by type", page_length = 10)
+```
+
+```{r content_sections, results='asis'}
+bundle_f_content_child <- function(content_type) {
+  key <- gsub("[^a-z0-9]+", "_", tolower(content_type))
+  key <- gsub("^_+|_+$", "", key)
+  title <- dow_report_content_title(content_type)
+  label <- dow_report_content_label(content_type)
+
+  paste0(
+    "\n# ", title, "\n\n",
+    "```{r ", key, "_weekday_setup, include=FALSE}\n",
+    "content_type <- \"", content_type, "\"\n",
+    "content_df <- content[[content_type]]\n",
+    "content_label <- dow_report_content_label(content_type)\n",
+    "if (nrow(content_df) == 0L) {\n",
+    "  stop(\"No rows are available for \", content_label, \" after filtering.\")\n",
+    "}\n",
+    "weekday_df <- dow_prep(content_df, reference_day = params$reference_day)\n",
+    "weekday_summary <- dow_summary(weekday_df)\n",
+    "weekday_summary_by_median <- weekday_summary %>%\n",
+    "  dplyr::arrange(dplyr::desc(.data$median_views))\n",
+    "weekday_models <- dow_fit(weekday_df)\n",
+    "weekday_plots <- dow_plot(weekday_df, weekday_summary)\n",
+    "```\n\n",
+    "## Weekday Summary\n\n",
+    "This table describes ", label, " performance for each publish weekday. Use `n` to judge how much evidence there is for each day, compare `mean_views` and `median_views` for typical performance, and use the confidence interval columns as a rough guide to uncertainty around the mean.\n\n",
+    "```{r ", key, "_weekday_summary_table}\n",
+    "dow_report_summary_datatable(weekday_summary, paste0(content_label, \": weekday summary\"))\n",
+    "```\n\n",
+    "## Weekdays Ranked By Median Views\n\n",
+    "This is the same weekday summary, sorted by `median_views` from highest to lowest. Median views are useful when a few unusually large or unusually small uploads might distort the mean.\n\n",
+    "```{r ", key, "_weekday_median_rank_table}\n",
+    "dow_report_summary_datatable(\n",
+    "  weekday_summary_by_median,\n",
+    "  paste0(content_label, \": weekday summary ranked by median views\")\n",
+    ")\n",
+    "```\n\n",
+    "## Raw Views Model Fit\n\n",
+    "This table summarizes the linear model that predicts raw view counts from publish weekday. Higher R-squared values mean weekday explains more of the variation in views, while the model p-value tests whether the weekday model improves on a no-weekday baseline.\n\n",
+    "```{r ", key, "_raw_model_fit_table}\n",
+    "dow_report_model_fit_datatable(weekday_models$raw, paste0(content_label, \": raw views model fit\"))\n",
+    "```\n\n",
+    "## Raw Views Coefficients\n\n",
+    "This table shows how each weekday compares with the reference weekday. The intercept is the estimated reference-day view count; each weekday coefficient is the estimated raw-view difference from that reference weekday.\n\n",
+    "```{r ", key, "_raw_model_coefficients_table}\n",
+    "dow_report_model_coefficient_datatable(\n",
+    "  weekday_models$raw,\n",
+    "  paste0(content_label, \": raw views model coefficients\")\n",
+    ")\n",
+    "```\n\n",
+    "## Raw Views ANOVA\n\n",
+    "This table tests the overall weekday term for the raw-views model. The weekday row asks whether publish weekday, as a group of categories, explains a meaningful amount of raw-view variation.\n\n",
+    "```{r ", key, "_raw_model_anova_table}\n",
+    "dow_report_model_anova_datatable(weekday_models$raw, paste0(content_label, \": raw views ANOVA\"))\n",
+    "```\n\n",
+    "## Log Views Model Fit\n\n",
+    "This table summarizes the model using log-transformed views, which reduces the influence of unusually large uploads. Use this model when view counts are skewed and percentage-style differences are easier to interpret than raw count differences.\n\n",
+    "```{r ", key, "_log_model_fit_table}\n",
+    "dow_report_model_fit_datatable(weekday_models$log, paste0(content_label, \": log views model fit\"))\n",
+    "```\n\n",
+    "## Log Views Coefficients\n\n",
+    "This table shows weekday differences on the log-view scale relative to the reference weekday. Positive estimates suggest higher expected views than the reference day; negative estimates suggest lower expected views.\n\n",
+    "```{r ", key, "_log_model_coefficients_table}\n",
+    "dow_report_model_coefficient_datatable(\n",
+    "  weekday_models$log,\n",
+    "  paste0(content_label, \": log views model coefficients\")\n",
+    ")\n",
+    "```\n\n",
+    "## Log Views ANOVA\n\n",
+    "This table tests the overall weekday term for the log-views model. If the weekday p-value is small, weekday appears to explain differences in viewership after reducing the impact of extreme view counts.\n\n",
+    "```{r ", key, "_log_model_anova_table}\n",
+    "dow_report_model_anova_datatable(weekday_models$log, paste0(content_label, \": log views ANOVA\"))\n",
+    "```\n\n",
+    "## Approximate Percent Change From Reference Weekday\n\n",
+    "This table converts the log-model coefficients into approximate percent changes from the reference weekday. Positive values indicate higher expected views than the reference day, and negative values indicate lower expected views.\n\n",
+    "```{r ", key, "_log_effects_table}\n",
+    "dow_report_log_effects_datatable(\n",
+    "  weekday_models$log_effects,\n",
+    "  paste0(content_label, \": approximate percent change from reference weekday\")\n",
+    ")\n",
+    "```\n\n",
+    "## Raw Views By Weekday\n\n",
+    "This boxplot shows the distribution of views for each publish weekday. Compare the median line and the spread within each box; wide boxes or long whiskers mean performance varies more on that day.\n\n",
+    "```{r ", key, "_raw_views_boxplot, fig.width=9, fig.height=5}\n",
+    "weekday_plots$boxplot_views\n",
+    "```\n\n",
+    "## Mean Views With Confidence Intervals\n\n",
+    "This plot compares average views by publish weekday. The vertical bars show 95% confidence intervals; overlapping intervals suggest the weekday averages may not be clearly different.\n\n",
+    "```{r ", key, "_mean_ci_plot, fig.width=9, fig.height=5}\n",
+    "weekday_plots$mean_ci_views\n",
+    "```\n\n",
+    "## Log Views By Weekday\n\n",
+    "This boxplot shows the same weekday pattern on a log scale, which makes extreme high-view uploads less dominant. Use it to compare typical performance when raw views are heavily skewed.\n\n",
+    "```{r ", key, "_log_views_boxplot, fig.width=9, fig.height=5}\n",
+    "weekday_plots$boxplot_log_views\n",
+    "```\n\n"
+  )
+}
+
+child_text <- paste(vapply(names(content), bundle_f_content_child, character(1)), collapse = "\n")
+cat(knitr::knit_child(text = child_text, quiet = TRUE))
+```

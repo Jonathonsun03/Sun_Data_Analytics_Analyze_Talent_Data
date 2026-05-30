@@ -20,7 +20,7 @@ gdrive_talent_build_client_structure_plan <- function(
   missing <- vector("list", 0)
   row_idx <- 0L
   missing_idx <- 0L
-  bundle_types <- c("bundle_a", "bundle_b", "bundle_c", "bundle_e", "bundle_z")
+  bundle_types <- c("bundle_a", "bundle_b", "bundle_c", "bundle_e", "bundle_f", "bundle_z")
 
   add_structure_row <- function(row, data_dir, source_relative_path, folder_name, parent_path, depth, upload_enabled) {
     row_idx <<- row_idx + 1L

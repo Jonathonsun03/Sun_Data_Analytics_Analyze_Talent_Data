@@ -90,7 +90,7 @@ gdrive_talent_report_template_inventory <- function(repo_root) {
       template_key = gdrive_talent_report_key_compact(basename(dir)),
       template_dir = normalizePath(dir, winslash = "/", mustWork = FALSE),
       template_rmd = paste(
-        normalizePath(files[grepl("\\.Rmd$", files, ignore.case = TRUE)], winslash = "/", mustWork = FALSE),
+        normalizePath(files[grepl("\\.(Rmd|qmd)$", files, ignore.case = TRUE)], winslash = "/", mustWork = FALSE),
         collapse = "; "
       ),
       template_html_count = sum(grepl("\\.html?$", files, ignore.case = TRUE)),
@@ -152,14 +152,14 @@ gdrive_talent_report_status <- function(has_rmd, html_count, plot_count, table_c
 
 gdrive_talent_report_status_reason <- function(has_rmd, html_count, plot_count, table_count) {
   if (!isTRUE(has_rmd)) {
-    return("No report Rmd found under templates/reports.")
+    return("No report Rmd or Qmd found under templates/reports.")
   }
 
   if (html_count > 0 && (plot_count > 0 || table_count > 0)) {
-    return("Template Rmd, test HTML, and template artifacts are present.")
+    return("Template Rmd/Qmd, test HTML, and template artifacts are present.")
   }
 
-  "Template Rmd exists, but test HTML or template artifacts are missing."
+  "Template Rmd/Qmd exists, but test HTML or template artifacts are missing."
 }
 
 gdrive_talent_build_reports_table <- function(

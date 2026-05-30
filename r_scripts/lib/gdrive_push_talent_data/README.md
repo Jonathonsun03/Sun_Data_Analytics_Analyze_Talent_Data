@@ -118,7 +118,7 @@ Expected manual columns:
 - `canonical_talent_name`
 - `report_id`
 - `cadence_days`
-- `window_days`
+- `window_days` (`30`, `60`, `90`, or `lifetime` for all available data)
 - `active`
 - `notes`
 

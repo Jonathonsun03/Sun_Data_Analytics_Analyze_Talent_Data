@@ -165,6 +165,7 @@ gdrive_talent_data_type_aliases <- function(data_type) {
     bundle_b = c("reports/bundle_B", "reports/bundle_b"),
     bundle_c = c("reports/bundle_C", "reports/bundle_c"),
     bundle_e = c("reports/bundle_E", "reports/bundle_e"),
+    bundle_f = c("reports/bundle_F", "reports/bundle_f"),
     bundle_z = c("reports/bundle_Z", "reports/bundle_z")
   )
 

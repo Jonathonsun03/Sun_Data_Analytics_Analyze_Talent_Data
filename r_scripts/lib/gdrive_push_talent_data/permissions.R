@@ -8,6 +8,7 @@ gdrive_talent_default_permission_cols <- function() {
     "bundle_b",
     "bundle_c",
     "bundle_e",
+    "bundle_f",
     "bundle_z",
     "text_playback"
   )

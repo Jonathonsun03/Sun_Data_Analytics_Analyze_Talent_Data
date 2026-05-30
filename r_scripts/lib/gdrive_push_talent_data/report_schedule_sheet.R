@@ -13,6 +13,7 @@ gdrive_talent_schedule_empty <- function() {
     "latest_report_file",
     "run_source",
     "updated_at",
+    "report_params",
     "notes"
   ))
 }
@@ -86,10 +87,10 @@ gdrive_talent_schedule_normalize_existing <- function(existing) {
       c("cadence_days", "report_cadence_days", "frequency_days", "Frequency Days"),
       default = NA_real_
     ),
-    window_days = gdrive_talent_schedule_number(
+    window_days = gdrive_talent_schedule_column(
       existing,
       c("window_days", "report_window_days", "Window Days"),
-      default = NA_real_
+      default = ""
     ),
     last_run = gdrive_talent_schedule_column(existing, c("last_run", "Last Run")),
     next_run = gdrive_talent_schedule_column(existing, c("next_run", "Next Run")),
@@ -98,6 +99,7 @@ gdrive_talent_schedule_normalize_existing <- function(existing) {
     latest_report_file = gdrive_talent_schedule_column(existing, c("latest_report_file", "Latest Report File")),
     run_source = gdrive_talent_schedule_column(existing, c("run_source", "Run Source")),
     updated_at = gdrive_talent_schedule_column(existing, c("updated_at", "Updated At")),
+    report_params = gdrive_talent_schedule_column(existing, c("report_params", "Report Params", "params", "Params")),
     notes = gdrive_talent_schedule_column(existing, c("notes", "Notes")),
     stringsAsFactors = FALSE
   )
@@ -271,10 +273,14 @@ gdrive_talent_build_report_schedule_table <- function(
     }
 
     window_days <- row$window_days[[1]]
+    window_days_key <- gdrive_talent_window_days_key(window_days)
+    if (is.na(window_days_key)) {
+      window_days_key <- "lifetime"
+    }
     latest <- gdrive_talent_find_latest_scheduled_report(
       talent_path = if (is.null(talent)) "" else talent$datalake_path[[1]],
       report_id = report_key,
-      window_days = window_days
+      window_days = window_days_key
     )
 
     manual_last_run <- gdrive_talent_schedule_date(row$last_run[[1]])
@@ -294,7 +300,7 @@ gdrive_talent_build_report_schedule_table <- function(
       report_id = report_key,
       report_name = if (is.null(report)) row$report_name[[1]] else report$report_name[[1]],
       cadence_days = cadence_days,
-      window_days = if (is.na(window_days)) NA_real_ else window_days,
+      window_days = if (nzchar(window_days)) window_days else "",
       last_run = if (is.na(last_run)) "" else as.character(last_run),
       next_run = if (is.na(next_run)) "" else as.character(next_run),
       schedule_status = status,
@@ -302,6 +308,7 @@ gdrive_talent_build_report_schedule_table <- function(
       latest_report_file = latest$latest_report_file,
       run_source = run_source,
       updated_at = now,
+      report_params = row$report_params[[1]],
       notes = row$notes[[1]],
       stringsAsFactors = FALSE
     )
@@ -323,8 +330,7 @@ gdrive_talent_schedule_computed_columns <- function() {
     "latest_report_path",
     "latest_report_file",
     "run_source",
-    "updated_at",
-    "notes"
+    "updated_at"
   )
 }
 
@@ -498,7 +504,7 @@ gdrive_talent_write_report_schedule_sheet <- function(
     googlesheets4::range_clear(
       ss = normalized_sheet_id,
       sheet = worksheet,
-      range = "G:N",
+      range = "G:M",
       reformat = FALSE
     )
     googlesheets4::range_write(
