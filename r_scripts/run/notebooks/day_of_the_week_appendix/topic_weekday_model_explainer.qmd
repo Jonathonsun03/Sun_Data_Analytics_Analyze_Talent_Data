@@ -1,0 +1,527 @@
+---
+title: "Topic-Weekday Recommendation Model Explainer"
+format:
+  html:
+    code-tools: false
+    embed-resources: true
+execute:
+  echo: true
+  message: false
+  warning: false
+---
+
+```{r setup}
+library(here)
+knitr::opts_knit$set(root.dir = here::here())
+
+library(dplyr)
+library(ggplot2)
+library(DT)
+
+source(here::here("r_scripts", "lib", "utils", "datalake_root.r"))
+source(here::here("r_scripts", "lib", "utils", "talent_select.R"))
+source(here::here("r_scripts", "lib", "import_data", "talent_files.R"))
+source(here::here("r_scripts", "lib", "clean_data", "CleanData.R"))
+source(here::here("r_scripts", "lib", "clean_data", "title_classification_join.R"))
+source(here::here("r_scripts", "lib", "linear_regression", "day_of_week", "weekday_transform.R"))
+source(here::here("r_scripts", "lib", "linear_regression", "day_of_week", "topic_weekday_recommendations.R"))
+
+explainer_datatable <- function(df, caption, page_length = 10) {
+  DT::datatable(
+    df,
+    rownames = FALSE,
+    caption = caption,
+    options = list(
+      dom = "tip",
+      pageLength = page_length,
+      scrollX = TRUE
+    )
+  )
+}
+```
+
+# Overview
+
+The production recommendation notebook answers the practical scheduling question:
+
+**What topics should be streamed on which weekdays?**
+
+This appendix answers the methods question:
+
+**How are those recommendations calculated?**
+
+The recommendation system uses live streams only. It groups sparse topics, models logged views, creates predictions for every observed topic crossed with every observed weekday, ranks weekdays within each topic, and classifies the strength of each recommendation. The final recommendation is therefore not just the historically highest observed topic-day cell. It is a model-informed estimate of which weekday is most promising for each topic, with warnings when the evidence is sparse.
+
+# Data Preparation
+
+The first step is to build the same live-stream dataframe used by the recommendation notebook. The code reads the talent's video analytics and monetary exports, joins title classifications, and keeps only rows whose content type is live.
+
+```{r import_live_streams}
+talent_name <- "ava"
+
+talent_root <- get_datalake_root()
+talent_path <- select_talent(talent_name, root = talent_root)
+talent_folder <- basename(talent_path)
+
+title_classifications <- load_title_classifications(talent = talent_folder)
+talent_files <- TalentFiles(talent_path)[[1]]
+
+required_video_types <- c("video_analytics", "video_monetary")
+missing_video_exports <- setdiff(required_video_types, names(talent_files))
+if (length(missing_video_exports) > 0L) {
+  stop(
+    "Missing required video export(s) for ",
+    talent_folder,
+    ": ",
+    paste(missing_video_exports, collapse = ", ")
+  )
+}
+
+stream_data <- video_preps_with_titles(
+  files = talent_files,
+  titles = title_classifications,
+  talent = talent_folder,
+  dedupe = TRUE
+)
+
+stream_video_level <- stream_data$analytics %>%
+  dplyr::select(-dplyr::any_of(c("Estimated Revenue", "CPM"))) %>%
+  dplyr::left_join(
+    stream_data$monetary %>%
+      dplyr::select(
+        dplyr::all_of("Video ID"),
+        dplyr::any_of(c("Estimated Revenue", "CPM"))
+      ),
+    by = "Video ID"
+  )
+
+live_df <- stream_video_level %>%
+  dplyr::filter(tolower(trimws(as.character(.data$`Content Type`))) == "live")
+```
+
+`dow_prep(reference_day = "Monday")` prepares the stream rows for weekday modeling. It converts view counts to numeric values, converts publish weekdays into an unordered categorical factor, makes Monday the reference weekday when Monday is present, and creates `log_views`.
+
+`topic_clean(min_topic_n = 3)` creates a modeling topic column called `topic_lumped`. Missing or blank topics become `Unknown`, while topics with fewer than three streams are grouped into `Other / sparse`. This protects the model from treating one-off labels as stable topic categories.
+
+`publish_wday` should be categorical because weekdays are names, not numeric measurements. Monday is not "one unit less" than Tuesday. The model should estimate each weekday as a group difference, not as a linear numeric trend.
+
+```{r prepare_model_data}
+live_topic_df <- live_df %>%
+  dow_prep(reference_day = "Monday") %>%
+  topic_clean(min_topic_n = 3)
+
+live_topic_preview <- live_topic_df %>%
+  dplyr::select(
+    topic_lumped,
+    publish_wday,
+    views,
+    log_views
+  ) %>%
+  dplyr::slice_head(n = 20)
+
+explainer_datatable(
+  live_topic_preview,
+  "Prepared live-stream rows used by the topic-weekday model",
+  page_length = 10
+)
+```
+
+# Why Logged Views Are Used
+
+The helper functions use:
+
+`log_views = log1p(views)`
+
+which means:
+
+`log_views = log(views + 1)`
+
+The model predicts logged views, not raw views. This is useful because raw view counts can be skewed by a small number of unusually large streams. The log scale compresses very large values, making the model focus more on repeatable patterns than on single extreme events.
+
+```{r log_transform_example}
+log_example <- tibble::tibble(
+  views = c(0, 100, 500, 1000, 5000),
+  log1p_views = log1p(.data$views),
+  recovered_views = expm1(.data$log1p_views)
+)
+
+explainer_datatable(log_example, "How log1p() and expm1() relate", page_length = 5) %>%
+  DT::formatRound(columns = c("log1p_views", "recovered_views"), digits = 2)
+```
+
+The inverse transformation is:
+
+`predicted_views = expm1(predicted_log_views)`
+
+which means:
+
+`predicted_views = exp(predicted_log_views) - 1`
+
+This matches the original `log1p()` transformation. If the model predicts `log(views + 1)`, then `expm1()` converts the prediction back into the approximate original view-count scale.
+
+# Categorical Regression And ANOVA
+
+A model such as:
+
+`lm(log_views ~ publish_wday, data = df)`
+
+is equivalent to a one-way ANOVA-style model because `publish_wday` is categorical. The model compares the average logged views for each weekday, using one weekday as the reference category.
+
+A model such as:
+
+`lm(log_views ~ publish_wday + topic_lumped, data = df)`
+
+is an additive two-factor model. The `+` means the model estimates main effects: a weekday effect and a topic effect. This lets the model compare weekdays while holding topic steady, and compare topics while holding weekday steady.
+
+A model such as:
+
+`lm(log_views ~ publish_wday * topic_lumped, data = df)`
+
+expands to:
+
+`lm(log_views ~ publish_wday + topic_lumped + publish_wday:topic_lumped, data = df)`
+
+The `*` means main effects plus an interaction. The interaction term asks whether the weekday pattern differs by topic. The additive model can tell us which weekdays are generally stronger and which topics are generally stronger. The interaction model is needed to estimate whether a specific topic is unusually strong or weak on a specific weekday.
+
+```{r toy_categorical_example}
+toy_df <- tibble::tibble(
+  log_views = c(6.0, 6.2, 6.1, 6.8, 6.9, 7.0),
+  publish_wday = factor(c("Monday", "Monday", "Tuesday", "Tuesday", "Monday", "Tuesday")),
+  topic_lumped = c("chat", "chat", "chat", "gaming", "gaming", "gaming")
+)
+
+toy_model_matrix <- stats::model.matrix(
+  log_views ~ publish_wday + topic_lumped,
+  data = toy_df
+) %>%
+  as.data.frame()
+
+explainer_datatable(
+  cbind(toy_df, toy_model_matrix),
+  "Toy example: categorical predictors become model columns",
+  page_length = 6
+)
+```
+
+# Candidate Models
+
+`fit_topic_day_models()` tries a small set of practical linear models:
+
+- `day_only`: `log_views ~ publish_wday`
+- `topic_only`: `log_views ~ topic_lumped`
+- `day_plus_topic`: `log_views ~ publish_wday + topic_lumped`
+- `day_topic_interaction`: `log_views ~ publish_wday * topic_lumped`
+
+The interaction model is only attempted when there are enough repeated topic-day cells. This avoids forcing a complex model onto data that cannot support it.
+
+```{r candidate_models}
+topic_day_models <- fit_topic_day_models(live_topic_df)
+topic_day_model_comparison <- model_comparison(topic_day_models)
+
+fitted_model_table <- tibble::tibble(
+  model_name = names(topic_day_models),
+  formula = vapply(
+    topic_day_models,
+    function(model) paste(deparse(stats::formula(model)), collapse = " "),
+    character(1)
+  )
+)
+
+explainer_datatable(fitted_model_table, "Models fitted for the current live-stream data")
+```
+
+# Model Stability And Model Selection
+
+The recommendation system does not simply choose the model with the lowest AIC. It prioritizes interpretive usefulness for recommendations while still checking that the model is stable.
+
+`is_stable_lm()` checks that a candidate model is a usable linear model: it has finite AIC, positive residual degrees of freedom, no aliased coefficients, and enough observations for the fitted terms. `select_recommendation_model()` then uses this priority order:
+
+1. `day_topic_interaction`, if available and stable
+2. `day_plus_topic`, if available and stable
+3. `day_only`, as a fallback
+
+```{r selected_model}
+selected_model <- select_recommendation_model(topic_day_models)
+selected_model_summary <- summary(selected_model$model)
+
+selected_model_table <- tibble::tibble(
+  selected_model_name = selected_model$model_name,
+  selected_model_formula = paste(deparse(stats::formula(selected_model$model)), collapse = " "),
+  aic = stats::AIC(selected_model$model),
+  adj_r_squared = selected_model_summary$adj.r.squared,
+  residual_standard_error = selected_model_summary$sigma
+)
+
+explainer_datatable(selected_model_table, "Selected recommendation model") %>%
+  DT::formatRound(
+    columns = c("aic", "adj_r_squared", "residual_standard_error"),
+    digits = 3
+  )
+```
+
+# Prediction Grid
+
+The model does not only summarize observed topic-day combinations. It creates a grid of every observed topic crossed with every observed weekday. This is what allows the model to estimate a topic on a weekday even when that exact combination has limited or no historical observations.
+
+```{r prediction_grid}
+topic_levels <- sort(unique(as.character(live_topic_df$topic_lumped)))
+weekday_levels <- levels(droplevels(live_topic_df$publish_wday))
+
+prediction_grid <- expand.grid(
+  topic_lumped = topic_levels,
+  publish_wday = weekday_levels,
+  KEEP.OUT.ATTRS = FALSE,
+  stringsAsFactors = FALSE
+) %>%
+  tibble::as_tibble() %>%
+  dplyr::mutate(
+    publish_wday = factor(.data$publish_wday, levels = weekday_levels)
+  )
+
+explainer_datatable(
+  dplyr::slice_head(prediction_grid, n = 20),
+  "Sample of the full topic-weekday prediction grid",
+  page_length = 10
+)
+```
+
+# Predicted Views
+
+The exact prediction process is:
+
+`predicted_log_views <- predict(recommendation_model, newdata = prediction_grid)`
+
+`predicted_views <- pmax(expm1(predicted_log_views), 0)`
+
+The model predicts logged views. `expm1()` converts those predictions back to the view-count scale. `pmax(..., 0)` prevents impossible negative predicted view counts.
+
+```{r predicted_views}
+prediction_grid$predicted_log_views <- as.numeric(
+  stats::predict(selected_model$model, newdata = prediction_grid)
+)
+
+predicted_grid <- prediction_grid %>%
+  dplyr::mutate(
+    predicted_views = pmax(expm1(.data$predicted_log_views), 0)
+  )
+
+explainer_datatable(
+  dplyr::slice_head(predicted_grid, n = 20),
+  "Sample model predictions on the original view scale",
+  page_length = 10
+) %>%
+  DT::formatRound(columns = c("predicted_log_views", "predicted_views"), digits = 2)
+```
+
+# Ranking Weekdays Within Topic
+
+The recommendation system ranks weekdays within each topic by predicted views. Rank 1 becomes `recommended_weekday`. Rank 2 becomes `second_best_weekday`.
+
+```{r ranking_example}
+example_topic <- predicted_grid %>%
+  dplyr::count(.data$topic_lumped, sort = TRUE) %>%
+  dplyr::slice_head(n = 1) %>%
+  dplyr::pull(.data$topic_lumped)
+
+example_topic_ranking <- predicted_grid %>%
+  dplyr::filter(.data$topic_lumped == example_topic) %>%
+  dplyr::arrange(dplyr::desc(.data$predicted_views)) %>%
+  dplyr::mutate(recommendation_rank = dplyr::row_number()) %>%
+  dplyr::select(
+    topic_lumped,
+    publish_wday,
+    predicted_views,
+    recommendation_rank
+  )
+
+explainer_datatable(
+  example_topic_ranking,
+  paste("Weekday ranking example for topic:", example_topic),
+  page_length = 7
+) %>%
+  DT::formatRound(columns = "predicted_views", digits = 0, mark = ",")
+```
+
+```{r first_second_choice_example}
+first_second_choice <- example_topic_ranking %>%
+  dplyr::filter(.data$recommendation_rank %in% c(1L, 2L))
+
+explainer_datatable(
+  first_second_choice,
+  "Selected first and second choices for the example topic",
+  page_length = 2
+) %>%
+  DT::formatRound(columns = "predicted_views", digits = 0, mark = ",")
+```
+
+# Predicted Gap
+
+The predicted gap is:
+
+`predicted_view_gap = predicted_views - second_best_predicted_views`
+
+The percent gap is:
+
+`predicted_gap_pct = predicted_view_gap / second_best_predicted_views`
+
+The percent gap helps decide whether the top weekday is meaningfully better than the runner-up. For example, if the top day is predicted to get 1,100 views and the second-best day is predicted to get 1,000 views, then the gap is 100 views and the gap percent is 10%.
+
+```{r predicted_gap_example}
+gap_example <- tibble::tibble(
+  top_day_predicted_views = 1100,
+  second_best_predicted_views = 1000,
+  predicted_view_gap = .data$top_day_predicted_views - .data$second_best_predicted_views,
+  predicted_gap_pct = .data$predicted_view_gap / .data$second_best_predicted_views
+)
+
+explainer_datatable(gap_example, "Simple predicted gap example", page_length = 1) %>%
+  DT::formatPercentage(columns = "predicted_gap_pct", digits = 1)
+```
+
+# Recommendation Strength Classification
+
+`model_recommend_weekday_by_topic()` uses transparent default thresholds:
+
+- `min_topic_streams = 5`
+- `min_cell_streams = 2`
+- `min_predicted_gap_pct = 0.10`
+
+The classification logic is:
+
+- `Not topic-specific` if the selected model is `day_only`
+- `Sparse / exploratory` if total topic streams are below 5
+- `Sparse / exploratory` if the recommended topic/day cell has fewer than 2 observed streams
+- `Tentative` if the predicted advantage over the second-best day is below 10%
+- `Strong` otherwise
+
+```{r recommendation_strength_table}
+topic_day_recommendations <- model_recommend_weekday_by_topic(
+  live_topic_df,
+  topic_day_models
+)
+
+recommendation_strength_detail <- topic_day_recommendations %>%
+  dplyr::mutate(
+    predicted_gap_pct = dplyr::if_else(
+      .data$second_best_predicted_views > 0,
+      .data$predicted_view_gap / .data$second_best_predicted_views,
+      NA_real_
+    )
+  ) %>%
+  dplyr::select(
+    topic_lumped,
+    recommended_weekday,
+    total_topic_streams,
+    observed_streams_for_topic_day,
+    predicted_views,
+    second_best_predicted_views,
+    predicted_view_gap,
+    predicted_gap_pct,
+    recommendation_strength,
+    recommendation_note
+  )
+
+explainer_datatable(
+  recommendation_strength_detail,
+  "Recommendation strength details",
+  page_length = 20
+) %>%
+  DT::formatRound(
+    columns = c("predicted_views", "second_best_predicted_views", "predicted_view_gap"),
+    digits = 0,
+    mark = ","
+  ) %>%
+  DT::formatPercentage(columns = "predicted_gap_pct", digits = 1)
+```
+
+# How To Read The Final Recommendation
+
+A `Strong` recommendation means:
+
+> The model selected this weekday for this topic, there is enough historical data for the topic, the specific topic/day cell has repeated observations, and the predicted advantage over the second-best day is at least 10%.
+
+A `Tentative` recommendation means:
+
+> The model selected this weekday, but the predicted advantage over the next-best option is small.
+
+A `Sparse / exploratory` recommendation means:
+
+> The model selected this weekday, but there is not enough historical data to treat it as stable.
+
+A `Not topic-specific` recommendation means:
+
+> The model fell back to a day-only model, so it can only identify generally stronger weekdays, not topic-specific weekday differences.
+
+# Limitations
+
+This is not causal evidence. The model does not prove that changing the stream day will cause higher views. It estimates associations in historical live-stream data.
+
+Sparse topic/day cells can produce unstable recommendations. The additive model may give similar weekday recommendations across topics because it estimates general weekday and topic effects rather than topic-specific weekday effects. The interaction model is more topic-specific, but it requires more data to estimate reliably.
+
+Predicted views are approximations from a log-view model. They should be interpreted as planning signals, not guaranteed future views.
+
+# Suggested Next Checks
+
+Useful diagnostics before treating recommendations as scheduling guidance include:
+
+- A topic/day cell count table
+- A model comparison table
+- Residual plots
+- An influential stream check
+- A comparison between observed historical best days and model-informed recommendations
+
+```{r suggested_next_check_tables}
+topic_day_cell_counts <- live_topic_df %>%
+  dplyr::count(.data$topic_lumped, .data$publish_wday, name = "streams") %>%
+  dplyr::arrange(.data$topic_lumped, .data$publish_wday)
+
+explainer_datatable(
+  topic_day_cell_counts,
+  "Topic/day cell counts",
+  page_length = 20
+)
+```
+
+```{r model_comparison_table}
+explainer_datatable(
+  topic_day_model_comparison,
+  "Candidate model comparison",
+  page_length = 10
+) %>%
+  DT::formatRound(
+    columns = c("adj_r_squared", "aic", "residual_standard_error"),
+    digits = 3
+  )
+```
+
+```{r observed_vs_model_recommendations}
+observed_best <- observed_best_weekday_by_topic(
+  topic_weekday_summary(live_topic_df),
+  min_streams = 2
+) %>%
+  dplyr::select(
+    topic_lumped,
+    observed_best_weekday = publish_wday,
+    observed_median_views = median_views
+  )
+
+observed_vs_model <- topic_day_recommendations %>%
+  dplyr::select(
+    topic_lumped,
+    model_recommended_weekday = recommended_weekday,
+    predicted_views,
+    recommendation_strength
+  ) %>%
+  dplyr::left_join(observed_best, by = "topic_lumped")
+
+explainer_datatable(
+  observed_vs_model,
+  "Observed historical best days compared with model-informed recommendations",
+  page_length = 20
+) %>%
+  DT::formatRound(
+    columns = c("predicted_views", "observed_median_views"),
+    digits = 0,
+    mark = ","
+  )
+```

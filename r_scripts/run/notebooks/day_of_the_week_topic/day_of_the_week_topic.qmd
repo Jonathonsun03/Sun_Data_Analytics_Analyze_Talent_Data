@@ -1,0 +1,267 @@
+---
+title: "Live Topic-by-Weekday Streaming Recommendations"
+format:
+  html:
+    code-tools: false
+    embed-resources: true
+execute:
+  echo: false
+  message: false
+  warning: false
+---
+
+```{r setup}
+library(here)
+knitr::opts_knit$set(root.dir = here::here())
+
+library(dplyr)
+library(ggplot2)
+library(DT)
+
+source(here::here("r_scripts", "lib", "utils", "source_dir.r"))
+source(here::here("r_scripts", "lib", "utils", "datalake_root.r"))
+source(here::here("r_scripts", "lib", "utils", "talent_select.R"))
+source(here::here("r_scripts", "lib", "import_data", "talent_files.R"))
+source(here::here("r_scripts", "lib", "clean_data", "CleanData.R"))
+source(here::here("r_scripts", "lib", "clean_data", "title_classification_join.R"))
+source(here::here("r_scripts", "lib", "plots", "PlottingThemes.R"))
+source(here::here("r_scripts", "lib", "linear_regression", "day_of_week", "weekday_transform.R"))
+source(here::here("r_scripts", "lib", "linear_regression", "day_of_week", "topic_weekday_recommendations.R"))
+
+weekday_datatable <- function(df, caption, page_length = 10) {
+  DT::datatable(
+    df,
+    rownames = FALSE,
+    caption = caption,
+    options = list(
+      dom = "tip",
+      pageLength = page_length,
+      scrollX = TRUE
+    )
+  )
+}
+```
+
+```{r import_live_streams}
+talent_name <- "ava"
+
+talent_root <- get_datalake_root()
+talent_path <- select_talent(talent_name, root = talent_root)
+talent_folder <- basename(talent_path)
+
+title_classifications <- load_title_classifications(talent = talent_folder)
+talent_files <- TalentFiles(talent_path)[[1]]
+
+required_video_types <- c("video_analytics", "video_monetary")
+missing_video_exports <- setdiff(required_video_types, names(talent_files))
+if (length(missing_video_exports) > 0L) {
+  stop(
+    "Missing required video export(s) for ",
+    talent_folder,
+    ": ",
+    paste(missing_video_exports, collapse = ", ")
+  )
+}
+
+stream_data <- video_preps_with_titles(
+  files = talent_files,
+  titles = title_classifications,
+  talent = talent_folder,
+  dedupe = TRUE
+)
+
+stream_video_level <- stream_data$analytics %>%
+  dplyr::select(-dplyr::any_of(c("Estimated Revenue", "CPM"))) %>%
+  dplyr::left_join(
+    stream_data$monetary %>%
+      dplyr::select(
+        dplyr::all_of("Video ID"),
+        dplyr::any_of(c("Estimated Revenue", "CPM"))
+      ),
+    by = "Video ID"
+  )
+
+live_df <- stream_video_level %>%
+  dplyr::filter(tolower(trimws(as.character(.data$`Content Type`))) == "live")
+```
+
+# Live Topic-by-Weekday Streaming Recommendations
+
+This report starts with live streams only. It asks: **which live-stream topics appear most promising on which weekdays?** The report builds toward a scheduling recommendation, but it does so in stages: first by describing historical topic-day performance, then by fitting simple log-view models, and finally by translating those model estimates into topic-day recommendations.
+
+The core modeling goal is to compare weekdays while holding topic mix steady, and to compare topics while holding weekday steady. A raw descriptive table can say, for example, that gaming streams historically performed well on Fridays, but that pattern might reflect the fact that stronger topics happened to be streamed on Fridays. The model helps separate these two sources of variation by estimating weekday and topic effects in the same equation.
+
+## Method Overview
+
+The outcome is `log_views`, created upstream by `dow_prep()` as `log1p(views)`, or `log(views + 1)`. Logged views are used because stream view counts are usually skewed: a few unusually large streams can dominate averages on the raw view scale. Modeling logged views reduces the influence of extreme streams while still allowing results to be back-transformed into approximate view counts for planning.
+
+The main model family is linear regression. This is closely related to ANOVA: an ANOVA with categorical predictors can be understood as a linear model where groups are represented by categories. The reason to use the linear regression form here is that it gives a flexible way to include multiple predictors at once, generate predicted values for every topic-weekday combination, and rank those predictions as recommendations. In other words, the model is not only testing whether groups differ; it is estimating the schedule choices we want to compare.
+
+Categorical variables such as `publish_wday` and `topic_lumped` enter the model through indicator variables. One level becomes the reference category, and the model estimates each other level as a difference from that reference while the other predictors in the model are held constant. For example, in an additive model with both weekday and topic, the weekday estimate compares weekdays after accounting for which topic was streamed, and the topic estimate compares topics after accounting for which weekday they appeared on.
+
+Two model structures are considered:
+
+- `log_views ~ publish_wday + topic_lumped`
+- `log_views ~ publish_wday * topic_lumped`
+
+The additive model estimates generally stronger weekdays and generally stronger topics. This is useful when the data are too sparse to estimate every topic-day pairing directly. The interaction model goes one step further: it estimates whether a specific topic performs differently on specific weekdays. The interaction model is preferable for recommendations when it is stable, but it requires enough repeated topic-day observations. If the interaction model is unavailable or unstable, the report falls back to the additive model or, if necessary, a day-only model and labels the recommendation as weaker.
+
+Recommendations are therefore strongest when a topic has enough total streams, the recommended topic/day cell has repeated observations, and the model predicts a meaningful gap over the second-best day. Sparse topics or one-off topic/day cells are flagged as exploratory rather than treated as firm scheduling guidance.
+
+```{r build_live_topic_day_tables}
+live_topic_df <- live_df %>%
+  dow_prep(reference_day = "Monday") %>%
+  topic_clean(min_topic_n = 3)
+
+topic_counts <- live_topic_df %>%
+  dplyr::count(.data$topic_lumped, sort = TRUE, name = "streams")
+
+live_topic_weekday_summary <- topic_weekday_summary(live_topic_df)
+live_observed_best_weekday_by_topic <- observed_best_weekday_by_topic(
+  live_topic_weekday_summary,
+  min_streams = 2
+)
+
+topic_day_models <- fit_topic_day_models(live_topic_df)
+topic_day_model_comparison <- model_comparison(topic_day_models)
+live_topic_day_recommendations <- model_recommend_weekday_by_topic(
+  live_topic_df,
+  topic_day_models
+)
+
+live_topic_day_recommendation_summary <- live_topic_day_recommendations %>%
+  dplyr::transmute(
+    topic = .data$topic_lumped,
+    recommended_day = .data$recommended_weekday,
+    predicted_views = round(.data$predicted_views, 0),
+    second_best_day = .data$second_best_weekday,
+    second_best_predicted_views = round(.data$second_best_predicted_views, 0),
+    predicted_view_gap = round(.data$predicted_view_gap, 0),
+    observed_streams_for_topic_day = .data$observed_streams_for_topic_day,
+    total_topic_streams = .data$total_topic_streams,
+    recommendation_strength = .data$recommendation_strength,
+    recommendation_note = .data$recommendation_note
+  )
+
+recommended_schedule_by_day <- live_topic_day_recommendations %>%
+  dplyr::transmute(
+    weekday = .data$recommended_weekday,
+    topic = .data$topic_lumped,
+    predicted_views = round(.data$predicted_views, 0),
+    recommendation_strength = .data$recommendation_strength,
+    recommendation_note = .data$recommendation_note
+  ) %>%
+  dplyr::arrange(.data$weekday, dplyr::desc(.data$predicted_views))
+```
+
+## Topic Coverage
+
+```{r topic_coverage}
+weekday_datatable(
+  topic_counts,
+  "Live streams: topic coverage",
+  page_length = 15
+)
+```
+
+## Observed Historical Best Days
+
+This table is descriptive. It selects the highest observed median-view weekday for each topic among topic/day cells with at least two streams. The final recommendation table above is model-informed and should be treated as the primary output.
+
+```{r observed_historical_best_days}
+weekday_datatable(
+  live_observed_best_weekday_by_topic,
+  "Live streams: observed historical best weekdays by topic",
+  page_length = 15
+) %>%
+  DT::formatRound(
+    columns = c("mean_views", "median_views", "median_log_views", "min_views", "max_views"),
+    digits = 2,
+    mark = ","
+  )
+```
+
+## Weekday By Topic Detail
+
+```{r weekday_by_topic_detail}
+weekday_datatable(
+  live_topic_weekday_summary,
+  "Live streams: weekday by topic detail",
+  page_length = 20
+) %>%
+  DT::formatRound(
+    columns = c("mean_views", "median_views", "median_log_views", "min_views", "max_views"),
+    digits = 2,
+    mark = ","
+  )
+```
+
+## Quick Model Check
+
+This is not the main output. Lower AIC indicates better relative fit among the models compared, while adjusted R-squared gives a rough sense of explanatory power after accounting for model size. The check helps decide whether topic adds signal beyond weekday alone. The notebook uses logged views because raw view counts are usually skewed, and logging reduces the influence of unusually high-view streams.
+
+```{r quick_model_check}
+weekday_datatable(
+  topic_day_model_comparison,
+  "Live streams: day-only vs topic-aware model comparison",
+  page_length = 10
+) %>%
+  DT::formatRound(
+    columns = c("adj_r_squared", "aic", "residual_standard_error"),
+    digits = 3
+  )
+```
+
+## Topic-Day Heatmap
+
+```{r topic_day_heatmap}
+topic_day_heatmap(live_topic_weekday_summary)
+```
+
+## Final Topic-Day Recommendations
+
+This table is the primary scheduling output. Each row gives the recommended weekday for a topic. Predicted views come from the selected log-view model and have been back-transformed into the original view-count scale. Recommendation strength indicates whether the recommendation is strong, tentative, exploratory, or not topic-specific.
+
+```{r final_topic_day_recommendation_summary}
+weekday_datatable(
+  live_topic_day_recommendation_summary,
+  "Live streams: simplified topic-day recommendations",
+  page_length = 20
+)
+```
+
+## Recommended Topics By Weekday
+
+This table answers the planning question: **If I am streaming on a given weekday, which topics look most promising?**
+
+```{r recommended_topics_by_weekday}
+weekday_datatable(
+  recommended_schedule_by_day,
+  "Live streams: recommended topics by weekday",
+  page_length = 20
+)
+```
+
+## Detailed model-informed recommendation diagnostics
+
+```{r detailed_topic_day_recommendations}
+weekday_datatable(
+  live_topic_day_recommendations,
+  "Live streams: detailed model-informed recommendation diagnostics",
+  page_length = 20
+) %>%
+  DT::formatRound(
+    columns = c(
+      "observed_median_views",
+      "observed_median_log_views",
+      "predicted_log_views",
+      "predicted_views",
+      "second_best_predicted_views",
+      "predicted_view_gap"
+    ),
+    digits = 2,
+    mark = ","
+  )
+```
+
+The recommendation table should be read as a scheduling guide, not as proof that a weekday causes higher viewership. The model estimates expected logged views for each topic-weekday combination and then ranks weekdays within each topic. Strong recommendations are based on repeated historical observations and a meaningful predicted gap over the second-best weekday. Tentative or exploratory recommendations should be treated as hypotheses to test in future streams rather than firm conclusions.

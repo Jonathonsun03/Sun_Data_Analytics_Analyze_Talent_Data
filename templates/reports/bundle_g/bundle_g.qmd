@@ -1,0 +1,445 @@
+---
+title: "Bundle G: Topic-by-Weekday Recommendations"
+format:
+  html:
+    code-fold: false
+    df-print: paged
+    embed-resources: true
+execute:
+  echo: false
+  message: false
+  warning: false
+params:
+  talent: "Ava"
+  data_source: "datalake"
+  data_root: null
+  render_generated_at: null
+  included_date_range: "All available dates"
+  render_cli: ""
+  render_output_dir: null
+  render_output_prefix: "Bundle_G"
+  window_days: null
+  start_date: null
+  end_date: null
+  reference_day: "Monday"
+  content_types:
+    - live
+    - video
+    - short
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+knitr::opts_knit$set(root.dir = normalizePath(file.path(getwd()), winslash = "/", mustWork = FALSE))
+
+library(here)
+library(dplyr)
+library(DT)
+library(ggplot2)
+library(purrr)
+
+`%||%` <- function(x, y) {
+  if (is.null(x) || length(x) == 0 || (length(x) == 1 && !nzchar(x))) y else x
+}
+
+source(here::here("r_scripts", "lib", "utils", "source_dir.r"))
+source(here::here("r_scripts", "lib", "utils", "staging_root.R"))
+source(here::here("r_scripts", "lib", "utils", "datalake_root.r"))
+source(here::here("r_scripts", "lib", "utils", "talent_select.R"))
+source(here::here("r_scripts", "lib", "import_data", "talent_files.R"))
+source(here::here("r_scripts", "lib", "clean_data", "CleanData.R"))
+source(here::here("r_scripts", "lib", "clean_data", "title_classification_join.R"))
+source(here::here("r_scripts", "lib", "plots", "PlottingThemes.R"))
+source(here::here("r_scripts", "lib", "utils", "content_type_utils.R"))
+source(here::here("r_scripts", "lib", "linear_regression", "day_of_week", "weekday_transform.R"))
+source(here::here("r_scripts", "lib", "linear_regression", "day_of_week", "report_helpers.R"))
+source(here::here("r_scripts", "lib", "linear_regression", "day_of_week", "topic_weekday_recommendations.R"))
+
+bundle_g_datatable <- function(df, caption, page_length = 10) {
+  DT::datatable(
+    df,
+    rownames = FALSE,
+    caption = caption,
+    options = list(
+      dom = "tip",
+      pageLength = page_length,
+      scrollX = TRUE
+    )
+  )
+}
+
+bundle_g_summary_datatable <- function(df, caption, page_length = 20) {
+  bundle_g_datatable(df, caption, page_length = page_length) %>%
+    DT::formatRound(
+      columns = intersect(
+        c(
+          "mean_views",
+          "median_views",
+          "median_log_views",
+          "min_views",
+          "max_views",
+          "predicted_views",
+          "second_best_predicted_views",
+          "predicted_view_gap"
+        ),
+        names(df)
+      ),
+      digits = 2,
+      mark = ","
+    )
+}
+
+bundle_g_topic_heatmap <- function(summary_df, content_label) {
+  plot_theme <- if (exists("theme_nyt", mode = "function")) {
+    theme_nyt()
+  } else {
+    ggplot2::theme_minimal()
+  }
+
+  ggplot2::ggplot(
+    summary_df,
+    ggplot2::aes(
+      x = .data$publish_wday,
+      y = .data$topic_lumped,
+      fill = .data$median_views
+    )
+  ) +
+    ggplot2::geom_tile(color = "white") +
+    ggplot2::geom_text(ggplot2::aes(label = .data$streams), size = 3) +
+    ggplot2::scale_fill_viridis_c(option = "C", labels = scales::comma) +
+    ggplot2::labs(
+      x = "Publish weekday",
+      y = "Topic",
+      fill = "Median views",
+      title = paste("Observed median views by", tolower(content_label), "topic and weekday"),
+      subtitle = "Tile color is observed median views; labels are stream counts."
+    ) +
+    plot_theme
+}
+
+resolve_bundle_g_data_root <- function(data_source, data_root) {
+  if (!is.null(data_root) && nzchar(trimws(data_root))) {
+    return(normalizePath(data_root, winslash = "/", mustWork = FALSE))
+  }
+  if (identical(tolower(data_source), "datalake")) {
+    return(normalizePath(get_datalake_root(), winslash = "/", mustWork = FALSE))
+  }
+  normalizePath(get_staging_root(), winslash = "/", mustWork = FALSE)
+}
+
+apply_bundle_g_publish_window <- function(df, start_date, end_date) {
+  if (!("publish_date" %in% names(df))) {
+    return(df)
+  }
+  if (!is.null(start_date) && nzchar(start_date)) {
+    df <- df %>% dplyr::filter(.data$publish_date >= as.Date(start_date))
+  }
+  if (!is.null(end_date) && nzchar(end_date)) {
+    df <- df %>% dplyr::filter(.data$publish_date <= as.Date(end_date))
+  }
+  df
+}
+
+canonical_bundle_g_content_types <- function(x) {
+  if (is.null(x) || length(x) == 0) {
+    return(c("live", "video", "short"))
+  }
+  x <- tolower(trimws(as.character(unlist(x))))
+  x <- x[nzchar(x)]
+  x <- dplyr::recode(
+    x,
+    videos = "video",
+    shorts = "short",
+    all = "all",
+    .default = x
+  )
+  if ("all" %in% x) {
+    return(c("live", "video", "short"))
+  }
+  unique(x)
+}
+
+build_bundle_g_content_results <- function(content_df, reference_day = "Monday") {
+  topic_df <- content_df %>%
+    dow_prep(reference_day = reference_day) %>%
+    topic_clean(min_topic_n = 3)
+
+  topic_counts <- topic_df %>%
+    dplyr::count(.data$topic_lumped, sort = TRUE, name = "streams")
+
+  topic_weekday <- topic_weekday_summary(topic_df)
+  observed_best <- observed_best_weekday_by_topic(topic_weekday, min_streams = 2)
+  models <- fit_topic_day_models(topic_df)
+  model_check <- model_comparison(models)
+  recommendations <- model_recommend_weekday_by_topic(topic_df, models)
+
+  recommendation_summary <- recommendations %>%
+    dplyr::transmute(
+      topic = .data$topic_lumped,
+      recommended_day = .data$recommended_weekday,
+      predicted_views = round(.data$predicted_views, 0),
+      second_best_day = .data$second_best_weekday,
+      second_best_predicted_views = round(.data$second_best_predicted_views, 0),
+      predicted_view_gap = round(.data$predicted_view_gap, 0),
+      observed_streams_for_topic_day = .data$observed_streams_for_topic_day,
+      total_topic_streams = .data$total_topic_streams,
+      recommendation_strength = .data$recommendation_strength,
+      recommendation_note = .data$recommendation_note
+    )
+
+  schedule_by_day <- recommendations %>%
+    dplyr::transmute(
+      weekday = .data$recommended_weekday,
+      topic = .data$topic_lumped,
+      predicted_views = round(.data$predicted_views, 0),
+      recommendation_strength = .data$recommendation_strength,
+      recommendation_note = .data$recommendation_note
+    ) %>%
+    dplyr::arrange(.data$weekday, dplyr::desc(.data$predicted_views))
+
+  list(
+    topic_df = topic_df,
+    topic_counts = topic_counts,
+    topic_weekday = topic_weekday,
+    observed_best = observed_best,
+    models = models,
+    model_check = model_check,
+    recommendations = recommendations,
+    recommendation_summary = recommendation_summary,
+    schedule_by_day = schedule_by_day
+  )
+}
+
+data_root <- resolve_bundle_g_data_root(params$data_source, params$data_root)
+talent_path <- select_talent(params$talent, root = data_root)
+talent_folder <- basename(talent_path)
+title_classifications <- load_title_classifications(talent = talent_folder)
+talent_files <- TalentFiles(talent_path)[[1]]
+
+required_video_types <- c("video_analytics", "video_monetary")
+missing_video_exports <- setdiff(required_video_types, names(talent_files))
+if (length(missing_video_exports) > 0L) {
+  stop(
+    "Missing required video export(s) for ",
+    talent_folder,
+    ": ",
+    paste(missing_video_exports, collapse = ", ")
+  )
+}
+
+stream_data <- video_preps_with_titles(
+  files = talent_files,
+  titles = title_classifications,
+  talent = talent_folder,
+  dedupe = TRUE
+)
+
+stream_video_level <- stream_data$analytics %>%
+  dplyr::select(-dplyr::any_of(c("Estimated Revenue", "CPM"))) %>%
+  dplyr::left_join(
+    stream_data$monetary %>%
+      dplyr::select(
+        dplyr::all_of("Video ID"),
+        dplyr::any_of(c("Estimated Revenue", "CPM"))
+      ),
+    by = "Video ID"
+  ) %>%
+  dplyr::mutate(talent_name = talent_folder) %>%
+  apply_bundle_g_publish_window(params$start_date, params$end_date)
+
+content_types <- canonical_bundle_g_content_types(params$content_types)
+available_content_types <- sort(unique(tolower(trimws(as.character(stream_video_level$`Content Type`)))))
+content_types <- intersect(content_types, available_content_types)
+if (length(content_types) == 0L) {
+  stop("No requested content types are available after filtering.")
+}
+
+content <- purrr::map(
+  content_types,
+  ~ stream_video_level %>%
+    dplyr::filter(tolower(trimws(as.character(.data$`Content Type`))) == .x)
+)
+names(content) <- content_types
+```
+
+```{r report_layout_style, results='asis'}
+cat(
+  "<style>
+  .main-container {
+    max-width: 1200px !important;
+  }
+  .dataTables_wrapper {
+    width: 100%;
+    max-width: 100%;
+  }
+  .dataTables_wrapper .dataTables_scroll {
+    overflow-x: auto;
+  }
+  table.dataTable {
+    width: 100% !important;
+  }
+  </style>"
+)
+```
+
+## Report Scope
+
+Bundle G extends Bundle F's weekday analysis by asking a more specific scheduling question: **which topics appear most promising on which weekdays?** Each requested content type is analyzed separately. The report combines descriptive historical topic-day performance with a simple model of logged views, then translates the model predictions into topic-day recommendations with evidence-strength labels.
+
+```{r report_scope}
+bundle_g_datatable(
+  tibble::tibble(
+    field = c(
+      "Talent",
+      "Data source",
+      "Data root",
+      "Included publish date range",
+      "Reference weekday",
+      "Content types",
+      "Generated"
+    ),
+    value = c(
+      talent_folder,
+      params$data_source,
+      data_root,
+      params$included_date_range,
+      params$reference_day,
+      paste(dow_report_content_label(content_types), collapse = ", "),
+      params$render_generated_at %||% as.character(Sys.time())
+    )
+  ),
+  "Bundle G render scope",
+  page_length = 7
+)
+```
+
+```{r content_type_overview}
+stream_video_level %>%
+  dplyr::count(`Content Type`, name = "videos") %>%
+  dplyr::arrange(`Content Type`) %>%
+  bundle_g_datatable("Available content by type", page_length = 10)
+```
+
+## Method Overview
+
+The outcome is `log_views`, created as `log1p(views)`, or `log(views + 1)`. Logged views are used because stream view counts are usually skewed: a few unusually large streams can dominate averages on the raw view scale. Modeling logged views reduces the influence of extreme streams while still allowing the final predictions to be back-transformed into approximate view counts for planning.
+
+The report uses linear regression rather than a standalone ANOVA because the goal is not only to test whether groups differ. Bundle G needs predicted values for every topic-weekday combination so it can rank possible scheduling choices. ANOVA with categorical predictors is mathematically part of the same linear-model family; the regression form makes it easier to include multiple categorical predictors, hold other predictors steady, and generate recommendation tables.
+
+Categorical variables such as publish weekday and topic enter the model as indicator variables. One level becomes the reference category, and the model estimates each other level as a difference from that reference while the other predictors are held constant. The additive model, `log_views ~ publish_wday + topic_lumped`, estimates generally stronger weekdays and generally stronger topics. The interaction model, `log_views ~ publish_wday * topic_lumped`, estimates whether specific topics perform differently on specific weekdays. When the interaction model is too sparse or unstable, the recommendation system falls back to a simpler model and labels the recommendations more cautiously.
+
+```{r content_sections, results='asis'}
+for (content_type in names(content)) {
+  content_df <- content[[content_type]]
+  content_label <- dow_report_content_label(content_type)
+
+  if (nrow(content_df) == 0L) {
+    next
+  }
+
+  content_results <- build_bundle_g_content_results(
+    content_df,
+    reference_day = params$reference_day
+  )
+
+  cat("\n\n# ", dow_report_content_title(content_type), "\n\n", sep = "")
+  cat(
+    "This section analyzes ",
+    tolower(content_label),
+    " only. It first documents topic coverage and observed historical topic-day performance, ",
+    "then shows model diagnostics, and finally presents the model-informed scheduling recommendations.\n\n",
+    sep = ""
+  )
+
+  cat("\n\n## Topic Coverage\n\n")
+  print(bundle_g_datatable(
+    content_results$topic_counts,
+    paste0(content_label, ": topic coverage"),
+    page_length = 15
+  ))
+
+  cat("\n\n## Observed Historical Best Days\n\n")
+  cat(
+    "This table is descriptive. It selects the highest observed median-view weekday for each topic ",
+    "among topic/day cells with at least two streams. The final recommendation table below is model-informed ",
+    "and should be treated as the primary scheduling output.\n\n",
+    sep = ""
+  )
+  print(bundle_g_summary_datatable(
+    content_results$observed_best,
+    paste0(content_label, ": observed historical best weekdays by topic"),
+    page_length = 15
+  ))
+
+  cat("\n\n## Weekday By Topic Detail\n\n")
+  print(bundle_g_summary_datatable(
+    content_results$topic_weekday,
+    paste0(content_label, ": weekday by topic detail"),
+    page_length = 20
+  ))
+
+  cat("\n\n## Quick Model Check\n\n")
+  cat(
+    "Lower AIC indicates better relative fit among the models compared, while adjusted R-squared gives a rough ",
+    "sense of explanatory power after accounting for model size. This check helps decide whether topic adds signal ",
+    "beyond weekday alone. The final recommendation model is selected by stability and recommendation usefulness, ",
+    "not by AIC alone.\n\n",
+    sep = ""
+  )
+  print(bundle_g_datatable(
+    content_results$model_check,
+    paste0(content_label, ": day-only vs topic-aware model comparison"),
+    page_length = 10
+  ) %>%
+    DT::formatRound(
+      columns = c("adj_r_squared", "aic", "residual_standard_error"),
+      digits = 3
+    ))
+
+  cat("\n\n## Topic-Day Heatmap\n\n")
+  print(bundle_g_topic_heatmap(content_results$topic_weekday, content_label))
+
+  cat("\n\n## Final Topic-Day Recommendations\n\n")
+  cat(
+    "This table is the primary scheduling output. Each row gives the recommended weekday for a topic. ",
+    "Predicted views come from the selected log-view model and have been back-transformed into the original ",
+    "view-count scale. Recommendation strength indicates whether the recommendation is strong, tentative, ",
+    "exploratory, or not topic-specific.\n\n",
+    sep = ""
+  )
+  print(bundle_g_datatable(
+    content_results$recommendation_summary,
+    paste0(content_label, ": simplified topic-day recommendations"),
+    page_length = 20
+  ))
+
+  cat("\n\n## Recommended Topics By Weekday\n\n")
+  cat(
+    "This table answers the planning question: if a stream is happening on a given weekday, ",
+    "which topics look most promising?\n\n",
+    sep = ""
+  )
+  print(bundle_g_datatable(
+    content_results$schedule_by_day,
+    paste0(content_label, ": recommended topics by weekday"),
+    page_length = 20
+  ))
+
+  cat("\n\n## Detailed Model-Informed Recommendation Diagnostics\n\n")
+  print(bundle_g_summary_datatable(
+    content_results$recommendations,
+    paste0(content_label, ": detailed model-informed recommendation diagnostics"),
+    page_length = 20
+  ))
+
+  cat(
+    "\n\nThe recommendation table should be read as a scheduling guide, not as proof that a weekday causes higher viewership. ",
+    "The model estimates expected logged views for each topic-weekday combination and then ranks weekdays within each topic. ",
+    "Strong recommendations are based on repeated historical observations and a meaningful predicted gap over the second-best weekday. ",
+    "Tentative or exploratory recommendations should be treated as hypotheses to test in future streams rather than firm conclusions.\n\n",
+    sep = ""
+  )
+}
+```

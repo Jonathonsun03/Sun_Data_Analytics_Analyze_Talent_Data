@@ -1,0 +1,266 @@
+# `r dow_report_content_title(content_type)`
+
+```{r}
+#| include: false
+
+content_df <- content[[content_type]]
+content_label <- dow_report_content_label(content_type)
+
+if (nrow(content_df) == 0L) {
+  stop("No rows are available for ", content_label, " after filtering.")
+}
+
+weekday_df <- dow_prep(content_df, reference_day = params$reference_day)
+weekday_summary <- dow_summary(weekday_df)
+weekday_summary_by_median <- weekday_summary %>%
+  dplyr::arrange(dplyr::desc(.data$median_views))
+weekday_recommendation <- weekday_summary_by_median %>%
+  dplyr::mutate(rank = dplyr::row_number()) %>%
+  dplyr::select(
+    rank,
+    publish_weekday = publish_wday,
+    streams = n,
+    median_views,
+    mean_views
+  )
+weekday_models <- dow_fit(weekday_df)
+weekday_levels <- levels(weekday_df$publish_wday)
+log_prediction_input <- tibble::tibble(
+  publish_wday = factor(weekday_levels, levels = weekday_levels)
+)
+log_weekday_estimates <- log_prediction_input
+log_weekday_estimates$estimated_log_views <- as.numeric(
+  stats::predict(weekday_models$log, newdata = log_prediction_input)
+)
+reference_estimated_views <- expm1(log_weekday_estimates$estimated_log_views[[1]])
+log_weekday_estimates <- log_weekday_estimates %>%
+  dplyr::mutate(
+    estimated_views = expm1(.data$estimated_log_views),
+    estimated_view_difference_from_reference = .data$estimated_views - reference_estimated_views,
+    estimated_percent_change_from_reference = if (reference_estimated_views > 0) {
+      (.data$estimated_views / reference_estimated_views - 1) * 100
+    } else {
+      NA_real_
+    }
+  ) %>%
+  dplyr::transmute(
+    publish_weekday = as.character(.data$publish_wday),
+    .data$estimated_views,
+    .data$estimated_view_difference_from_reference,
+    .data$estimated_percent_change_from_reference
+  )
+log_coefficient_examples <- weekday_models$log_effects %>%
+  dplyr::filter(.data$term != "(Intercept)") %>%
+  dplyr::mutate(
+    publish_weekday = sub("^publish_wday", "", .data$term),
+    effect_direction = dplyr::case_when(
+      .data$approx_percent_change_from_reference > 0 ~ "higher",
+      .data$approx_percent_change_from_reference < 0 ~ "lower",
+      TRUE ~ "about the same as"
+    ),
+    absolute_percent_change = abs(.data$approx_percent_change_from_reference)
+  ) %>%
+  dplyr::arrange(dplyr::desc(.data$absolute_percent_change))
+log_coefficient_example <- dplyr::slice_head(log_coefficient_examples, n = 1)
+log_coefficient_example_text <- if (nrow(log_coefficient_example) == 0L) {
+  paste0(
+    "This model only contains the reference weekday, ",
+    levels(weekday_df$publish_wday)[[1]],
+    ", so there are no weekday coefficients to compare against it."
+  )
+} else {
+  sprintf(
+    paste0(
+      "These coefficients can be interpreted as approximate percent differences ",
+      "from the reference weekday using `percent difference = (exp(coefficient) - 1) * 100`. ",
+      "For this model, `%s` has a coefficient of %.3f, which converts to an estimated %.1f%% %s views than `%s`."
+    ),
+    log_coefficient_example$publish_weekday[[1]],
+    log_coefficient_example$estimate[[1]],
+    abs(log_coefficient_example$approx_percent_change_from_reference[[1]]),
+    log_coefficient_example$effect_direction[[1]],
+    levels(weekday_df$publish_wday)[[1]]
+  )
+}
+log_anova_table <- dow_report_model_anova_table(weekday_models$log)
+log_anova_weekday <- log_anova_table %>%
+  dplyr::filter(.data$term == "publish_wday") %>%
+  dplyr::slice_head(n = 1)
+log_anova_interpretation <- if (nrow(log_anova_weekday) == 0L || is.na(log_anova_weekday$p_value[[1]])) {
+  "The ANOVA table does not contain a usable weekday p-value, so this model cannot provide an overall weekday significance interpretation."
+} else if (log_anova_weekday$p_value[[1]] < 0.05) {
+  sprintf(
+    paste0(
+      "In this model, the weekday term is statistically significant at the 0.05 level ",
+      "(F = %.2f, p = %.3g). This means the observed weekday differences are unlikely ",
+      "to be explained by random variation alone under this model, so publish weekday appears ",
+      "to be meaningfully associated with log-view performance for these %s."
+    ),
+    log_anova_weekday$f_value[[1]],
+    log_anova_weekday$p_value[[1]],
+    tolower(content_label)
+  )
+} else {
+  sprintf(
+    paste0(
+      "In this model, the weekday term is not statistically significant at the 0.05 level ",
+      "(F = %.2f, p = %.3g). This means the report does not have strong model-level evidence ",
+      "that publish weekday explains log-view differences for these %s, even if the descriptive ",
+      "tables still show some weekdays ranking higher than others."
+    ),
+    log_anova_weekday$f_value[[1]],
+    log_anova_weekday$p_value[[1]],
+    tolower(content_label)
+  )
+}
+weekday_plots <- dow_plot(weekday_df, weekday_summary)
+```
+
+## Recommended Stream Days
+
+This is the primary table for deciding which weekday looks strongest overall. Days are ranked by `median_views`, because the median[^median] is less likely than the mean[^mean] to be distorted by one unusually large or small stream. Use `streams` as a confidence check: a high-ranked day with very few streams should be treated as promising, not proven.
+
+[^median]: The median is the middle value after sorting streams from lowest to highest views. It is useful here because one unusually large stream has less influence on the median than it would on the mean.
+
+[^mean]: The mean is the arithmetic average: total views divided by number of streams. It is easy to interpret, but it can be pulled upward or downward by unusually large or unusually small streams.
+
+```{r}
+dow_report_datatable(
+  weekday_recommendation,
+  paste0(content_label, ": recommended stream days"),
+  page_length = 7
+) %>%
+  DT::formatRound(columns = c("median_views", "mean_views"), digits = 0, mark = ",")
+```
+
+## Weekday Evidence Summary
+
+This table provides the supporting evidence behind the ranking. The most important fields for this report are `n`, `median_views`, and `mean_views`; the remaining columns help show spread and uncertainty.
+
+```{r}
+dow_report_summary_datatable(weekday_summary, paste0(content_label, ": weekday summary"))
+```
+
+## Log Views Model Fit
+
+This table summarizes the model using log-transformed views,[^log-transform] which reduces the influence of unusually large streams. For the "best general day" question, this is more useful than a raw-view model because it emphasizes repeatable weekday patterns over single outlier streams.
+
+[^log-transform]: A log transform compresses large values more than small values. In this report, views are modeled as `log1p(views)`, which means `log(views + 1)`, so zero-view rows can still be handled.
+
+```{r}
+dow_report_model_fit_datatable(weekday_models$log, paste0(content_label, ": log views model fit"))
+```
+
+## Log Views Coefficients
+
+This table shows weekday coefficients[^coefficient] on the log-view scale relative to the reference weekday.[^reference-weekday] Positive estimates suggest higher expected views than the reference day; negative estimates suggest lower expected views.
+
+`r log_coefficient_example_text`
+
+[^coefficient]: A coefficient is the model's estimated difference for a term. For weekday terms in this log-view model, each coefficient estimates how that weekday differs from the reference weekday on the log-view scale.
+
+[^reference-weekday]: The reference weekday is the comparison baseline used by the model. Its expected value is represented by the intercept, and each other weekday coefficient is interpreted relative to that reference day.
+
+```{r}
+dow_report_model_coefficient_datatable(
+  weekday_models$log,
+  paste0(content_label, ": log views model coefficients")
+)
+```
+
+## Log Model Converted To Estimated Views
+
+This table converts the log-view model back into approximate raw view counts. `estimated_views` is the model-estimated view count for each weekday, while `estimated_view_difference_from_reference` shows the approximate raw-view difference from the reference weekday.
+
+```{r}
+dow_report_datatable(
+  log_weekday_estimates,
+  paste0(content_label, ": log model converted to estimated views"),
+  page_length = 7
+) %>%
+  DT::formatRound(
+    columns = c(
+      "estimated_views",
+      "estimated_view_difference_from_reference",
+      "estimated_percent_change_from_reference"
+    ),
+    digits = 0,
+    mark = ","
+  )
+```
+
+## Log Views ANOVA
+
+This table tests the overall weekday term for the log-views model using ANOVA.[^anova] The F statistic[^f-statistic] and p-value[^p-value] are used together to decide whether the weekday pattern is statistically significant.[^significance] If the weekday p-value is small, weekday appears to explain differences in viewership after reducing the impact of extreme view counts.
+
+```{r}
+dow_report_model_anova_datatable(weekday_models$log, paste0(content_label, ": log views ANOVA"))
+```
+
+`r log_anova_interpretation`
+
+[^anova]: ANOVA, or analysis of variance, tests whether a group of predictors improves the model. Here, it asks whether publish weekday as a whole explains meaningful variation in log views.
+
+[^p-value]: The p-value is the probability of seeing a weekday pattern at least this strong if weekday had no real association with log views in this model. Smaller p-values provide stronger evidence against that no-weekday-effect assumption.
+
+[^f-statistic]: The F statistic compares the variation explained by weekday against the variation left unexplained by the model. Larger F values usually indicate stronger model-level evidence that weekday matters.
+
+[^significance]: In this report, "statistically significant at the 0.05 level" means `p < 0.05`. It is evidence of an association in this model, not proof that weekday alone causes the performance difference.
+
+## Approximate Percent Change From Reference Weekday
+
+This table converts the log-model coefficients into approximate percent changes from the reference weekday. Positive values indicate higher expected views than the reference day, and negative values indicate lower expected views.
+
+```{r}
+dow_report_log_effects_datatable(
+  weekday_models$log_effects,
+  paste0(content_label, ": approximate percent change from reference weekday")
+)
+```
+
+## View Distribution By Weekday
+
+This boxplot shows the distribution of views for each publish weekday. Compare the median line and the spread within each box; wide boxes or long whiskers mean performance varies more on that day. Treat this as a diagnostic for consistency, not as the main ranking.
+
+```{r}
+#| fig-width: 9
+#| fig-height: 9
+#| out-width: 100%
+#| out-height: 720px
+
+bundle_f_ggplotly(weekday_plots$boxplot_views)
+```
+
+## Mean Views With Confidence Intervals
+
+This plot compares the mean, or average, views for streams published on each weekday. The point for each weekday is calculated by adding up the views for streams published on that day and dividing by the number of streams from that day.
+
+The vertical bars show 95% confidence intervals around each weekday average. Wider intervals mean the estimate is less certain, usually because there are fewer streams for that weekday or because view counts vary a lot. If two weekdays have heavily overlapping intervals, the report should treat their average-view difference cautiously; if the intervals are clearly separated, that is stronger evidence that the weekday averages differ.
+
+These intervals are calculated as `mean_views +/- t_critical * standard_error`, where `standard_error` is the weekday's view standard deviation divided by the square root of the number of streams on that weekday. The report uses a 95% t-based interval so weekdays with fewer streams receive wider uncertainty bands.[^t-critical][^standard-error]
+
+[^t-critical]: `t_critical` is the multiplier from the t distribution used for a 95% confidence interval. It depends on the number of streams available for that weekday; smaller samples use a larger multiplier because the average is less certain.
+
+[^standard-error]: `standard_error` measures how uncertain the weekday average is. In this report, it is calculated as the weekday's standard deviation of views divided by the square root of the number of streams on that weekday.
+
+```{r}
+#| fig-width: 9
+#| fig-height: 9
+#| out-width: 100%
+#| out-height: 720px
+
+bundle_f_ggplotly(weekday_plots$mean_ci_views)
+```
+
+## Log Views By Weekday
+
+This boxplot shows the same weekday pattern on a log scale, which makes extreme high-view uploads less dominant. Use it to compare typical performance when raw views are heavily skewed.
+
+```{r}
+#| fig-width: 9
+#| fig-height: 9
+#| out-width: 100%
+#| out-height: 720px
+
+bundle_f_ggplotly(weekday_plots$boxplot_log_views)
+```

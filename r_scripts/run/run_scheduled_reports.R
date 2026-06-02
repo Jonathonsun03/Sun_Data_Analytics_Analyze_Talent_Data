@@ -33,7 +33,7 @@ usage <- function() {
       "Schedule mapping:",
       "  talent_report_schedule.active                 -> row must be TRUE",
       "  talent_report_schedule.report_id              -> dispatches to a supported report runner",
-      "  supported report_id values                    -> bundle_a, bundle_e, bundle_f",
+      "  supported report_id values                    -> bundle_a, bundle_e, bundle_f, bundle_g",
       "  talent_report_schedule.canonical_talent_name  -> mapped via talents.datalake_folder_name",
       "  talent_report_schedule.window_days            -> passed to the report runner; use lifetime for all data",
       "  talent_report_schedule.report_params          -> optional JSON bundle parameters",
@@ -53,6 +53,7 @@ usage <- function() {
       "  --bundle-a-runner PATH          Bundle A full-pipeline runner path",
       "  --bundle-e-runner PATH          Bundle E full-pipeline runner path",
       "  --bundle-f-runner PATH          Bundle F full-pipeline runner path",
+      "  --bundle-g-runner PATH          Bundle G full-pipeline runner path",
       "  --input-source staging|datalake Passed to report runners",
       "  --datalake-root PATH            Passed to report runners",
       "  --staging-root PATH             Passed to report runners",
@@ -86,6 +87,7 @@ parse_args <- function(args) {
     bundle_a_runner = "bin/linux/render_reports/bundle_A/run_bundle_A_full_pipeline.sh",
     bundle_e_runner = "bin/linux/render_reports/bundle_E/run_bundle_E_full_pipeline.sh",
     bundle_f_runner = "bin/linux/render_reports/bundle_F/run_bundle_F_full_pipeline.sh",
+    bundle_g_runner = "bin/linux/render_reports/bundle_G/run_bundle_G_full_pipeline.sh",
     input_source = "datalake",
     datalake_root = "",
     staging_root = "",
@@ -130,6 +132,7 @@ parse_args <- function(args) {
       "--bundle-a-runner",
       "--bundle-e-runner",
       "--bundle-f-runner",
+      "--bundle-g-runner",
       "--input-source",
       "--datalake-root",
       "--staging-root",
@@ -197,6 +200,10 @@ parse_args <- function(args) {
     out$bundle_f_runner <- file.path(repo_root, out$bundle_f_runner)
   }
   out$bundle_f_runner <- normalizePath(out$bundle_f_runner, winslash = "/", mustWork = FALSE)
+  if (!grepl("^/", out$bundle_g_runner)) {
+    out$bundle_g_runner <- file.path(repo_root, out$bundle_g_runner)
+  }
+  out$bundle_g_runner <- normalizePath(out$bundle_g_runner, winslash = "/", mustWork = FALSE)
 
   out
 }
@@ -283,6 +290,7 @@ runner_for_report <- function(report_id, args) {
     bundle_a = args$bundle_a_runner,
     bundle_e = args$bundle_e_runner,
     bundle_f = args$bundle_f_runner,
+    bundle_g = args$bundle_g_runner,
     ""
   )
 }
@@ -375,7 +383,7 @@ schedule_report_params_args <- function(report_id, report_params) {
     stop("report_params must be a JSON object for ", report_id, ".", call. = FALSE)
   }
 
-  if (!identical(report_id, "bundle_f")) {
+  if (!report_id %in% c("bundle_f", "bundle_g")) {
     return(character())
   }
 
@@ -383,7 +391,9 @@ schedule_report_params_args <- function(report_id, report_params) {
   unknown <- setdiff(names(params), allowed)
   if (length(unknown) > 0) {
     stop(
-      "Unsupported Bundle F report_params key(s): ",
+      "Unsupported ",
+      toupper(report_id),
+      " report_params key(s): ",
       paste(unknown, collapse = ", "),
       ". Allowed keys: ",
       paste(allowed, collapse = ", "),
@@ -442,6 +452,9 @@ if (!file.exists(args$bundle_e_runner)) {
 }
 if (!file.exists(args$bundle_f_runner)) {
   stop("Missing Bundle F runner: ", args$bundle_f_runner, call. = FALSE)
+}
+if (!file.exists(args$bundle_g_runner)) {
+  stop("Missing Bundle G runner: ", args$bundle_g_runner, call. = FALSE)
 }
 
 if (nzchar(args$google_email)) {

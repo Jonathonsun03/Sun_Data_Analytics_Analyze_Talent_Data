@@ -39,6 +39,7 @@ library(readr)
 library(dplyr)
 library(purrr)
 library(DT)
+library(plotly)
 
 `%||%` <- function(x, y) {
   if (is.null(x) || length(x) == 0 || (length(x) == 1 && !nzchar(x))) y else x
@@ -55,6 +56,38 @@ source(here::here("r_scripts", "lib", "plots", "PlottingThemes.R"))
 source(here::here("r_scripts", "lib", "utils", "content_type_utils.R"))
 source(here::here("r_scripts", "lib", "linear_regression", "day_of_week", "weekday_transform.R"))
 source(here::here("r_scripts", "lib", "linear_regression", "day_of_week", "report_helpers.R"))
+
+bundle_f_plotly_layout <- function(
+  plot_obj,
+  margin_l = 120,
+  margin_r = 30,
+  margin_b = 72,
+  margin_t = 88
+) {
+  layout_args <- list(
+    margin = list(l = margin_l, r = margin_r, b = margin_b, t = margin_t),
+    xaxis = list(automargin = TRUE),
+    yaxis = list(automargin = TRUE),
+    autosize = TRUE,
+    title = list(x = 0.01, xanchor = "left")
+  )
+
+  plot_obj <- do.call(plotly::layout, c(list(p = plot_obj), layout_args))
+
+  axis_keys <- names(plot_obj$x$layout)[grepl("^(x|y)axis[0-9]*$", names(plot_obj$x$layout))]
+  for (axis_key in axis_keys) {
+    if (is.null(plot_obj$x$layout[[axis_key]])) {
+      plot_obj$x$layout[[axis_key]] <- list()
+    }
+    plot_obj$x$layout[[axis_key]]$automargin <- TRUE
+  }
+
+  plotly::config(plot_obj, responsive = TRUE, displaylogo = FALSE)
+}
+
+bundle_f_ggplotly <- function(plot_obj, tooltip = c("x", "y"), height = 720) {
+  bundle_f_plotly_layout(plotly::ggplotly(plot_obj, tooltip = tooltip, height = height))
+}
 
 resolve_bundle_f_data_root <- function(data_source, data_root) {
   if (!is.null(data_root) && nzchar(trimws(data_root))) {
@@ -155,7 +188,46 @@ content <- purrr::map(
 names(content) <- content_types
 ```
 
+```{r report_layout_style, results='asis'}
+cat(
+  "<style>
+  .main-container {
+    max-width: 1200px !important;
+  }
+  .html-widget,
+  .plotly.html-widget,
+  .js-plotly-plot,
+  .plot-container,
+  .svg-container {
+    max-width: 100% !important;
+  }
+  .plotly.html-widget {
+    width: 100% !important;
+    height: 720px !important;
+    overflow: visible !important;
+  }
+  .plotly.html-widget .plot-container,
+  .plotly.html-widget .svg-container {
+    height: 720px !important;
+    overflow: visible !important;
+  }
+  .dataTables_wrapper {
+    width: 100%;
+    max-width: 100%;
+  }
+  .dataTables_wrapper .dataTables_scroll {
+    overflow-x: auto;
+  }
+  table.dataTable {
+    width: 100% !important;
+  }
+  </style>"
+)
+```
+
 ## Report Scope
+
+This report is designed to identify the best general day to stream for the selected talent, date range, and content types. Each included content type is analyzed separately, with weekday rankings, typical-view summaries, log-view models, estimated percent differences from the reference weekday, and supporting plots. The tables below document the exact render inputs and the available content counts used for this run.
 
 ```{r report_scope}
 dow_report_datatable(
@@ -192,103 +264,19 @@ stream_video_level %>%
 ```
 
 ```{r content_sections, results='asis'}
-bundle_f_content_child <- function(content_type) {
-  key <- gsub("[^a-z0-9]+", "_", tolower(content_type))
-  key <- gsub("^_+|_+$", "", key)
-  title <- dow_report_content_title(content_type)
-  label <- dow_report_content_label(content_type)
+content_section_path <- here::here("templates", "reports", "bundle_f", "_content_section.qmd")
 
-  paste0(
-    "\n# ", title, "\n\n",
-    "```{r ", key, "_weekday_setup, include=FALSE}\n",
-    "content_type <- \"", content_type, "\"\n",
-    "content_df <- content[[content_type]]\n",
-    "content_label <- dow_report_content_label(content_type)\n",
-    "if (nrow(content_df) == 0L) {\n",
-    "  stop(\"No rows are available for \", content_label, \" after filtering.\")\n",
-    "}\n",
-    "weekday_df <- dow_prep(content_df, reference_day = params$reference_day)\n",
-    "weekday_summary <- dow_summary(weekday_df)\n",
-    "weekday_summary_by_median <- weekday_summary %>%\n",
-    "  dplyr::arrange(dplyr::desc(.data$median_views))\n",
-    "weekday_models <- dow_fit(weekday_df)\n",
-    "weekday_plots <- dow_plot(weekday_df, weekday_summary)\n",
-    "```\n\n",
-    "## Weekday Summary\n\n",
-    "This table describes ", label, " performance for each publish weekday. Use `n` to judge how much evidence there is for each day, compare `mean_views` and `median_views` for typical performance, and use the confidence interval columns as a rough guide to uncertainty around the mean.\n\n",
-    "```{r ", key, "_weekday_summary_table}\n",
-    "dow_report_summary_datatable(weekday_summary, paste0(content_label, \": weekday summary\"))\n",
-    "```\n\n",
-    "## Weekdays Ranked By Median Views\n\n",
-    "This is the same weekday summary, sorted by `median_views` from highest to lowest. Median views are useful when a few unusually large or unusually small uploads might distort the mean.\n\n",
-    "```{r ", key, "_weekday_median_rank_table}\n",
-    "dow_report_summary_datatable(\n",
-    "  weekday_summary_by_median,\n",
-    "  paste0(content_label, \": weekday summary ranked by median views\")\n",
-    ")\n",
-    "```\n\n",
-    "## Raw Views Model Fit\n\n",
-    "This table summarizes the linear model that predicts raw view counts from publish weekday. Higher R-squared values mean weekday explains more of the variation in views, while the model p-value tests whether the weekday model improves on a no-weekday baseline.\n\n",
-    "```{r ", key, "_raw_model_fit_table}\n",
-    "dow_report_model_fit_datatable(weekday_models$raw, paste0(content_label, \": raw views model fit\"))\n",
-    "```\n\n",
-    "## Raw Views Coefficients\n\n",
-    "This table shows how each weekday compares with the reference weekday. The intercept is the estimated reference-day view count; each weekday coefficient is the estimated raw-view difference from that reference weekday.\n\n",
-    "```{r ", key, "_raw_model_coefficients_table}\n",
-    "dow_report_model_coefficient_datatable(\n",
-    "  weekday_models$raw,\n",
-    "  paste0(content_label, \": raw views model coefficients\")\n",
-    ")\n",
-    "```\n\n",
-    "## Raw Views ANOVA\n\n",
-    "This table tests the overall weekday term for the raw-views model. The weekday row asks whether publish weekday, as a group of categories, explains a meaningful amount of raw-view variation.\n\n",
-    "```{r ", key, "_raw_model_anova_table}\n",
-    "dow_report_model_anova_datatable(weekday_models$raw, paste0(content_label, \": raw views ANOVA\"))\n",
-    "```\n\n",
-    "## Log Views Model Fit\n\n",
-    "This table summarizes the model using log-transformed views, which reduces the influence of unusually large uploads. Use this model when view counts are skewed and percentage-style differences are easier to interpret than raw count differences.\n\n",
-    "```{r ", key, "_log_model_fit_table}\n",
-    "dow_report_model_fit_datatable(weekday_models$log, paste0(content_label, \": log views model fit\"))\n",
-    "```\n\n",
-    "## Log Views Coefficients\n\n",
-    "This table shows weekday differences on the log-view scale relative to the reference weekday. Positive estimates suggest higher expected views than the reference day; negative estimates suggest lower expected views.\n\n",
-    "```{r ", key, "_log_model_coefficients_table}\n",
-    "dow_report_model_coefficient_datatable(\n",
-    "  weekday_models$log,\n",
-    "  paste0(content_label, \": log views model coefficients\")\n",
-    ")\n",
-    "```\n\n",
-    "## Log Views ANOVA\n\n",
-    "This table tests the overall weekday term for the log-views model. If the weekday p-value is small, weekday appears to explain differences in viewership after reducing the impact of extreme view counts.\n\n",
-    "```{r ", key, "_log_model_anova_table}\n",
-    "dow_report_model_anova_datatable(weekday_models$log, paste0(content_label, \": log views ANOVA\"))\n",
-    "```\n\n",
-    "## Approximate Percent Change From Reference Weekday\n\n",
-    "This table converts the log-model coefficients into approximate percent changes from the reference weekday. Positive values indicate higher expected views than the reference day, and negative values indicate lower expected views.\n\n",
-    "```{r ", key, "_log_effects_table}\n",
-    "dow_report_log_effects_datatable(\n",
-    "  weekday_models$log_effects,\n",
-    "  paste0(content_label, \": approximate percent change from reference weekday\")\n",
-    ")\n",
-    "```\n\n",
-    "## Raw Views By Weekday\n\n",
-    "This boxplot shows the distribution of views for each publish weekday. Compare the median line and the spread within each box; wide boxes or long whiskers mean performance varies more on that day.\n\n",
-    "```{r ", key, "_raw_views_boxplot, fig.width=9, fig.height=5}\n",
-    "weekday_plots$boxplot_views\n",
-    "```\n\n",
-    "## Mean Views With Confidence Intervals\n\n",
-    "This plot compares average views by publish weekday. The vertical bars show 95% confidence intervals; overlapping intervals suggest the weekday averages may not be clearly different.\n\n",
-    "```{r ", key, "_mean_ci_plot, fig.width=9, fig.height=5}\n",
-    "weekday_plots$mean_ci_views\n",
-    "```\n\n",
-    "## Log Views By Weekday\n\n",
-    "This boxplot shows the same weekday pattern on a log scale, which makes extreme high-view uploads less dominant. Use it to compare typical performance when raw views are heavily skewed.\n\n",
-    "```{r ", key, "_log_views_boxplot, fig.width=9, fig.height=5}\n",
-    "weekday_plots$boxplot_log_views\n",
-    "```\n\n"
+for (content_type in names(content)) {
+  content_env <- new.env(parent = knitr::knit_global())
+  content_env$content_type <- content_type
+
+  cat(
+    knitr::knit_child(
+      content_section_path,
+      envir = content_env,
+      quiet = TRUE
+    ),
+    sep = "\n"
   )
 }
-
-child_text <- paste(vapply(names(content), bundle_f_content_child, character(1)), collapse = "\n")
-cat(knitr::knit_child(text = child_text, quiet = TRUE))
 ```

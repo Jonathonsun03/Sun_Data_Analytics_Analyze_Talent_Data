@@ -3,7 +3,7 @@ gdrive_talent_raw_data_types <- function() {
 }
 
 gdrive_talent_bundle_types <- function() {
-  c("bundle_a", "bundle_b", "bundle_c", "bundle_e", "bundle_f", "bundle_z")
+  c("bundle_a", "bundle_b", "bundle_c", "bundle_e", "bundle_f", "bundle_g", "bundle_z")
 }
 
 gdrive_talent_is_bundle_type <- function(data_type) {

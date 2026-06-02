@@ -29,6 +29,7 @@ Supported report IDs:
 - `bundle_a`
 - `bundle_e`
 - `bundle_f`
+- `bundle_g`
 
 ## What It Runs
 
@@ -37,6 +38,7 @@ The scheduler maps the sheet row to a bundle runner:
 - `bundle_a` -> `bin/linux/render_reports/bundle_A/run_bundle_A_full_pipeline.sh`
 - `bundle_e` -> `bin/linux/render_reports/bundle_E/run_bundle_E_full_pipeline.sh`
 - `bundle_f` -> `bin/linux/render_reports/bundle_F/run_bundle_F_full_pipeline.sh`
+- `bundle_g` -> `bin/linux/render_reports/bundle_G/run_bundle_G_full_pipeline.sh`
 
 It passes:
 
@@ -46,7 +48,7 @@ It passes:
 - optional JSON in `report_params` for supported bundle-specific parameters
 - configured source/root values as `--input-source` and `--datalake-root`
 
-Bundle F currently supports these `report_params` keys:
+Bundles F and G currently support these `report_params` keys:
 
 - `content_type`, for example `{"content_type":"live"}`
 - `content_types`, for example `{"content_types":["live","video"]}`
@@ -121,10 +123,10 @@ bin/linux/render_reports/run_scheduled_reports.sh --skip-schedule-update
 1. Add or edit a row in `talent_report_schedule`.
 2. Set `active` to `TRUE`.
 3. Set `canonical_talent_name` to a value from the dropdown.
-4. Set `report_id` to a supported report ID, such as `bundle_a`, `bundle_e`, or `bundle_f`.
+4. Set `report_id` to a supported report ID, such as `bundle_a`, `bundle_e`, `bundle_f`, or `bundle_g`.
 5. Set `cadence_days` and `window_days`. Use a positive integer such as `90`,
    or use `lifetime` for all available data.
-6. For Bundle F live-only, set `report_params` to `{"content_type":"live"}`.
+6. For Bundle F or G live-only, set `report_params` to `{"content_type":"live"}`.
 7. Use `--as-of-date` to simulate the row being due.
 8. Start with `--dry-run`.
 
@@ -165,4 +167,6 @@ tail -n 200 /mnt/datalake/DataLake/Sun_Data_Analytics/Processed/report_scheduler
 - Bundle E currently supports artifacts plus render. It accepts
   no-interpretation flags for scheduler compatibility.
 - Bundle F currently supports a compatibility artifact stage plus render. It
+  accepts no-interpretation flags for scheduler compatibility.
+- Bundle G currently supports a compatibility artifact stage plus render. It
   accepts no-interpretation flags for scheduler compatibility.

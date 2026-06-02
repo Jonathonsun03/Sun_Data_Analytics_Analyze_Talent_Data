@@ -177,34 +177,70 @@ dow_fit <- function(df) {
 
 dow_plot <- function(df, summary_df = dow_summary(df)) {
   # Return notebook-ready plots without saving files.
+  plot_theme <- if (exists("theme_nyt", mode = "function")) {
+    theme_nyt()
+  } else {
+    ggplot2::theme_minimal()
+  }
+  brand_colors <- if (exists("sun_data_brand_colors", mode = "function")) {
+    sun_data_brand_colors()
+  } else {
+    c(blue = "#4580E6", orange = "#F35C06", ink = "#151F36", steel = "#9AA6B8")
+  }
+  fill_scale <- if (exists("scale_fill_sun_data", mode = "function")) {
+    scale_fill_sun_data(variant = "brand", guide = "none")
+  } else {
+    ggplot2::scale_fill_discrete(guide = "none")
+  }
+
   list(
-    boxplot_views = ggplot2::ggplot(df, ggplot2::aes(x = .data$publish_wday, y = .data$views)) +
-      ggplot2::geom_boxplot(outlier.alpha = 0.45) +
+    boxplot_views = ggplot2::ggplot(
+      df,
+      ggplot2::aes(x = .data$publish_wday, y = .data$views, fill = .data$publish_wday)
+    ) +
+      ggplot2::geom_boxplot(
+        alpha = 0.82,
+        color = brand_colors[["ink"]],
+        outlier.alpha = 0.45,
+        outlier.color = brand_colors[["orange"]]
+      ) +
+      fill_scale +
       ggplot2::labs(
         x = "Publish weekday",
         y = "Views",
         title = "Views by weekday"
       ) +
-      ggplot2::theme_minimal(),
+      plot_theme,
     mean_ci_views = ggplot2::ggplot(summary_df, ggplot2::aes(x = .data$publish_wday, y = .data$mean_views)) +
       ggplot2::geom_errorbar(
         ggplot2::aes(ymin = .data$ci_low, ymax = .data$ci_high),
+        color = brand_colors[["blue"]],
+        linewidth = 0.75,
         width = 0.15
       ) +
-      ggplot2::geom_point(size = 2.5) +
+      ggplot2::geom_point(color = brand_colors[["orange"]], size = 2.8) +
       ggplot2::labs(
         x = "Publish weekday",
         y = "Mean views",
         title = "Mean views by weekday with 95% CI"
       ) +
-      ggplot2::theme_minimal(),
-    boxplot_log_views = ggplot2::ggplot(df, ggplot2::aes(x = .data$publish_wday, y = .data$log_views)) +
-      ggplot2::geom_boxplot(outlier.alpha = 0.45) +
+      plot_theme,
+    boxplot_log_views = ggplot2::ggplot(
+      df,
+      ggplot2::aes(x = .data$publish_wday, y = .data$log_views, fill = .data$publish_wday)
+    ) +
+      ggplot2::geom_boxplot(
+        alpha = 0.82,
+        color = brand_colors[["ink"]],
+        outlier.alpha = 0.45,
+        outlier.color = brand_colors[["orange"]]
+      ) +
+      fill_scale +
       ggplot2::labs(
         x = "Publish weekday",
         y = "log1p(views)",
         title = "Log views by weekday"
       ) +
-      ggplot2::theme_minimal()
+      plot_theme
   )
 }

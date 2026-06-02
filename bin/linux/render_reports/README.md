@@ -6,6 +6,7 @@ This folder contains Linux wrapper scripts that standardize how Bundle reports a
 - `run_bundle_B_report.sh`
 - `run_bundle_E_report.sh`
 - `run_bundle_F_report.sh`
+- `run_bundle_G_report.sh`
 - `run_monthly_bundle_reports.sh`
 - `run_scheduled_reports.sh`
 
@@ -30,6 +31,11 @@ Bundle F-specific scripts now live in:
 - `bin/linux/render_reports/bundle_F/`
 - `bin/linux/render_reports/bundle_F/README.md`
 
+Bundle G-specific scripts now live in:
+
+- `bin/linux/render_reports/bundle_G/`
+- `bin/linux/render_reports/bundle_G/README.md`
+
 The only top-level Bundle A wrapper intentionally kept is:
 
 - `run_bundle_A_report.sh`
@@ -49,11 +55,12 @@ supported `report_id` to the matching bundle runner. Currently supported:
 - `bundle_a` -> `bin/linux/render_reports/bundle_A/run_bundle_A_full_pipeline.sh`
 - `bundle_e` -> `bin/linux/render_reports/bundle_E/run_bundle_E_full_pipeline.sh`
 - `bundle_f` -> `bin/linux/render_reports/bundle_F/run_bundle_F_full_pipeline.sh`
+- `bundle_g` -> `bin/linux/render_reports/bundle_G/run_bundle_G_full_pipeline.sh`
 
 The schedule row's mapped datalake talent folder is passed as `--talent`, and
 `window_days` is passed as `--window-days`. Optional JSON in `report_params`
-is passed through for supported bundle-specific parameters; Bundle F supports
-keys such as `content_type`, `content_types`, and `reference_day`. After at
+is passed through for supported bundle-specific parameters; Bundles F and G
+support keys such as `content_type`, `content_types`, and `reference_day`. After at
 least one successful real run, the wrapper refreshes the schedule's computed
 columns such as `last_run`, `next_run`, and `schedule_status`. Dry runs do not
 write back.
@@ -149,6 +156,26 @@ Bundle F writes reports to:
 - `<datalake_root>/<talent>/reports/bundle_f/report/current/`
 
 Bundle F accepts `--content-type`, `--content-types`, and `--reference-day`
+in addition to the common talent, window, and data-source flags.
+
+## What `run_bundle_G_report.sh` does
+
+Path: `bin/linux/render_reports/run_bundle_G_report.sh`
+
+It serves as the main Bundle G entrypoint and wraps:
+
+- `bin/linux/render_reports/bundle_G/run_bundle_G_full_pipeline.sh`
+
+Primary behavior:
+
+1. Runs the Bundle G compatibility artifact stage.
+2. Renders and publishes the final topic-by-weekday recommendation HTML report.
+
+Bundle G writes reports to:
+
+- `<datalake_root>/<talent>/reports/bundle_g/report/current/`
+
+Bundle G accepts `--content-type`, `--content-types`, and `--reference-day`
 in addition to the common talent, window, and data-source flags.
 
 ## Defaults (Bundle A)
