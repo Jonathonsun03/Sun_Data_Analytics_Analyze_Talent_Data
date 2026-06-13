@@ -1,0 +1,283 @@
+---
+title: "Creator Analytics Dashboard"
+format:
+  dashboard:
+    embed-resources: true
+    orientation: rows
+execute:
+  echo: false
+  warning: false
+  message: false
+params:
+  talent: "Ava"
+  data_source: "datalake"
+  data_root: null
+  start_date: null
+  end_date: null
+  content_types: ["live", "video", "short"]
+  reference_day: "Monday"
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+source("../../../r_scripts/lib/dashboard/dashboard_dependencies.R")
+source("../../../r_scripts/lib/dashboard/dashboard_data.R")
+source("../../../r_scripts/lib/dashboard/dashboard_sections.R")
+
+dashboard_data <- build_creator_dashboard_data(
+  talent = params$talent,
+  data_source = params$data_source,
+  data_root = params$data_root,
+  start_date = params$start_date,
+  end_date = params$end_date,
+  content_types = params$content_types,
+  reference_day = params$reference_day
+)
+
+dashboard_talent_label <- dashboard_data$overview$value[
+  dashboard_data$overview$metric == "Talent"
+][[1]]
+dashboard_content_types <- names(dashboard_data$topic_weekday_summary)
+dashboard_primary_content_type <- if (length(dashboard_content_types) > 0) {
+  dashboard_content_types[[1]]
+} else {
+  NA_character_
+}
+```
+
+# Overview
+
+This page summarizes the selected creator, reporting window, source data, and top-performing videos.
+
+## Row
+
+```{r}
+#| title: "Overview Metrics"
+
+dashboard_overview_table(dashboard_data)
+```
+
+```{r}
+#| title: "Top Videos"
+
+dashboard_top_videos_table(dashboard_data)
+```
+
+## Row
+
+```{r}
+#| title: "Performance Over Time"
+
+dashboard_monthly_performance_plot(dashboard_data, talent = dashboard_talent_label)
+```
+
+# Creator Performance
+
+This page shows performance by time and content format, including views, revenue-adjacent context, engagement, and high-performing uploads.
+
+## Row
+
+```{r}
+#| title: "Monthly Views and Revenue"
+
+dashboard_monthly_performance_plot(dashboard_data, talent = dashboard_talent_label)
+```
+
+## Row
+
+```{r}
+#| title: "Content Type Views"
+
+dashboard_content_views_plot(dashboard_data, talent = dashboard_talent_label)
+```
+
+```{r}
+#| title: "Top Videos"
+
+dashboard_top_videos_table(dashboard_data, page_length = 12)
+```
+
+# Content Strategy
+
+This page compares content type performance and engagement patterns so recurring formats can be prioritized with evidence.
+
+## Row
+
+```{r}
+#| title: "Views by Content Type"
+
+dashboard_content_views_plot(dashboard_data, talent = dashboard_talent_label)
+```
+
+```{r}
+#| title: "Content Summary"
+
+dashboard_datatable(dashboard_data$content_summary$total_views, page_length = 10)
+```
+
+## Row
+
+```{r}
+#| title: "Engagement by Content Type"
+
+dashboard_content_engagement_plot(dashboard_data, talent = dashboard_talent_label)
+```
+
+```{r}
+#| title: "Engagement Summary"
+
+dashboard_datatable(dashboard_data$content_summary$engagement, page_length = 10)
+```
+
+# Publishing Schedule
+
+This page evaluates timing patterns, including weekday performance and topic-by-weekday recommendations.
+
+## Row
+
+```{r}
+#| title: "Weekday Performance"
+
+dashboard_weekday_plot(dashboard_data, talent = dashboard_talent_label, as_share = FALSE)
+```
+
+```{r}
+#| title: "Weekday Summary"
+
+dashboard_weekday_table(dashboard_data)
+```
+
+## Row
+
+```{r}
+#| title: "Topic-Weekday Heatmap"
+
+if (!is.na(dashboard_primary_content_type)) {
+  dashboard_topic_weekday_heatmap(
+    dashboard_data,
+    content_type = dashboard_primary_content_type,
+    content_label = dow_report_content_label(dashboard_primary_content_type)
+  )
+}
+```
+
+```{r}
+#| title: "Topic-Weekday Recommendations"
+
+if (!is.na(dashboard_primary_content_type)) {
+  dashboard_topic_weekday_recommendation_table(
+    dashboard_data,
+    content_type = dashboard_primary_content_type,
+    page_length = 15
+  )
+}
+```
+
+# Audience
+
+This page summarizes audience composition and audience-share trends where demographic exports are available.
+
+## Row
+
+```{r}
+#| title: "Audience Age and Gender Trends"
+
+dashboard_audience_plot(dashboard_data, talent = dashboard_talent_label)
+```
+
+```{r}
+#| title: "Audience Summary"
+
+dashboard_datatable(dashboard_data$audience_summary, page_length = 15)
+```
+
+# Recommendations
+
+This page converts descriptive and model-informed dashboard outputs into practical planning tables.
+
+## Row
+
+```{r}
+#| title: "Weekday Recommendations"
+
+dashboard_datatable(dashboard_data$recommendations$weekday, page_length = 7)
+```
+
+## Row
+
+```{r}
+#| title: "Topic-Weekday Recommendations"
+
+if (!is.na(dashboard_primary_content_type)) {
+  dashboard_topic_weekday_recommendation_table(
+    dashboard_data,
+    content_type = dashboard_primary_content_type,
+    page_length = 20
+  )
+}
+```
+
+```{r}
+#| title: "Lifecycle Recommendations"
+#| results: asis
+
+cat(
+  "Lifecycle recommendations are not wired into the dashboard yet. ",
+  "Bundle E lifecycle outputs still depend on artifact CSV loading that should be extracted into a reusable dashboard loader before this card is populated."
+)
+```
+
+# Method Notes
+
+Use this dashboard as a descriptive operating view, not as a causal proof system.
+
+## Row
+
+```{r}
+#| title: "Dashboard Scope"
+
+dashboard_overview_table(dashboard_data)
+```
+
+```{r}
+#| title: "Filters"
+
+tibble::tibble(
+  setting = c(
+    "Talent parameter",
+    "Data source",
+    "Start date",
+    "End date",
+    "Content type filters",
+    "Reference weekday"
+  ),
+  value = c(
+    as.character(params$talent),
+    as.character(params$data_source),
+    if (is.null(params$start_date) || is.na(params$start_date)) "All available" else as.character(params$start_date),
+    if (is.null(params$end_date) || is.na(params$end_date)) "All available" else as.character(params$end_date),
+    paste(params$content_types, collapse = ", "),
+    as.character(params$reference_day)
+  )
+) |>
+  dashboard_datatable(page_length = 6)
+```
+
+## Row
+
+```{r}
+#| title: "Interpretation Notes"
+#| results: asis
+
+cat(
+  "- Reporting period follows the selected `start_date` and `end_date`; when both are empty, all available rows are used.\n",
+  "- Content type filters limit topic-weekday modeling to the requested formats that exist in the prepared data.\n",
+  "- Descriptive statistics summarize observed performance and can be affected by outliers, posting volume, and missing exports.\n",
+  "- Model-based recommendations estimate expected logged views by weekday/topic patterns; they are planning signals, not guarantees.\n",
+  "- Correlation is not causation: timing, topic, collaboration, title, format, and external context can move together.\n",
+  "- Lifecycle recommendations are pending a reusable Bundle E artifact loader extraction.\n",
+  sep = ""
+)
+```
