@@ -99,6 +99,27 @@ bundle_a_dual_metric_plot <- function(
     stop("Summary data missing required view/revenue columns.")
   }
 
+  if (nrow(summary_df) == 0) {
+    return(
+      ggplot2::ggplot() +
+        ggplot2::annotate(
+          geom = "text",
+          x = 1,
+          y = 1,
+          label = "No data available for current filters."
+        ) +
+        ggplot2::xlim(0.5, 1.5) +
+        ggplot2::ylim(0.5, 1.5) +
+        ggplot2::theme_void() +
+        ggplot2::labs(
+          title = bundle_a_wrap_text(title, width = 58),
+          subtitle = bundle_a_talent_subtitle(talent, subtitle),
+          x = "",
+          y = if (isTRUE(as_share)) "Share of total" else if (!is.null(y_axis_label)) y_axis_label else "Total"
+        )
+    )
+  }
+
   group_vals <- summary_df[[group_col]]
   group_levels <- if (is.factor(group_vals)) {
     levels(group_vals)

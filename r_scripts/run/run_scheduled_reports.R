@@ -339,15 +339,20 @@ run_one <- function(row, args) {
   }
   runner_args <- c(runner_args, schedule_report_params_args(report_id, row$report_params[[1]]))
 
-  skip_interpretation <- isTRUE(args$skip_interpretation) || isTRUE(args$no_interpretation)
-  skip_editorial <- isTRUE(args$skip_editorial_rewrite) || isTRUE(args$no_interpretation)
+  bundle_a_plot_only <- identical(report_id, "bundle_a")
+  skip_interpretation <- bundle_a_plot_only ||
+    isTRUE(args$skip_interpretation) ||
+    isTRUE(args$no_interpretation)
+  skip_editorial <- bundle_a_plot_only ||
+    isTRUE(args$skip_editorial_rewrite) ||
+    isTRUE(args$no_interpretation)
   if (skip_interpretation) {
     runner_args <- c(runner_args, "--skip-interpretation")
   }
   if (skip_editorial) {
     runner_args <- c(runner_args, "--skip-editorial-rewrite")
   }
-  if (isTRUE(args$no_interpretation)) {
+  if (bundle_a_plot_only || isTRUE(args$no_interpretation)) {
     runner_args <- c(runner_args, "--no-interpretations")
   }
 

@@ -48,6 +48,11 @@ It passes:
 - optional JSON in `report_params` for supported bundle-specific parameters
 - configured source/root values as `--input-source` and `--datalake-root`
 
+Scheduled Bundle A rows are plot-only: the dispatcher passes
+`--skip-interpretation`, `--skip-editorial-rewrite`, and `--no-interpretations`
+so the run builds artifacts and renders plots without adding interpretation or
+editorial text.
+
 Bundles F and G currently support these `report_params` keys:
 
 - `content_type`, for example `{"content_type":"live"}`
@@ -95,7 +100,8 @@ bin/linux/render_reports/run_scheduled_reports.sh \
   --window-days lifetime
 ```
 
-Run one specific row without generating or including interpretation text:
+Run one specific non-Bundle-A row without generating or including interpretation
+text:
 
 ```bash
 bin/linux/render_reports/run_scheduled_reports.sh \

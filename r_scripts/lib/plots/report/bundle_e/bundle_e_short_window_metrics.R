@@ -70,6 +70,55 @@ bundle_e_short_window_candidate_days <- function(
   auto_days[auto_days <= max_observed_age]
 }
 
+bundle_e_empty_short_window_diagnostics <- function() {
+  tibble::tibble(
+    window_days = integer(),
+    n_videos = integer(),
+    median_share_of_latest = numeric(),
+    p25_share_of_latest = numeric(),
+    p75_share_of_latest = numeric(),
+    median_remaining_share = numeric(),
+    p75_remaining_share = numeric(),
+    pct_remaining_le_10 = numeric(),
+    pct_remaining_le_05 = numeric(),
+    eligible_window = logical()
+  )
+}
+
+bundle_e_empty_short_window_selection <- function() {
+  bundle_e_empty_short_window_diagnostics() %>%
+    dplyr::mutate(
+      selection_method = character(),
+      required_launch_capture_days = numeric(),
+      target_median_remaining = numeric(),
+      target_p75_remaining = numeric()
+    )
+}
+
+bundle_e_empty_short_window_video_scores <- function() {
+  tibble::tibble(
+    `Video ID` = character(),
+    Title = character(),
+    `Channel Name` = character(),
+    publish_date = as.Date(character()),
+    `Published At` = as.POSIXct(character(), tz = "UTC"),
+    `Content Type` = character(),
+    topic = character(),
+    tags = character(),
+    snapshot_date_at_window = as.Date(character()),
+    video_age_days_at_window = integer(),
+    window_days = numeric(),
+    latest_views = numeric(),
+    views_at_window = numeric(),
+    share_of_latest = numeric(),
+    remaining_share = numeric(),
+    views_at_window_percentile = numeric(),
+    relative_to_window_median = numeric(),
+    early_performance_bucket = character(),
+    standout_within_window = logical()
+  )
+}
+
 build_bundle_e_short_window_diagnostics <- function(
   panel_df,
   candidate_days = NULL,
@@ -84,11 +133,15 @@ build_bundle_e_short_window_diagnostics <- function(
   )
 
   if (nrow(short_panel) == 0) {
-    return(tibble::tibble())
+    return(bundle_e_empty_short_window_diagnostics())
   }
 
   if (is.null(candidate_days) || length(candidate_days) == 0) {
     candidate_days <- bundle_e_short_window_candidate_days(short_panel)
+  }
+
+  if (length(candidate_days) == 0) {
+    return(bundle_e_empty_short_window_diagnostics())
   }
 
   purrr::map_dfr(candidate_days, function(day) {
@@ -150,7 +203,7 @@ choose_bundle_e_short_window <- function(
   )
 
   if (nrow(diagnostics) == 0) {
-    return(tibble::tibble())
+    return(bundle_e_empty_short_window_selection())
   }
 
   passing <- diagnostics %>%
@@ -199,7 +252,7 @@ build_bundle_e_short_window_video_scores <- function(
   )
 
   if (nrow(short_panel) == 0) {
-    return(tibble::tibble())
+    return(bundle_e_empty_short_window_video_scores())
   }
 
   scored <- bundle_e_short_window_snapshot_at_day(short_panel, target_day = window_days) %>%
@@ -274,7 +327,7 @@ build_bundle_e_short_window_analysis <- function(
   chosen_day <- if (nrow(selected_window) == 0) NA_real_ else selected_window$window_days[[1]]
 
   video_scores <- if (is.na(chosen_day)) {
-    tibble::tibble()
+    bundle_e_empty_short_window_video_scores()
   } else {
     build_bundle_e_short_window_video_scores(
       panel_df = panel_df,

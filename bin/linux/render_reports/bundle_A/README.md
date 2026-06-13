@@ -72,7 +72,9 @@ bin/linux/render_reports/run_scheduled_reports.sh --dry-run
 The scheduled report runner reads the `talent_report_schedule` and `talents`
 tabs from the client permissions spreadsheet. Due rows with `report_id` set to
 `bundle_a` dispatch to the Bundle A full-pipeline runner with the row's mapped
-talent and `window_days`. After at least one successful real report run, the
+talent and `window_days`. Scheduled Bundle A rows are plot-only: the dispatcher
+passes `--skip-interpretation`, `--skip-editorial-rewrite`, and
+`--no-interpretations`. After at least one successful real report run, the
 runner refreshes the computed schedule columns, including `last_run`,
 `next_run`, `schedule_status`, and latest report path/file. Dry runs stay
 read-only. Use `--skip-schedule-update` to suppress the post-run refresh, or

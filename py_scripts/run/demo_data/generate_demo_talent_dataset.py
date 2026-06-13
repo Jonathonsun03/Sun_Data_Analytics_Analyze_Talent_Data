@@ -427,6 +427,42 @@ def build_record(
     }
 
 
+def growth_fraction(age_days: int, content_type: str, rng: random.Random) -> float:
+    if age_days <= 0:
+        return rng.uniform(0.04, 0.12)
+
+    profile = {
+        "short": (0.58, 4.5, 0.12),
+        "video": (0.42, 16.0, 0.20),
+        "live": (0.34, 24.0, 0.26),
+    }[content_type]
+    launch_share, decay_days, floor_share = profile
+    launch_component = launch_share * (1.0 - math.exp(-age_days / decay_days))
+    long_tail_component = (1.0 - launch_share) * (1.0 - math.exp(-age_days / 180.0))
+    floor_component = floor_share * min(1.0, age_days / 365.0)
+    return clamp(launch_component + long_tail_component + floor_component, 0.02, 1.0)
+
+
+def record_at_snapshot(record: dict, snapshot_dt: datetime, final_snapshot_dt: datetime, rng: random.Random) -> dict | None:
+    if record["published_at"].date() > snapshot_dt.date():
+        return None
+
+    age_days = max(0, (snapshot_dt.date() - record["published_at"].date()).days)
+    final_age_days = max(age_days + 1, (final_snapshot_dt.date() - record["published_at"].date()).days)
+    current_fraction = growth_fraction(age_days, record["content_type"], rng)
+    final_fraction = max(current_fraction, growth_fraction(final_age_days, record["content_type"], rng))
+    scale = clamp(current_fraction / final_fraction, 0.01, 1.0)
+
+    out = dict(record)
+    out["created_at"] = snapshot_dt
+    out["views"] = max(25, int(round(record["views"] * scale)))
+    out["estimated_revenue"] = round(record["estimated_revenue"] * scale, 2)
+    out["estimated_minutes_watched"] = int(round(record["estimated_minutes_watched"] * scale))
+    out["subscribers_gained"] = int(round(record["subscribers_gained"] * scale))
+    out["subscribers_lost"] = int(round(record["subscribers_lost"] * scale))
+    return out
+
+
 def write_csv(path: Path, fieldnames: list[str], rows: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
@@ -455,92 +491,213 @@ def build_outputs(args: argparse.Namespace) -> dict:
     demographic_rows = []
     geography_rows = []
     title_rows = []
+    snapshot_summaries = []
     collab_target = max(18, int(round(args.videos * 0.30)))
     forced_collab_indices = set(rng.sample(range(1, args.videos + 1), k=min(args.videos, collab_target)))
 
+    records = []
     for video_index in range(1, args.videos + 1):
-        record = build_record(
-            rng=rng,
-            talent_name=args.talent_name,
-            talent_slug=slugify(args.talent_name),
-            channel_id=channel_id,
-            snapshot_dt=snapshot_dt,
-            start_dt=start_dt,
-            video_index=video_index,
-            force_collab=video_index in forced_collab_indices,
+        records.append(
+            build_record(
+                rng=rng,
+                talent_name=args.talent_name,
+                talent_slug=slugify(args.talent_name),
+                channel_id=channel_id,
+                snapshot_dt=snapshot_dt,
+                start_dt=start_dt,
+                video_index=video_index,
+                force_collab=video_index in forced_collab_indices,
+            )
         )
+
+    snapshot_days = [
+        snapshot_day - timedelta(days=args.snapshot_step_days * ix)
+        for ix in reversed(range(args.snapshot_count))
+    ]
+
+    for current_snapshot_day in snapshot_days:
+        current_snapshot_dt = datetime.combine(
+            current_snapshot_day,
+            time(12, 0, 0),
+            tzinfo=timezone.utc,
+        ).replace(tzinfo=None)
+        snapshot_suffix = current_snapshot_day.isoformat()
+
+        analytics_rows = []
+        monetary_rows = []
+        demographic_rows = []
+        geography_rows = []
+
+        for record in records:
+            snapshot_record = record_at_snapshot(
+                record,
+                snapshot_dt=current_snapshot_dt,
+                final_snapshot_dt=snapshot_dt,
+                rng=rng,
+            )
+            if snapshot_record is None:
+                continue
+
+            record = snapshot_record
+            published_at_ts = format_ts(record["published_at"])
+            published_at_date = format_date(record["published_at"])
+
+            analytics_rows.append(
+                {
+                    "Channel Name": record["channel_name"],
+                    "Channel ID": record["channel_id"],
+                    "Video ID": record["video_id"],
+                    "Title": record["title"],
+                    "Published At": published_at_ts,
+                    "Content Type": record["content_type"],
+                    "DurationSeconds": record["duration_seconds"],
+                    "DurationISO": record["duration_iso"],
+                    "video": f"https://youtu.be/{record['video_id']}",
+                    "views": record["views"],
+                    "estimatedMinutesWatched": record["estimated_minutes_watched"],
+                    "averageViewDuration": record["average_view_duration_seconds"],
+                    "averageViewPercentage": record["average_view_percentage"],
+                    "subscribersGained": record["subscribers_gained"],
+                    "subscribersLost": record["subscribers_lost"],
+                    "Estimated Revenue": record["estimated_revenue"],
+                    "CPM": record["cpm"],
+                }
+            )
+
+            monetary_rows.append(
+                {
+                    "Channel Name": record["channel_name"],
+                    "Channel ID": record["channel_id"],
+                    "Video ID": record["video_id"],
+                    "Title": record["title"],
+                    "Published At": published_at_ts,
+                    "video": f"https://youtu.be/{record['video_id']}",
+                    "views_monetary_check": record["views"],
+                    "Estimated Revenue": record["estimated_revenue"],
+                    "CPM": record["cpm"],
+                }
+            )
+
+            for age_group, gender, viewer_pct in build_demographic_percentages(
+                rng=rng,
+                content_type=record["content_type"],
+                topic=record["topic"],
+            ):
+                demographic_rows.append(
+                    {
+                        "Video ID": record["video_id"],
+                        "Title": record["title"],
+                        "Published At": published_at_date,
+                        "Viewer Age": age_group,
+                        "Viewer Gender": gender,
+                        "Viewer Percentage": viewer_pct,
+                        "Channel ID": record["channel_id"],
+                        "Channel Name": record["channel_name"],
+                    }
+                )
+
+            for country, viewer_pct in build_geography_percentages(rng=rng):
+                share = viewer_pct / 100.0
+                geography_rows.append(
+                    {
+                        "Channel Name": record["channel_name"],
+                        "Channel ID": record["channel_id"],
+                        "Video ID": record["video_id"],
+                        "Title": record["title"],
+                        "Published At": published_at_date,
+                        "Country": country,
+                        "Viewer Percentage": viewer_pct,
+                        "Est Views (calc)": int(round(record["views"] * share)),
+                        "Est Minutes Watched (calc)": int(round(record["estimated_minutes_watched"] * share)),
+                    }
+                )
+
+        analytics_path = raw_root / "video_analytics" / f"video_analytics_{snapshot_suffix}.csv"
+        monetary_path = raw_root / "video_monetary" / f"video_monetary_{snapshot_suffix}.csv"
+        demographics_path = raw_root / "video_demographics" / f"video_demographics_{snapshot_suffix}.csv"
+        geography_path = raw_root / "video_geography" / f"video_geography_{snapshot_suffix}.csv"
+
+        write_csv(
+            analytics_path,
+            [
+                "Channel Name",
+                "Channel ID",
+                "Video ID",
+                "Title",
+                "Published At",
+                "Content Type",
+                "DurationSeconds",
+                "DurationISO",
+                "video",
+                "views",
+                "estimatedMinutesWatched",
+                "averageViewDuration",
+                "averageViewPercentage",
+                "subscribersGained",
+                "subscribersLost",
+                "Estimated Revenue",
+                "CPM",
+            ],
+            analytics_rows,
+        )
+        write_csv(
+            monetary_path,
+            [
+                "Channel Name",
+                "Channel ID",
+                "Video ID",
+                "Title",
+                "Published At",
+                "video",
+                "views_monetary_check",
+                "Estimated Revenue",
+                "CPM",
+            ],
+            monetary_rows,
+        )
+        write_csv(
+            demographics_path,
+            [
+                "Video ID",
+                "Title",
+                "Published At",
+                "Viewer Age",
+                "Viewer Gender",
+                "Viewer Percentage",
+                "Channel ID",
+                "Channel Name",
+            ],
+            demographic_rows,
+        )
+        write_csv(
+            geography_path,
+            [
+                "Channel Name",
+                "Channel ID",
+                "Video ID",
+                "Title",
+                "Published At",
+                "Country",
+                "Viewer Percentage",
+                "Est Views (calc)",
+                "Est Minutes Watched (calc)",
+            ],
+            geography_rows,
+        )
+
+        snapshot_summaries.append(
+            {
+                "snapshot_date": snapshot_suffix,
+                "videos_in_snapshot": len(analytics_rows),
+                "analytics_path": str(analytics_path),
+                "monetary_path": str(monetary_path),
+                "demographics_path": str(demographics_path),
+                "geography_path": str(geography_path),
+            }
+        )
+
+    for record in records:
         published_at_ts = format_ts(record["published_at"])
-        published_at_date = format_date(record["published_at"])
-
-        analytics_rows.append(
-            {
-                "Channel Name": record["channel_name"],
-                "Channel ID": record["channel_id"],
-                "Video ID": record["video_id"],
-                "Title": record["title"],
-                "Published At": published_at_ts,
-                "Content Type": record["content_type"],
-                "DurationSeconds": record["duration_seconds"],
-                "DurationISO": record["duration_iso"],
-                "video": f"https://youtu.be/{record['video_id']}",
-                "views": record["views"],
-                "estimatedMinutesWatched": record["estimated_minutes_watched"],
-                "averageViewDuration": record["average_view_duration_seconds"],
-                "averageViewPercentage": record["average_view_percentage"],
-                "subscribersGained": record["subscribers_gained"],
-                "subscribersLost": record["subscribers_lost"],
-                "Estimated Revenue": record["estimated_revenue"],
-                "CPM": record["cpm"],
-            }
-        )
-
-        monetary_rows.append(
-            {
-                "Channel Name": record["channel_name"],
-                "Channel ID": record["channel_id"],
-                "Video ID": record["video_id"],
-                "Title": record["title"],
-                "Published At": published_at_ts,
-                "video": f"https://youtu.be/{record['video_id']}",
-                "views_monetary_check": record["views"],
-                "Estimated Revenue": record["estimated_revenue"],
-                "CPM": record["cpm"],
-            }
-        )
-
-        for age_group, gender, viewer_pct in build_demographic_percentages(
-            rng=rng,
-            content_type=record["content_type"],
-            topic=record["topic"],
-        ):
-            demographic_rows.append(
-                {
-                    "Video ID": record["video_id"],
-                    "Title": record["title"],
-                    "Published At": published_at_date,
-                    "Viewer Age": age_group,
-                    "Viewer Gender": gender,
-                    "Viewer Percentage": viewer_pct,
-                    "Channel ID": record["channel_id"],
-                    "Channel Name": record["channel_name"],
-                }
-            )
-
-        for country, viewer_pct in build_geography_percentages(rng=rng):
-            share = viewer_pct / 100.0
-            geography_rows.append(
-                {
-                    "Channel Name": record["channel_name"],
-                    "Channel ID": record["channel_id"],
-                    "Video ID": record["video_id"],
-                    "Title": record["title"],
-                    "Published At": published_at_date,
-                    "Country": country,
-                    "Viewer Percentage": viewer_pct,
-                    "Est Views (calc)": int(round(record["views"] * share)),
-                    "Est Minutes Watched (calc)": int(round(record["estimated_minutes_watched"] * share)),
-                }
-            )
 
         title_rows.append(
             {
@@ -576,80 +733,9 @@ def build_outputs(args: argparse.Namespace) -> dict:
             }
         )
 
-    analytics_path = raw_root / "video_analytics" / f"video_analytics_{snapshot_suffix}.csv"
-    monetary_path = raw_root / "video_monetary" / f"video_monetary_{snapshot_suffix}.csv"
-    demographics_path = raw_root / "video_demographics" / f"video_demographics_{snapshot_suffix}.csv"
-    geography_path = raw_root / "video_geography" / f"video_geography_{snapshot_suffix}.csv"
     titles_path = demo_input_root / "demo_title_classifications.csv"
     manifest_path = demo_input_root / "demo_dataset_manifest.json"
 
-    write_csv(
-        analytics_path,
-        [
-            "Channel Name",
-            "Channel ID",
-            "Video ID",
-            "Title",
-            "Published At",
-            "Content Type",
-            "DurationSeconds",
-            "DurationISO",
-            "video",
-            "views",
-            "estimatedMinutesWatched",
-            "averageViewDuration",
-            "averageViewPercentage",
-            "subscribersGained",
-            "subscribersLost",
-            "Estimated Revenue",
-            "CPM",
-        ],
-        analytics_rows,
-    )
-    write_csv(
-        monetary_path,
-        [
-            "Channel Name",
-            "Channel ID",
-            "Video ID",
-            "Title",
-            "Published At",
-            "video",
-            "views_monetary_check",
-            "Estimated Revenue",
-            "CPM",
-        ],
-        monetary_rows,
-    )
-    write_csv(
-        demographics_path,
-        [
-            "Video ID",
-            "Title",
-            "Published At",
-            "Viewer Age",
-            "Viewer Gender",
-            "Viewer Percentage",
-            "Channel ID",
-            "Channel Name",
-        ],
-        demographic_rows,
-    )
-    write_csv(
-        geography_path,
-        [
-            "Channel Name",
-            "Channel ID",
-            "Video ID",
-            "Title",
-            "Published At",
-            "Country",
-            "Viewer Percentage",
-            "Est Views (calc)",
-            "Est Minutes Watched (calc)",
-        ],
-        geography_rows,
-    )
     write_csv(
         titles_path,
         [
@@ -691,6 +777,9 @@ def build_outputs(args: argparse.Namespace) -> dict:
         "months": args.months,
         "seed": args.seed,
         "snapshot_date": snapshot_suffix,
+        "snapshot_count": args.snapshot_count,
+        "snapshot_step_days": args.snapshot_step_days,
+        "snapshots": snapshot_summaries,
         "talent_dir": str(talent_dir),
         "title_classifications_path": str(titles_path),
         "render_examples": {
@@ -703,6 +792,21 @@ def build_outputs(args: argparse.Namespace) -> dict:
                 "Rscript r_scripts/run/bundle_B/render_bundle_B.R "
                 f"--talent \"{args.talent_name}\" --data-source datalake "
                 f"--titles-path \"{titles_path}\""
+            ),
+            "bundle_e": (
+                f"BUNDLE_E_TITLE_CLASSIFICATIONS_PATH=\"{titles_path}\" "
+                "bin/linux/render_reports/run_bundle_E_report.sh "
+                f"--talent \"{args.talent_name}\" --window-days lifetime --input-source datalake"
+            ),
+            "bundle_f": (
+                f"TITLE_CLASSIFICATIONS_PATH=\"{titles_path}\" "
+                "bin/linux/render_reports/run_bundle_F_report.sh "
+                f"--talent \"{args.talent_name}\" --window-days lifetime --input-source datalake"
+            ),
+            "bundle_g": (
+                f"TITLE_CLASSIFICATIONS_PATH=\"{titles_path}\" "
+                "bin/linux/render_reports/run_bundle_G_report.sh "
+                f"--talent \"{args.talent_name}\" --window-days lifetime --input-source datalake"
             ),
         },
     }
@@ -732,7 +836,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--snapshot-date",
         default=date.today().isoformat(),
-        help="Snapshot date used in the raw_data filenames. Format: YYYY-MM-DD.",
+        help="Final snapshot date used in the raw_data filenames. Format: YYYY-MM-DD.",
+    )
+    parser.add_argument(
+        "--snapshot-count",
+        type=int,
+        default=1,
+        help="Number of dated snapshots to generate. Use 45-90 for Bundle E lifecycle demos.",
+    )
+    parser.add_argument(
+        "--snapshot-step-days",
+        type=int,
+        default=7,
+        help="Days between generated snapshots when --snapshot-count is greater than 1.",
     )
     parser.add_argument(
         "--videos",
@@ -761,6 +877,10 @@ def main() -> None:
         raise SystemExit("--videos must be at least 12 for stable bundle-level summaries.")
     if args.months < 3:
         raise SystemExit("--months must be at least 3 so the time-series sections remain useful.")
+    if args.snapshot_count < 1:
+        raise SystemExit("--snapshot-count must be at least 1.")
+    if args.snapshot_step_days < 1:
+        raise SystemExit("--snapshot-step-days must be at least 1.")
 
     summary = build_outputs(args)
     print(json.dumps(summary, indent=2))

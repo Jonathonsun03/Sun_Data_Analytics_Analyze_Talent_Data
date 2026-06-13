@@ -242,7 +242,21 @@ Generator entrypoint:
 python3 py_scripts/run/demo_data/generate_demo_talent_dataset.py --talent-name "Northstar Story Lab Demo"
 ```
 
-That generator creates:
+For longitudinal Bundle E/F/G demos, generate repeated snapshots with enough
+video volume across all content formats:
+
+```bash
+python3 py_scripts/run/demo_data/generate_demo_talent_dataset.py \
+  --talent-name "Northstar Story Lab Demo" \
+  --snapshot-date 2026-03-25 \
+  --snapshot-count 57 \
+  --snapshot-step-days 2 \
+  --videos 180 \
+  --months 18 \
+  --seed 42
+```
+
+That generator creates one dated file per snapshot:
 
 - `<datalake_root>/<talent>/raw_data/video_analytics/video_analytics_<snapshot>.csv`
 - `<datalake_root>/<talent>/raw_data/video_monetary/video_monetary_<snapshot>.csv`
@@ -271,6 +285,81 @@ Notes:
 - `--titles-path` keeps demo classifications out of the production `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/` exports.
 - The render scripts now accept `--titles-path` directly and forward that file into the Bundle A/B title join step.
 - Generated demo HTML reports are written to the normal per-talent report folders under `<datalake_root>/<talent>/reports/bundle_A/` and `<datalake_root>/<talent>/reports/bundle_B/`.
+- Bundle E needs repeated snapshots with stable `Video ID` values and cumulative
+  views/revenue. Bundle F and Bundle G use the latest deduped video-level rows,
+  so the same dataset should also include enough `live`, `video`, and `short`
+  uploads across weekdays and topics.
+
+For Bundle E/F/G demo renders, point the title-classification loaders at the
+isolated demo CSV:
+
+Run all currently implemented Northstar demo reports:
+
+```bash
+cd /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+
+export NORTHSTAR_TALENT="Northstar Story Lab Demo"
+export NORTHSTAR_TITLES="/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Northstar Story Lab Demo/reports/demo_inputs/demo_title_classifications.csv"
+export TITLE_CLASSIFICATIONS_PATH="${NORTHSTAR_TITLES}"
+
+bin/linux/render_reports/run_bundle_A_report.sh \
+  --talent "${NORTHSTAR_TALENT}" \
+  --window-days lifetime \
+  --input-source datalake
+
+bin/linux/render_reports/run_bundle_B_report.sh \
+  --talent "${NORTHSTAR_TALENT}" \
+  --window-days lifetime \
+  --input-source datalake
+
+BUNDLE_E_TITLE_CLASSIFICATIONS_PATH="${NORTHSTAR_TITLES}" \
+bin/linux/render_reports/run_bundle_E_report.sh \
+  --talent "${NORTHSTAR_TALENT}" \
+  --window-days lifetime \
+  --input-source datalake
+
+bin/linux/render_reports/run_bundle_F_report.sh \
+  --talent "${NORTHSTAR_TALENT}" \
+  --window-days lifetime \
+  --input-source datalake \
+  --content-types live,video,short
+
+bin/linux/render_reports/run_bundle_G_report.sh \
+  --talent "${NORTHSTAR_TALENT}" \
+  --window-days lifetime \
+  --input-source datalake \
+  --content-types live,video,short
+```
+
+Bundle C is not currently runnable from the Linux report wrappers. The repo has
+`r_scripts/run/bundle_C/Bundle_C_Desc.md`, but there is not yet a
+`run_bundle_C_report.sh` wrapper or Bundle C report template.
+
+```bash
+BUNDLE_E_TITLE_CLASSIFICATIONS_PATH="/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Northstar Story Lab Demo/reports/demo_inputs/demo_title_classifications.csv" \
+bin/linux/render_reports/run_bundle_E_report.sh \
+  --talent "Northstar Story Lab Demo" \
+  --window-days lifetime \
+  --input-source datalake
+```
+
+```bash
+TITLE_CLASSIFICATIONS_PATH="/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Northstar Story Lab Demo/reports/demo_inputs/demo_title_classifications.csv" \
+bin/linux/render_reports/run_bundle_F_report.sh \
+  --talent "Northstar Story Lab Demo" \
+  --window-days lifetime \
+  --input-source datalake \
+  --content-types live,video,short
+```
+
+```bash
+TITLE_CLASSIFICATIONS_PATH="/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Northstar Story Lab Demo/reports/demo_inputs/demo_title_classifications.csv" \
+bin/linux/render_reports/run_bundle_G_report.sh \
+  --talent "Northstar Story Lab Demo" \
+  --window-days lifetime \
+  --input-source datalake \
+  --content-types live,video,short
+```
 
 ## Talent resolution rules
 
