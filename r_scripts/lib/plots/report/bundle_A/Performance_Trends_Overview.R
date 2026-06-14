@@ -97,6 +97,9 @@ performance_trends_over_time_plot <- function(
     ggplot2::scale_x_date(date_breaks = "1 month", date_labels = "%b %Y") +
     ggplot2::scale_y_continuous(labels = y_scale) +
     theme_nyt() +
+    ggplot2::theme(
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, vjust = 1)
+    ) +
     ggplot2::labs(
       title = bundle_a_wrap_text("Performance Trends Over Time", width = 58),
       subtitle = bundle_a_talent_subtitle(talent, bundle_a_date_range_subtitle(use_df$.period)),

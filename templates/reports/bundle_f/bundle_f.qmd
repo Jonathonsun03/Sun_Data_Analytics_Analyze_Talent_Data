@@ -61,12 +61,12 @@ bundle_f_plotly_layout <- function(
   plot_obj,
   margin_l = 120,
   margin_r = 30,
-  margin_b = 72,
+  margin_b = 95,
   margin_t = 88
 ) {
   layout_args <- list(
     margin = list(l = margin_l, r = margin_r, b = margin_b, t = margin_t),
-    xaxis = list(automargin = TRUE),
+    xaxis = list(automargin = TRUE, tickangle = -45),
     yaxis = list(automargin = TRUE),
     autosize = TRUE,
     title = list(x = 0.01, xanchor = "left")
@@ -80,12 +80,19 @@ bundle_f_plotly_layout <- function(
       plot_obj$x$layout[[axis_key]] <- list()
     }
     plot_obj$x$layout[[axis_key]]$automargin <- TRUE
+    if (grepl("^xaxis[0-9]*$", axis_key)) {
+      plot_obj$x$layout[[axis_key]]$tickangle <- -45
+    }
   }
 
   plotly::config(plot_obj, responsive = TRUE, displaylogo = FALSE)
 }
 
 bundle_f_ggplotly <- function(plot_obj, tooltip = c("x", "y"), height = 720) {
+  plot_obj <- plot_obj +
+    ggplot2::theme(
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, vjust = 1)
+    )
   bundle_f_plotly_layout(plotly::ggplotly(plot_obj, tooltip = tooltip, height = height))
 }
 

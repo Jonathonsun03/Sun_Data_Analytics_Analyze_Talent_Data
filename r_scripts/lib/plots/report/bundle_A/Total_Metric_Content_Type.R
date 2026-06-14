@@ -96,6 +96,9 @@ total_metric_content_type_plot <- function(plot_df,
         ) +
         scale_fill_manual(values = fill_map, name = fill_legend) +
         theme_nyt() +
+        theme(
+          axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
+        ) +
         labs(
           title = bundle_a_wrap_text(paste0("Total ", metric_label, " by Content Type"), width = 58),
           subtitle = bundle_a_talent_subtitle(talent, subtitle_text),
@@ -126,6 +129,9 @@ total_metric_content_type_plot <- function(plot_df,
         ) +
         scale_fill_sun_data(variant = "brand") +
         theme_nyt() +
+        theme(
+          axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
+        ) +
         labs(
           title = bundle_a_wrap_text(paste0("Total ", metric_label, " by Content Type"), width = 58),
           subtitle = bundle_a_talent_subtitle(talent, subtitle_text),
@@ -159,6 +165,9 @@ total_metric_content_type_plot <- function(plot_df,
       scale_fill_sun_data(variant = "brand") +
       guides(fill = "none") +
       theme_nyt() +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
+      ) +
       labs(
         title = bundle_a_wrap_text(paste0("Total ", metric_label, " by Content Type"), width = 58),
         subtitle = bundle_a_talent_subtitle(talent, subtitle_text),

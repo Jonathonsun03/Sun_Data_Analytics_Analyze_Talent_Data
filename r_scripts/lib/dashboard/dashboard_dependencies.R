@@ -58,4 +58,7 @@ dashboard_source("r_scripts", "lib", "linear_regression", "day_of_week", "weekda
 dashboard_source("r_scripts", "lib", "linear_regression", "day_of_week", "report_helpers.R")
 dashboard_source("r_scripts", "lib", "linear_regression", "day_of_week", "topic_weekday_recommendations.R")
 
+# Dashboard-specific narrative and recommendation rules.
+dashboard_source("r_scripts", "lib", "dashboard", "dashboard_recommendations.R")
+
 invisible(TRUE)

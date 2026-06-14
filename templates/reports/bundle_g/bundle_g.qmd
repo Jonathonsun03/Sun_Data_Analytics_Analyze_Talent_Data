@@ -116,7 +116,10 @@ bundle_g_topic_heatmap <- function(summary_df, content_label) {
       title = paste("Observed median views by", tolower(content_label), "topic and weekday"),
       subtitle = "Tile color is observed median views; labels are stream counts."
     ) +
-    plot_theme
+    plot_theme +
+    ggplot2::theme(
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, vjust = 1)
+    )
 }
 
 resolve_bundle_g_data_root <- function(data_source, data_root) {

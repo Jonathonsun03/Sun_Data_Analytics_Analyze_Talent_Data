@@ -8,6 +8,7 @@ execute:
   echo: false
   warning: false
   message: false
+  keep-md: true
 params:
   talent: "Ava"
   data_source: "datalake"
@@ -21,6 +22,9 @@ params:
 ```{r}
 #| label: setup
 #| include: false
+
+knitr::opts_knit$set(root.dir = normalizePath(getwd(), winslash = "/", mustWork = TRUE))
+dashboard_render_dir <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
 
 source("../../../r_scripts/lib/dashboard/dashboard_dependencies.R")
 source("../../../r_scripts/lib/dashboard/dashboard_data.R")
@@ -40,211 +44,18 @@ dashboard_talent_label <- dashboard_data$overview$value[
   dashboard_data$overview$metric == "Talent"
 ][[1]]
 dashboard_content_types <- names(dashboard_data$topic_weekday_summary)
-dashboard_primary_content_type <- if (length(dashboard_content_types) > 0) {
-  dashboard_content_types[[1]]
+dashboard_topic_weekday_types <- dashboard_content_types[
+  purrr::map_lgl(dashboard_data$topic_weekday_summary, function(x) {
+    !is.null(x) && !is.null(x$topic_weekday) && nrow(x$topic_weekday) > 0
+  })
+]
+dashboard_primary_content_type <- if (length(dashboard_topic_weekday_types) > 0) {
+  dashboard_topic_weekday_types[[1]]
 } else {
   NA_character_
 }
-```
 
-# Overview
-
-This page summarizes the selected creator, reporting window, source data, and top-performing videos.
-
-## Row
-
-```{r}
-#| title: "Overview Metrics"
-
-dashboard_overview_table(dashboard_data)
-```
-
-```{r}
-#| title: "Top Videos"
-
-dashboard_top_videos_table(dashboard_data)
-```
-
-## Row
-
-```{r}
-#| title: "Performance Over Time"
-
-dashboard_monthly_performance_plot(dashboard_data, talent = dashboard_talent_label)
-```
-
-# Creator Performance
-
-This page shows performance by time and content format, including views, revenue-adjacent context, engagement, and high-performing uploads.
-
-## Row
-
-```{r}
-#| title: "Monthly Views and Revenue"
-
-dashboard_monthly_performance_plot(dashboard_data, talent = dashboard_talent_label)
-```
-
-## Row
-
-```{r}
-#| title: "Content Type Views"
-
-dashboard_content_views_plot(dashboard_data, talent = dashboard_talent_label)
-```
-
-```{r}
-#| title: "Top Videos"
-
-dashboard_top_videos_table(dashboard_data, page_length = 12)
-```
-
-# Content Strategy
-
-This page compares content type performance and engagement patterns so recurring formats can be prioritized with evidence.
-
-## Row
-
-```{r}
-#| title: "Views by Content Type"
-
-dashboard_content_views_plot(dashboard_data, talent = dashboard_talent_label)
-```
-
-```{r}
-#| title: "Content Summary"
-
-dashboard_datatable(dashboard_data$content_summary$total_views, page_length = 10)
-```
-
-## Row
-
-```{r}
-#| title: "Engagement by Content Type"
-
-dashboard_content_engagement_plot(dashboard_data, talent = dashboard_talent_label)
-```
-
-```{r}
-#| title: "Engagement Summary"
-
-dashboard_datatable(dashboard_data$content_summary$engagement, page_length = 10)
-```
-
-# Publishing Schedule
-
-This page evaluates timing patterns, including weekday performance and topic-by-weekday recommendations.
-
-## Row
-
-```{r}
-#| title: "Weekday Performance"
-
-dashboard_weekday_plot(dashboard_data, talent = dashboard_talent_label, as_share = FALSE)
-```
-
-```{r}
-#| title: "Weekday Summary"
-
-dashboard_weekday_table(dashboard_data)
-```
-
-## Row
-
-```{r}
-#| title: "Topic-Weekday Heatmap"
-
-if (!is.na(dashboard_primary_content_type)) {
-  dashboard_topic_weekday_heatmap(
-    dashboard_data,
-    content_type = dashboard_primary_content_type,
-    content_label = dow_report_content_label(dashboard_primary_content_type)
-  )
-}
-```
-
-```{r}
-#| title: "Topic-Weekday Recommendations"
-
-if (!is.na(dashboard_primary_content_type)) {
-  dashboard_topic_weekday_recommendation_table(
-    dashboard_data,
-    content_type = dashboard_primary_content_type,
-    page_length = 15
-  )
-}
-```
-
-# Audience
-
-This page summarizes audience composition and audience-share trends where demographic exports are available.
-
-## Row
-
-```{r}
-#| title: "Audience Age and Gender Trends"
-
-dashboard_audience_plot(dashboard_data, talent = dashboard_talent_label)
-```
-
-```{r}
-#| title: "Audience Summary"
-
-dashboard_datatable(dashboard_data$audience_summary, page_length = 15)
-```
-
-# Recommendations
-
-This page converts descriptive and model-informed dashboard outputs into practical planning tables.
-
-## Row
-
-```{r}
-#| title: "Weekday Recommendations"
-
-dashboard_datatable(dashboard_data$recommendations$weekday, page_length = 7)
-```
-
-## Row
-
-```{r}
-#| title: "Topic-Weekday Recommendations"
-
-if (!is.na(dashboard_primary_content_type)) {
-  dashboard_topic_weekday_recommendation_table(
-    dashboard_data,
-    content_type = dashboard_primary_content_type,
-    page_length = 20
-  )
-}
-```
-
-```{r}
-#| title: "Lifecycle Recommendations"
-#| results: asis
-
-cat(
-  "Lifecycle recommendations are not wired into the dashboard yet. ",
-  "Bundle E lifecycle outputs still depend on artifact CSV loading that should be extracted into a reusable dashboard loader before this card is populated."
-)
-```
-
-# Method Notes
-
-Use this dashboard as a descriptive operating view, not as a causal proof system.
-
-## Row
-
-```{r}
-#| title: "Dashboard Scope"
-
-dashboard_overview_table(dashboard_data)
-```
-
-```{r}
-#| title: "Filters"
-
-tibble::tibble(
+dashboard_filter_summary <- tibble::tibble(
   setting = c(
     "Talent parameter",
     "Data source",
@@ -261,13 +72,361 @@ tibble::tibble(
     paste(params$content_types, collapse = ", "),
     as.character(params$reference_day)
   )
-) |>
-  dashboard_datatable(page_length = 6)
+)
+
+dashboard_lifecycle_note <- paste(
+  "Lifecycle summaries are now built from Bundle E panel data for the active talent and date window.",
+  "Use the Creator Performance tab for the primary lifecycle view."
+)
 ```
+
+# Overview
+
+This page summarizes the selected creator, reporting window, source data, and top-performing videos.
+
+## Row {height=22%}
+
+```{r}
+#| label: overview-total-views
+#| title: "Total Views"
+
+dashboard_metric_card(dashboard_data, metric = "total_views")
+```
+
+```{r}
+#| label: overview-total-revenue
+#| title: "Total Revenue"
+
+dashboard_metric_card(dashboard_data, metric = "total_revenue")
+```
+
+```{r}
+#| label: overview-total-videos
+#| title: "Videos / Streams"
+
+dashboard_metric_card(dashboard_data, metric = "video_count")
+```
+
+```{r}
+#| label: overview-average-views
+#| title: "Average Views"
+
+dashboard_metric_card(dashboard_data, metric = "average_views")
+```
+
+## Row {height=55%}
+
+```{r}
+#| label: overview-performance-over-time
+#| title: "Performance Over Time"
+
+dashboard_monthly_performance_plot(dashboard_data, talent = dashboard_talent_label)
+```
+
+```{r}
+#| label: overview-revenue-by-content-type
+#| title: "Total Revenue by Content Type"
+
+dashboard_revenue_content_type_plot(dashboard_data, talent = dashboard_talent_label)
+```
+
+```{r}
+#| label: overview-engagement-distribution
+#| title: "Average View % by Content Type"
+
+dashboard_content_engagement_plot(dashboard_data, talent = dashboard_talent_label)
+```
+
+## Row {height=33%}
+
+```{r}
+#| label: overview-top-videos
+#| title: "Top Videos"
+
+dashboard_top_videos_table(dashboard_data)
+```
+
+# Creator Performance
+
+This page summarizes lifecycle performance for the active talent and date window.
+
+## Row {height=45%}
+
+```{r}
+#| label: creator-latest-views-age
+#| title: "Latest Views vs Video Age"
+
+dashboard_lifecycle_latest_views_age_plot(dashboard_data, talent = dashboard_talent_label)
+```
+
+```{r}
+#| label: creator-recent-vs-lifetime
+#| title: "Recent Momentum vs Lifetime Rate"
+
+dashboard_lifecycle_recent_vs_lifetime_plot(dashboard_data, talent = dashboard_talent_label)
+```
+
+```{r}
+#| label: creator-lifecycle-classification-guide
+#| title: "Lifecycle Classification Guide"
+
+dashboard_lifecycle_classification_guide()
+```
+
+## Row {height=45%}
+
+```{r}
+#| label: creator-short-lifecycle
+#| title: "Shorts"
+
+dashboard_lifecycle_type_age_curve_plot(
+  dashboard_data,
+  talent = dashboard_talent_label,
+  content_type = "short"
+)
+```
+
+```{r}
+#| label: creator-video-lifecycle
+#| title: "Videos"
+
+dashboard_lifecycle_type_age_curve_plot(
+  dashboard_data,
+  talent = dashboard_talent_label,
+  content_type = "video"
+)
+```
+
+```{r}
+#| label: creator-live-lifecycle
+#| title: "Live Streams"
+
+dashboard_lifecycle_type_age_curve_plot(
+  dashboard_data,
+  talent = dashboard_talent_label,
+  content_type = "live"
+)
+```
+
+# Content Strategy
+
+This page focuses on topic, tag, and collaboration patterns that can guide future content planning.
+
+## Row {height=50%}
+
+### Column {width=33%}
+
+```{r}
+#| label: strategy-topic-performance
+#| title: "Topic Performance"
+
+dashboard_topic_performance_plot(dashboard_data, talent = dashboard_talent_label)
+```
+
+### Column {width=33%}
+
+```{r}
+#| label: strategy-tag-performance
+#| title: "Tag Performance"
+
+dashboard_tag_performance_plot(dashboard_data, talent = dashboard_talent_label)
+```
+
+### Column {width=34%}
+
+```{r}
+#| label: strategy-topic-longevity
+#| title: "Topic Longevity by Video Type"
+
+dashboard_lifecycle_topic_longevity_plot(dashboard_data, talent = dashboard_talent_label)
+```
+
+## Row {height=50%}
+
+### Column {width=33%}
+
+```{r}
+#| label: strategy-topic-table
+#| title: "Topic Table"
+
+dashboard_topic_performance_table(dashboard_data, page_length = 10)
+```
+
+### Column {width=33%}
+
+```{r}
+#| label: strategy-tag-table
+#| title: "Tag Table"
+
+dashboard_tag_performance_table(dashboard_data, page_length = 15)
+```
+
+### Column {width=34%}
+
+```{r}
+#| label: strategy-collaboration-performance
+#| title: "Collaboration Performance"
+
+dashboard_collaboration_performance_compact_plot(dashboard_data)
+```
+
+# Publishing Schedule
+
+This page evaluates timing patterns for the active talent and date window.
+
+## Row {height=50%}
+
+```{r}
+#| label: schedule-day-of-week-deviation
+#| title: "Day-of-Week Deviation from Average"
+#| fig-height: 4.8
+#| fig-width: 5.2
+
+dashboard_day_of_week_deviation_plot(dashboard_data, talent = dashboard_talent_label)
+```
+
+```{r}
+#| label: schedule-weekend-weekday-distribution
+#| title: "Weekend vs Weekday Distribution"
+#| fig-height: 4.8
+#| fig-width: 5.2
+
+dashboard_weekend_weekday_distribution_plot(dashboard_data, talent = dashboard_talent_label)
+```
+
+```{r}
+#| label: schedule-topic-heatmap
+#| title: "Topic-Weekday Heatmap"
+#| fig-height: 4.8
+#| fig-width: 5.2
+
+if (!is.na(dashboard_primary_content_type)) {
+  dashboard_topic_weekday_heatmap(
+    dashboard_data,
+    content_type = dashboard_primary_content_type,
+    content_label = dow_report_content_label(dashboard_primary_content_type)
+  )
+} else {
+  dashboard_empty_state("Topic-weekday heatmap is unavailable for the active filters.")
+}
+```
+
+## Row {height=50%}
+
+```{r}
+#| label: schedule-day-of-week-performance
+#| title: "Day-of-Week Performance"
+#| fig-height: 3.5
+#| fig-width: 7
+
+dashboard_weekday_plot(dashboard_data, talent = dashboard_talent_label)
+```
+
+```{r}
+#| label: schedule-weekday-summary
+#| title: "Weekday Summary"
+
+dashboard_weekday_table(dashboard_data)
+```
+
+# Audience
+
+This page summarizes audience composition and audience geography where exports are available.
 
 ## Row
 
 ```{r}
+#| label: audience-trends
+#| title: "Audience Age and Gender Trends"
+
+dashboard_audience_plot(dashboard_data, talent = dashboard_talent_label)
+```
+
+```{r}
+#| label: audience-geography-map
+#| title: "Audience Geography"
+
+dashboard_audience_geography_map(dashboard_data, talent = dashboard_talent_label)
+```
+
+## Row {height=34%}
+
+```{r}
+#| label: audience-summary
+#| title: "Audience Summary"
+
+dashboard_datatable(dashboard_data$audience_summary, page_length = 15)
+```
+
+# Recommendations
+
+These recommendations are generated from the active talent/date window and should be read as descriptive signals, not causal claims.
+
+## Row {height=42%}
+
+```{r}
+#| label: recommendations-top
+#| title: "Highest-Priority Recommendations"
+
+dashboard_recommendation_cards(dashboard_data$recommendations$story$top)
+```
+
+## Row {height=42%}
+
+```{r}
+#| label: recommendations-publishing
+#| title: "Publishing Strategy"
+
+dashboard_recommendation_cards(dashboard_data$recommendations$story, domain = "publishing")
+```
+
+```{r}
+#| label: recommendations-content
+#| title: "Content Strategy"
+
+dashboard_recommendation_cards(dashboard_data$recommendations$story, domain = "content")
+```
+
+## Row {height=42%}
+
+```{r}
+#| label: recommendations-audience
+#| title: "Audience Strategy"
+
+dashboard_recommendation_cards(dashboard_data$recommendations$story, domain = "audience")
+```
+
+```{r}
+#| label: recommendations-performance
+#| title: "Performance Strategy"
+
+dashboard_recommendation_cards(dashboard_data$recommendations$story, domain = "performance")
+```
+
+## Row {height=26%}
+
+```{r}
+#| label: recommendations-caveats
+#| title: "Caveats and Data Limits"
+
+dashboard_recommendation_caveat_cards(dashboard_data$recommendations$story)
+```
+
+# Method Notes
+
+Use this dashboard as a descriptive operating view. Model-informed recommendations are planning signals, not proof of causality.
+
+## Row
+
+```{r}
+#| label: method-filters
+#| title: "Filters"
+
+dashboard_datatable(dashboard_filter_summary, page_length = 6)
+```
+
+```{r}
+#| label: method-interpretation-notes
 #| title: "Interpretation Notes"
 #| results: asis
 
@@ -277,7 +436,46 @@ cat(
   "- Descriptive statistics summarize observed performance and can be affected by outliers, posting volume, and missing exports.\n",
   "- Model-based recommendations estimate expected logged views by weekday/topic patterns; they are planning signals, not guarantees.\n",
   "- Correlation is not causation: timing, topic, collaboration, title, format, and external context can move together.\n",
-  "- Lifecycle recommendations are pending a reusable Bundle E artifact loader extraction.\n",
+  "- Creator Performance uses Bundle E lifecycle panel summaries for age, momentum, topic longevity, and per-format curve comparisons.\n",
   sep = ""
 )
+```
+
+```{r}
+#| label: method-recommendation-rules
+#| title: "Recommendation Rules"
+#| results: asis
+
+cat(
+  "- Recommendations are generated by deterministic rule functions, not freeform AI prose.\n",
+  "- Recommendations are descriptive signals from the active talent/date window, not causal claims.\n",
+  "- Per-video metrics are preferred over total-volume metrics when making action recommendations.\n",
+  "- Sample-size thresholds affect confidence labels; small samples produce weak or insufficient recommendations.\n",
+  "- Views and revenue signals are evaluated separately when those fields are available.\n",
+  "- Audience percentages are treated as shares, not raw audience counts.\n",
+  "- Missing or sparse data produces fallback/data-limit messages instead of forced recommendations.\n",
+  sep = ""
+)
+```
+
+```{r}
+#| label: method-lifecycle-classification
+#| title: "Lifecycle Classification Rules"
+#| results: asis
+
+cat(
+  "- `Re-accelerating`: recent 7-day average views per day are at least 1.5x the prior 7-day average.\n",
+  "- `Evergreen`: the upload is at least 90 days old and its recent 30-day average views per day are at least 25% of its lifetime average views per day.\n",
+  "- `Front-loaded`: the 30-day launch window is observed and recent 30-day average views per day have fallen to 10% or less of the first-30-days average pace.\n",
+  "- `Other`: the upload does not meet the re-accelerating, evergreen, or front-loaded rules.\n",
+  "- When more than one rule could apply in the momentum plot, Bundle E labels the video in this order: Re-accelerating, then Evergreen, then Front-loaded, then Other.\n",
+  sep = ""
+)
+```
+
+```{r}
+#| label: restore-render-dir
+#| include: false
+
+setwd(dashboard_render_dir)
 ```

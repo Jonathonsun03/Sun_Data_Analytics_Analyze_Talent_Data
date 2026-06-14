@@ -113,6 +113,13 @@ cat(
 
 ```{r plotly_helpers, include=FALSE}
 bundle_a_ggplotly <- function(plot_obj, tooltip = NULL, rotate_y_axis_title = FALSE) {
+  if (inherits(plot_obj, "ggplot")) {
+    plot_obj <- plot_obj +
+      ggplot2::theme(
+        axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, vjust = 1)
+      )
+  }
+
   p <- if (is.null(tooltip)) {
     plotly::ggplotly(plot_obj)
   } else {
@@ -224,7 +231,21 @@ bundle_a_ggplotly <- function(plot_obj, tooltip = NULL, rotate_y_axis_title = FA
     p$x$layout$annotations <- anns
   }
 
+  axis_keys <- names(p$x$layout)[grepl("^xaxis[0-9]*$", names(p$x$layout))]
+  for (axis_key in axis_keys) {
+    if (is.null(p$x$layout[[axis_key]])) {
+      p$x$layout[[axis_key]] <- list()
+    }
+    p$x$layout[[axis_key]]$automargin <- TRUE
+    p$x$layout[[axis_key]]$tickangle <- -45
+  }
+
   margin_cfg <- list(t = top_margin)
+  current_bottom <- p$x$layout$margin$b
+  if (is.null(current_bottom) || !is.finite(current_bottom)) {
+    current_bottom <- 60
+  }
+  margin_cfg$b <- max(as.numeric(current_bottom), 95)
   if (isTRUE(rotate_y_axis_title)) {
     current_left <- p$x$layout$margin$l
     if (is.null(current_left) || !is.finite(current_left)) {
@@ -246,7 +267,7 @@ bundle_a_ggplotly <- function(plot_obj, tooltip = NULL, rotate_y_axis_title = FA
       margin = margin_cfg,
       autosize = TRUE
     ) %>%
-    plotly::config(responsive = TRUE)
+    plotly::config(responsive = TRUE, displaylogo = FALSE)
 }
 ```
 

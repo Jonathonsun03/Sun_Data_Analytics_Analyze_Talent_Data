@@ -50,7 +50,7 @@ bundle_b_plotly_layout <- function(
   plot_obj,
   margin_l = 120,
   margin_r = 30,
-  margin_b = 64,
+  margin_b = 95,
   margin_t = 88
 ) {
   if (!requireNamespace("plotly", quietly = TRUE)) {
@@ -59,7 +59,7 @@ bundle_b_plotly_layout <- function(
   plot_obj <- plot_obj %>%
     plotly::layout(
       margin = list(l = margin_l, r = margin_r, b = margin_b, t = margin_t),
-      xaxis = list(automargin = TRUE),
+      xaxis = list(automargin = TRUE, tickangle = -45),
       yaxis = list(automargin = TRUE, tickangle = 45),
       autosize = TRUE,
       title = list(x = 0.01, xanchor = "left")
@@ -71,6 +71,9 @@ bundle_b_plotly_layout <- function(
       plot_obj$x$layout[[axis_key]] <- list()
     }
     plot_obj$x$layout[[axis_key]]$automargin <- TRUE
+    if (grepl("^xaxis[0-9]*$", axis_key)) {
+      plot_obj$x$layout[[axis_key]]$tickangle <- -45
+    }
     if (grepl("^yaxis[0-9]*$", axis_key)) {
       plot_obj$x$layout[[axis_key]]$tickangle <- 45
     }
@@ -116,6 +119,10 @@ bundle_b_ggplotly <- function(plot_obj, tooltip = c("text", "x", "y")) {
   if (!requireNamespace("plotly", quietly = TRUE)) {
     stop("Package 'plotly' is required for interactive charts.")
   }
+  plot_obj <- plot_obj +
+    ggplot2::theme(
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, vjust = 1)
+    )
   bundle_b_plotly_layout(
     plotly::ggplotly(plot_obj, tooltip = tooltip)
   )

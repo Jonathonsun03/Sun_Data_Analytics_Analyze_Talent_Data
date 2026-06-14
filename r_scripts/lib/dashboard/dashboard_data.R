@@ -158,6 +158,199 @@ dashboard_build_topic_weekday <- function(content_df, reference_day = "Monday", 
   )
 }
 
+dashboard_filter_bundle_e_content_types <- function(panel_df, content_types) {
+  if (is.null(panel_df) || nrow(panel_df) == 0 || !("Content Type" %in% names(panel_df))) {
+    return(panel_df)
+  }
+
+  content_types <- dashboard_canonical_content_types(content_types)
+  panel_df %>%
+    dplyr::filter(tolower(trimws(as.character(.data$`Content Type`))) %in% content_types)
+}
+
+dashboard_build_lifecycle_data <- function(
+  talent_files,
+  title_classifications,
+  talent_folder,
+  start_date = NULL,
+  end_date = NULL,
+  content_types = c("live", "video", "short")
+) {
+  panel <- build_bundle_e_long_panel(
+    files = talent_files,
+    titles = title_classifications,
+    talent = talent_folder
+  )
+  panel <- dashboard_apply_publish_window(panel, start_date, end_date)
+  panel <- dashboard_filter_bundle_e_content_types(panel, content_types)
+
+  video_summary <- build_bundle_e_video_summary(panel) %>%
+    add_bundle_e_sleeper_flag()
+
+  detail_tables <- build_bundle_e_video_type_detail_tables(video_summary)
+  type_curves <- purrr::map(
+    c(short = "short", video = "video", live = "live"),
+    ~ build_bundle_e_type_age_curve_comparison(
+      panel_df = panel,
+      comparison_df = detail_tables$video_type_top_performing_videos,
+      newest_df = detail_tables$video_type_newest_five_videos,
+      content_type = .x
+    )
+  )
+
+  list(
+    panel = panel,
+    video_summary = video_summary,
+    library_growth_snapshot = build_bundle_e_library_growth_snapshot(panel),
+    back_catalog_contribution = build_bundle_e_back_catalog_contribution(panel),
+    publish_cohort_performance = build_bundle_e_publish_cohort_performance(video_summary),
+    publish_cohort_performance_by_type = build_bundle_e_publish_cohort_performance_by_type(video_summary),
+    video_type_longevity = build_bundle_e_attribute_summary(video_summary, "Content Type"),
+    detail_tables = detail_tables,
+    type_curves = type_curves,
+    leaders = build_bundle_e_leaders(video_summary)
+  )
+}
+
+dashboard_iso3166_lookup <- function() {
+  iso_path <- "/usr/share/iso-codes/json/iso_3166-1.json"
+  if (file.exists(iso_path) && requireNamespace("jsonlite", quietly = TRUE)) {
+    iso <- jsonlite::fromJSON(iso_path)[["3166-1"]]
+    return(iso %>%
+      dplyr::transmute(
+        country_code = toupper(.data$alpha_2),
+        country_iso3 = toupper(.data$alpha_3),
+        country_name = .data$name
+      ))
+  }
+
+  # Fallback for common YouTube geography codes if the system ISO table is unavailable.
+  tibble::tribble(
+    ~country_code, ~country_iso3, ~country_name,
+    "AR", "ARG", "Argentina",
+    "AU", "AUS", "Australia",
+    "BR", "BRA", "Brazil",
+    "CA", "CAN", "Canada",
+    "DE", "DEU", "Germany",
+    "ES", "ESP", "Spain",
+    "FR", "FRA", "France",
+    "GB", "GBR", "United Kingdom",
+    "ID", "IDN", "Indonesia",
+    "IN", "IND", "India",
+    "IT", "ITA", "Italy",
+    "JP", "JPN", "Japan",
+    "KR", "KOR", "Korea, Republic of",
+    "MX", "MEX", "Mexico",
+    "MY", "MYS", "Malaysia",
+    "NL", "NLD", "Netherlands",
+    "PH", "PHL", "Philippines",
+    "SE", "SWE", "Sweden",
+    "SG", "SGP", "Singapore",
+    "TH", "THA", "Thailand",
+    "TW", "TWN", "Taiwan, Province of China",
+    "UA", "UKR", "Ukraine",
+    "US", "USA", "United States",
+    "VN", "VNM", "Viet Nam",
+    "ZA", "ZAF", "South Africa"
+  )
+}
+
+dashboard_select_geography_metric <- function(geo_df) {
+  metric_candidates <- c(
+    "views",
+    "Views",
+    "Est Views (calc)",
+    "Estimated Views",
+    "estimated_views",
+    "Viewer Percentage",
+    "viewer_percentage",
+    "Audience Share",
+    "audience_share"
+  )
+  metric_col <- metric_candidates[metric_candidates %in% names(geo_df)][1]
+  if (is.na(metric_col)) {
+    return(NULL)
+  }
+
+  metric_label <- dplyr::case_when(
+    metric_col %in% c("views", "Views") ~ "Views",
+    metric_col %in% c("Est Views (calc)", "Estimated Views", "estimated_views") ~ "Estimated Cumulative Views",
+    metric_col %in% c("Viewer Percentage", "viewer_percentage") ~ "Viewer Percentage",
+    metric_col %in% c("Audience Share", "audience_share") ~ "Audience Share",
+    TRUE ~ metric_col
+  )
+  metric_agg <- if (metric_label %in% c("Viewer Percentage", "Audience Share")) "mean" else "sum"
+
+  list(column = metric_col, label = metric_label, aggregation = metric_agg)
+}
+
+dashboard_build_audience_geography <- function(geo_df) {
+  if (is.null(geo_df) || nrow(geo_df) == 0 || !("Country" %in% names(geo_df))) {
+    return(NULL)
+  }
+
+  date_col <- c("snapshot_date", "date", "Date", "Report Date", "report_date")
+  date_col <- date_col[date_col %in% names(geo_df)][1]
+  if (is.na(date_col)) {
+    return(NULL)
+  }
+
+  metric <- dashboard_select_geography_metric(geo_df)
+  if (is.null(metric)) {
+    return(NULL)
+  }
+
+  cleaned <- geo_df %>%
+    dplyr::transmute(
+      snapshot_date = suppressWarnings(as.Date(.data[[date_col]])),
+      country_code = toupper(trimws(as.character(.data$Country))),
+      metric_value = suppressWarnings(as.numeric(.data[[metric$column]]))
+    ) %>%
+    dplyr::mutate(
+      country_code = dplyr::na_if(.data$country_code, ""),
+      country_code = dplyr::na_if(.data$country_code, "(NO DATA)")
+    ) %>%
+    dplyr::filter(!is.na(.data$snapshot_date), !is.na(.data$country_code), !is.na(.data$metric_value))
+
+  if (nrow(cleaned) == 0) {
+    return(NULL)
+  }
+
+  grouped <- cleaned %>%
+    dplyr::group_by(.data$snapshot_date, .data$country_code)
+
+  summary_df <- if (identical(metric$aggregation, "mean")) {
+    grouped %>% dplyr::summarise(metric_value = mean(.data$metric_value, na.rm = TRUE), .groups = "drop")
+  } else {
+    grouped %>% dplyr::summarise(metric_value = sum(.data$metric_value, na.rm = TRUE), .groups = "drop")
+  }
+
+  summary_df <- summary_df %>%
+    dplyr::left_join(dashboard_iso3166_lookup(), by = "country_code") %>%
+    dplyr::mutate(
+      snapshot_date_label = format(.data$snapshot_date, "%Y-%m-%d"),
+      metric_label = metric$label,
+      metric_display = if (metric$label %in% c("Viewer Percentage", "Audience Share")) {
+        scales::percent(.data$metric_value, accuracy = 0.1)
+      } else {
+        scales::comma(round(.data$metric_value))
+      }
+    ) %>%
+    dplyr::arrange(.data$snapshot_date, dplyr::desc(.data$metric_value))
+
+  unmatched_codes <- summary_df %>%
+    dplyr::filter(is.na(.data$country_iso3)) %>%
+    dplyr::distinct(.data$country_code) %>%
+    dplyr::pull("country_code")
+
+  attr(summary_df, "metric_label") <- metric$label
+  attr(summary_df, "metric_source_column") <- metric$column
+  attr(summary_df, "metric_aggregation") <- metric$aggregation
+  attr(summary_df, "unmatched_country_count") <- length(unmatched_codes)
+  attr(summary_df, "unmatched_country_codes") <- unmatched_codes
+  summary_df
+}
+
 build_creator_dashboard_data <- function(
   talent,
   data_source = c("datalake", "staging"),
@@ -182,12 +375,19 @@ build_creator_dashboard_data <- function(
     talent = talent_folder,
     dedupe = TRUE,
     key_cols = "Video ID",
-    sort_cols = c("confidence", "published_at", "Published At")
+    sort_cols = c("confidence", "published_at", "Published At"),
+    # Match Bundle A/B dashboard-facing imports: dedupe video-level analytics
+    # and monetary rows, but preserve demographic segment rows for audience plots.
+    dedupe_sets = c("analytics", "monetary")
   )
 
   analytics <- dashboard_apply_publish_window(prepared$analytics, start_date, end_date)
   monetary <- dashboard_apply_publish_window(prepared$monetary, start_date, end_date)
   demo <- dashboard_apply_publish_window(prepared$demo, start_date, end_date)
+  geo <- dashboard_try(
+    dashboard_apply_publish_window(.get_type_data(talent_files, "video_geography"), start_date, end_date),
+    NULL
+  )
 
   content_types <- dashboard_canonical_content_types(content_types)
   stream_video_level <- analytics
@@ -222,8 +422,19 @@ build_creator_dashboard_data <- function(
       NULL
     )
   )
+  lifecycle <- dashboard_try(
+    dashboard_build_lifecycle_data(
+      talent_files = talent_files,
+      title_classifications = title_classifications,
+      talent_folder = talent_folder,
+      start_date = start_date,
+      end_date = end_date,
+      content_types = content_types
+    ),
+    NULL
+  )
 
-  list(
+  out <- list(
     overview = dashboard_build_overview(analytics, monetary, demo, talent_folder, data_source, data_root),
     monthly_performance = dashboard_try(
       performance_trends_over_time_prep(analytics, monetary, freq = "month"),
@@ -240,9 +451,34 @@ build_creator_dashboard_data <- function(
         NULL
       )
     ),
+    content_strategy = list(
+      collab_summary = dashboard_try(
+        collaboration_effectiveness_prep(analytics, monetary),
+        NULL
+      ),
+      topic_summary = dashboard_try(
+        topic_performance_prep(analytics, monetary, top_n = 8),
+        NULL
+      ),
+      tag_summary = dashboard_try(
+        tag_performance_prep(
+          analytics,
+          monetary,
+          top_n = 15,
+          min_videos = 2
+        ),
+        NULL
+      )
+    ),
     weekday_summary = weekday_summary,
+    weekend_weekday_distribution = dashboard_try(
+      weekend_vs_weekday_distribution_prep(analytics, monetary),
+      NULL
+    ),
     topic_weekday_summary = topic_weekday_summary,
+    lifecycle = lifecycle,
     audience_summary = dashboard_try(audience_age_gender_trends_prep(demo_df = demo, freq = "month"), NULL),
+    audience_geography = dashboard_try(dashboard_build_audience_geography(geo), NULL),
     top_videos = dashboard_build_top_videos(analytics, monetary, top_n = top_n_videos),
     recommendations = list(
       weekday = if (is.null(weekday_summary) || nrow(weekday_summary) == 0) {
@@ -263,15 +499,18 @@ build_creator_dashboard_data <- function(
         }
       },
       topic_weekday = purrr::map(topic_weekday_summary, "recommendations"),
-      lifecycle = NULL # TODO: load Bundle E artifact CSVs through a reusable artifact loader.
+      lifecycle = if (is.null(lifecycle)) NULL else lifecycle$leaders
     ),
     source_data = list(
       talent_path = talent_path,
       analytics = analytics,
       monetary = monetary,
       demo = demo,
+      geo = geo,
       content = content,
       title_classifications = title_classifications
     )
   )
+  out$recommendations$story <- dashboard_build_recommendations(out)
+  out
 }
