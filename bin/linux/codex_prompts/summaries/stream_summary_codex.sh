@@ -1,12 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="$HOME/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data"
+# Load repo .env defaults without overriding already-exported values.
+_ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+while [[ "${_ENV_ROOT}" != "/" ]]; do
+  if [[ -f "${_ENV_ROOT}/AGENTS.md" && -d "${_ENV_ROOT}/r_scripts" ]]; then
+    break
+  fi
+  _ENV_ROOT="$(dirname "${_ENV_ROOT}")"
+done
+if [[ -f "${_ENV_ROOT}/bin/linux/load_repo_env.sh" ]]; then
+  # shellcheck source=/dev/null
+  source "${_ENV_ROOT}/bin/linux/load_repo_env.sh"
+  load_repo_env "${_ENV_ROOT}"
+fi
+unset _ENV_ROOT
+
+REPO="${REPO:-${TALENT_REPO_ROOT:-$HOME/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data}}"
 DEFAULT_PROMPT_FILE="$REPO/prompts/summaries/stream_summary_codex.md"
 PROMPT_FILE="${PROMPT_FILE:-$DEFAULT_PROMPT_FILE}"
 TALENT_SCOPE=""
 LIMIT_SCOPE=""
-LOG_ROOT="/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/codex_prompts"
+TALENT_DATA_ROOT_FOR_LOGS="${TALENT_DATALAKE_ROOT:-/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data}"
+ANALYTICS_ROOT_FOR_LOGS="${TALENT_DATA_ROOT_FOR_LOGS%/Talent_data}"
+LOG_ROOT="${CODEX_PROMPTS_LOG_ROOT:-${ANALYTICS_ROOT_FOR_LOGS}/Processed/Logs/codex_prompts}"
 LOG_DIR="$LOG_ROOT/summaries/stream_summary_codex"
 RUN_TS="$(date +%Y-%m-%d_%H-%M-%S)"
 RUN_SLUG="stream_summary_codex"

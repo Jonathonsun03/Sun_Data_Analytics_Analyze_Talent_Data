@@ -15,7 +15,7 @@ The implementation should mirror the Bundle A pattern as closely as possible unl
 
 ## Existing Bundle B files
 
-- Template: `templates/reports/Bundle_B/Bundle_B.Rmd`
+- Template: `r_scripts/notebooks/reports/Bundle_B/Bundle_B.Rmd`
 - Description: `r_scripts/run/bundle_B/Bundle_B_Desc.md`
 - Import/artifact builder: `r_scripts/run/bundle_B/import_data.r`
 - Render script: `r_scripts/run/bundle_B/render_bundle_B.R`
@@ -26,7 +26,7 @@ The implementation should mirror the Bundle A pattern as closely as possible unl
 Use Bundle A as the exact reference pattern for architecture, naming, and testing:
 
 - Prompt tree: `prompts/reports/bundle_a/`
-- Template: `templates/reports/Bundle_A/Bundle_A.Rmd`
+- Template: `r_scripts/notebooks/reports/Bundle_A/Bundle_A.Rmd`
 - Import/artifact builder: `r_scripts/run/bundle_A/import_data.r`
 - Render script: `r_scripts/run/bundle_A/render_bundle_A.R`
 - Shell wrappers:
@@ -115,7 +115,7 @@ Keep support for test controls such as:
 
 ### 4. Render inclusion
 
-Update `templates/reports/Bundle_B/Bundle_B.Rmd` so it can read generated interpretation markdown from the current talent's Bundle B folder and print it below the relevant charts or section intros.
+Update `r_scripts/notebooks/reports/Bundle_B/Bundle_B.Rmd` so it can read generated interpretation markdown from the current talent's Bundle B folder and print it below the relevant charts or section intros.
 
 Requirements:
 

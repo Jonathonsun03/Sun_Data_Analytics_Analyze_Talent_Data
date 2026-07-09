@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Load repo .env defaults without overriding already-exported values.
+_ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+while [[ "${_ENV_ROOT}" != "/" ]]; do
+  if [[ -f "${_ENV_ROOT}/AGENTS.md" && -d "${_ENV_ROOT}/r_scripts" ]]; then
+    break
+  fi
+  _ENV_ROOT="$(dirname "${_ENV_ROOT}")"
+done
+if [[ -f "${_ENV_ROOT}/bin/linux/load_repo_env.sh" ]]; then
+  # shellcheck source=/dev/null
+  source "${_ENV_ROOT}/bin/linux/load_repo_env.sh"
+  load_repo_env "${_ENV_ROOT}"
+fi
+unset _ENV_ROOT
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
@@ -12,8 +27,12 @@ CHECK_SCRIPT="py_scripts/run/qualitative_coding/check_qualitative_batch.py"
 EXPORT_SCRIPT="r_scripts/run/Title_classification/title_classification/05_export_results_csv.R"
 CONFIG_JSON="classification/config/talent_profiles.json"
 
-EXPORT_ROOT="${TITLE_CLASSIFICATIONS_DIR:-/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification}"
-BATCH_RUN_ROOT="${TITLE_CLASSIFICATION_BATCH_RUN_ROOT:-${EXPORT_ROOT}/batch_runs}"
+TALENT_DATA_ROOT="${TALENT_DATALAKE_ROOT:-/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data}"
+TALENT_DATA_ROOT="${TALENT_DATA_ROOT%/}"
+ANALYTICS_ROOT="${TALENT_DATA_ROOT%/Talent_data}"
+EXPORT_ROOT="${TITLE_CLASSIFICATIONS_DIR:-${ANALYTICS_ROOT}/Processed/Title_classification}"
+CLASSIFICATION_LOG_ROOT="${TITLE_CLASSIFICATION_LOG_ROOT:-${ANALYTICS_ROOT}/Processed/Logs/classification}"
+BATCH_RUN_ROOT="${TITLE_CLASSIFICATION_BATCH_RUN_ROOT:-${CLASSIFICATION_LOG_ROOT}/title_classification/batch_runs}"
 
 MODE="build"
 RUN_ID=""
@@ -53,13 +72,13 @@ Examples:
     bin/linux/classification/run_title_classification_batch.sh --run-id "title_v7_$(date +%Y-%m-%d_%H-%M-%S)" -- --batch-size 25
 
   Submit after reviewing the run folder:
-    bin/linux/classification/run_title_classification_batch.sh --mode submit --run-dir "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/batch_runs/<run_id>" --execute
+    bin/linux/classification/run_title_classification_batch.sh --mode submit --run-dir "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/classification/title_classification/batch_runs/<run_id>" --execute
 
   Check later and retrieve output:
-    bin/linux/classification/run_title_classification_batch.sh --mode check --run-dir "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/batch_runs/<run_id>" --retrieve-output
+    bin/linux/classification/run_title_classification_batch.sh --mode check --run-dir "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/classification/title_classification/batch_runs/<run_id>" --retrieve-output
 
   Apply retrieved output into DuckDB and refresh DataLake current/archive exports:
-    bin/linux/classification/run_title_classification_batch.sh --mode apply --run-dir "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/batch_runs/<run_id>"
+    bin/linux/classification/run_title_classification_batch.sh --mode apply --run-dir "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/classification/title_classification/batch_runs/<run_id>"
 USAGE
 }
 

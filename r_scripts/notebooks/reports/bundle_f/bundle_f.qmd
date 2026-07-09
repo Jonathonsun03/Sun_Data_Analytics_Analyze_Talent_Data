@@ -271,7 +271,7 @@ stream_video_level %>%
 ```
 
 ```{r content_sections, results='asis'}
-content_section_path <- here::here("templates", "reports", "bundle_f", "_content_section.qmd")
+content_section_path <- here::here("r_scripts", "notebooks", "reports", "bundle_f", "_content_section.qmd")
 
 for (content_type in names(content)) {
   content_env <- new.env(parent = knitr::knit_global())

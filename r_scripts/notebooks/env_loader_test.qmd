@@ -1,0 +1,92 @@
+---
+title: "R Env Loader Test"
+format: html
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+```{r}
+find_repo_root <- function(start = getwd()) {
+  current <- normalizePath(start, winslash = "/", mustWork = FALSE)
+  repeat {
+    if (
+      file.exists(file.path(current, "AGENTS.md")) &&
+        dir.exists(file.path(current, "r_scripts")) &&
+        dir.exists(file.path(current, "py_scripts"))
+    ) {
+      return(current)
+    }
+    parent <- dirname(current)
+    if (identical(parent, current)) {
+      stop("Could not locate repository root from: ", start, call. = FALSE)
+    }
+    current <- parent
+  }
+}
+
+repo_root <- find_repo_root()
+source(file.path(repo_root, "r_scripts", "lib", "utils", "repo_env.R"))
+source(file.path(repo_root, "r_scripts", "lib", "utils", "staging_root.R"))
+source(file.path(repo_root, "r_scripts", "lib", "utils", "datalake_root.r"))
+```
+
+```{r}
+local({
+  old_values <- Sys.getenv(
+    c(
+      "CODEX_ENV_LOADER_TEST",
+      "CODEX_ENV_LOADER_EXISTING",
+      "TALENT_REPO_ROOT",
+      "TALENT_STAGING_ROOT",
+      "TALENT_DATALAKE_ROOT"
+    ),
+    unset = NA_character_
+  )
+  on.exit({
+    for (name in names(old_values)) {
+      if (is.na(old_values[[name]])) {
+        Sys.unsetenv(name)
+      } else {
+        do.call(Sys.setenv, stats::setNames(list(old_values[[name]]), name))
+      }
+    }
+  })
+
+  temp_root <- tempfile("repo-env-notebook-")
+  dir.create(temp_root)
+  writeLines(
+    c(
+      "CODEX_ENV_LOADER_TEST=from_r_notebook_env",
+      "CODEX_ENV_LOADER_EXISTING=from_env_file",
+      "TALENT_STAGING_ROOT=/tmp/r-notebook-staging-root",
+      "TALENT_DATALAKE_ROOT=/tmp/r-notebook-talent-root"
+    ),
+    file.path(temp_root, ".env")
+  )
+
+  Sys.setenv(
+    CODEX_ENV_LOADER_EXISTING = "already_exported",
+    TALENT_REPO_ROOT = temp_root
+  )
+  Sys.unsetenv(c("CODEX_ENV_LOADER_TEST", "TALENT_STAGING_ROOT", "TALENT_DATALAKE_ROOT"))
+
+  load_repo_env(repo_root = temp_root)
+
+  stopifnot(identical(Sys.getenv("CODEX_ENV_LOADER_TEST"), "from_r_notebook_env"))
+  stopifnot(identical(Sys.getenv("CODEX_ENV_LOADER_EXISTING"), "already_exported"))
+  stopifnot(identical(get_staging_root(), "/tmp/r-notebook-staging-root"))
+  stopifnot(identical(get_datalake_root(), "/tmp/r-notebook-talent-root"))
+
+  data.frame(
+    check = c(
+      "loads values from .env",
+      "preserves exported values",
+      "get_staging_root uses .env",
+      "get_datalake_root uses .env"
+    ),
+    status = "pass"
+  )
+})
+```

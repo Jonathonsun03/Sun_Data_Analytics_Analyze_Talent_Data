@@ -43,30 +43,24 @@ default_text_playback_talent_data_root <- function(talent_data_root = NULL) {
     return(normalizePath(talent_data_root, winslash = "/", mustWork = FALSE))
   }
 
-  if (exists("get_datalake_root", mode = "function")) {
-    return(normalizePath(get_datalake_root(), winslash = "/", mustWork = FALSE))
+  if (!exists("get_datalake_root", mode = "function")) {
+    repo_root <- Sys.getenv("TALENT_REPO_ROOT", unset = "")
+    datalake_root_path <- if (nzchar(repo_root)) {
+      file.path(repo_root, "r_scripts", "lib", "utils", "datalake_root.r")
+    } else {
+      file.path("r_scripts", "lib", "utils", "datalake_root.r")
+    }
+    if (!file.exists(datalake_root_path)) {
+      stop(
+        "`get_datalake_root()` is not loaded and datalake_root.r could not be found. ",
+        "Source r_scripts/lib/utils/datalake_root.r or set TALENT_REPO_ROOT.",
+        call. = FALSE
+      )
+    }
+    source(datalake_root_path)
   }
 
-  env_root <- Sys.getenv("TALENT_DATALAKE_ROOT", unset = "")
-  if (nzchar(env_root)) {
-    return(normalizePath(env_root, winslash = "/", mustWork = FALSE))
-  }
-
-  if (.Platform$OS.type == "windows") {
-    return("Z:/DataLake/Sun_Data_Analytics/Talent_data")
-  }
-
-  candidates <- c(
-    "/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data",
-    "/mnt/router_data/DataLake/Sun_Data_Analytics/Talent_data",
-    "/mnt/datalake/Datalake/Sun_Data_Analytics/Talent_data"
-  )
-  existing <- candidates[dir.exists(candidates)]
-  if (length(existing) > 0L) {
-    return(existing[[1]])
-  }
-
-  stop("Datalake Talent_data root not found. Set TALENT_DATALAKE_ROOT.", call. = FALSE)
+  normalizePath(get_datalake_root(), winslash = "/", mustWork = FALSE)
 }
 
 text_playback_talent_key <- function(x) {

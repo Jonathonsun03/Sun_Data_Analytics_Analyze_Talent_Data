@@ -4,6 +4,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from py_scripts.lib.utils.env import load_repo_env
+
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_TALENT_ROOTS = (
@@ -33,6 +35,7 @@ def talent_slugify(value: str) -> str:
 
 
 def default_talent_root() -> Path:
+    load_repo_env()
     for key in ("TALENT_DATALAKE_ROOT", "CHAT_OUTPUT_ROOT"):
         raw = os.environ.get(key, "").strip()
         if raw:
@@ -44,6 +47,7 @@ def default_talent_root() -> Path:
 
 
 def processed_root(talent_root: Path | None = None) -> Path:
+    load_repo_env()
     env_root = os.environ.get("TALENT_PROCESSED_ROOT", "").strip()
     if env_root:
         return Path(env_root).expanduser()

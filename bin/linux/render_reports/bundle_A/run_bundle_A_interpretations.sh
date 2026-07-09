@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Load repo .env defaults without overriding already-exported values.
+_ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+while [[ "${_ENV_ROOT}" != "/" ]]; do
+  if [[ -f "${_ENV_ROOT}/AGENTS.md" && -d "${_ENV_ROOT}/r_scripts" ]]; then
+    break
+  fi
+  _ENV_ROOT="$(dirname "${_ENV_ROOT}")"
+done
+if [[ -f "${_ENV_ROOT}/bin/linux/load_repo_env.sh" ]]; then
+  # shellcheck source=/dev/null
+  source "${_ENV_ROOT}/bin/linux/load_repo_env.sh"
+  load_repo_env "${_ENV_ROOT}"
+fi
+unset _ENV_ROOT
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 
@@ -24,6 +39,7 @@ PROMPT_FILTER=""
 MAX_PROMPTS=""
 CODEX_BIN="${CODEX_BIN:-codex}"
 RSCRIPT_BIN="${RSCRIPT_BIN:-Rscript}"
+USE_LLM="false"
 
 declare -a TALENTS=()
 
@@ -33,8 +49,9 @@ Usage:
   bin/linux/render_reports/bundle_A/run_bundle_A_interpretations.sh [options]
 
 Description:
-  Generates Bundle A interpretation markdown files by pairing prompt specs with
-  Bundle A artifact tables/figures and calling `codex exec`.
+  Generates Bundle A interpretation markdown files. The default path is a
+  deterministic Bundle A rule layer in R. Pass --llm to use the legacy prompt
+  specs and `codex exec` path.
 
   Output structure:
     <datalake_root>/<talent>/reports/bundle_A/interpretations/<section>/<prompt>/input.md
@@ -50,6 +67,7 @@ Talent selection:
 Prompt selection:
   --prompt-filter TEXT   Run only prompts whose relative path contains TEXT
   --max-prompts N        Limit prompt count for testing
+  --llm                  Use the legacy Codex prompt interpretation path
 
 Compatibility args:
   --window-days N
@@ -251,6 +269,10 @@ while [[ $# -gt 0 ]]; do
       MAX_PROMPTS="$2"
       shift 2
       ;;
+    --llm|--use-llm)
+      USE_LLM="true"
+      shift
+      ;;
     --window-days)
       [[ $# -ge 2 ]] || { echo "Error: --window-days requires a value" >&2; exit 1; }
       WINDOW_DAYS="$2"
@@ -349,6 +371,73 @@ if [[ -z "${LC_ALL:-}" ]]; then
 fi
 
 PROMPTS_ROOT_PATH="$(resolve_path "${PROMPTS_ROOT}")"
+DATALAKE_ROOT="$(resolve_datalake_root)"
+if [[ -z "${DATALAKE_ROOT}" || ! -d "${DATALAKE_ROOT}" ]]; then
+  echo "Error: datalake root not found: ${DATALAKE_ROOT}" >&2
+  exit 1
+fi
+LOG_ROOT="$(resolve_logs_root "${DATALAKE_ROOT}")"
+mkdir -p "${LOG_ROOT}"
+
+if [[ "${USE_LLM}" != "true" ]]; then
+  if [[ -n "${PROMPT_FILTER}" || -n "${MAX_PROMPTS}" ]]; then
+    echo "[bundle-a-interpretations] Note: --prompt-filter and --max-prompts apply only with --llm; deterministic mode writes all existing slots."
+  fi
+
+  echo "[bundle-a-interpretations] Started: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  echo "[bundle-a-interpretations] Mode: deterministic R rules"
+  echo "[bundle-a-interpretations] Datalake root: ${DATALAKE_ROOT}"
+  echo "[bundle-a-interpretations] Talents: ${TALENTS[*]}"
+
+  status=0
+  for talent_query in "${TALENTS[@]}"; do
+    set +e
+    talent_folder_name="$(resolve_talent_folder_name "${talent_query}" 2>/dev/null)"
+    rc=$?
+    set -e
+    if [[ ${rc} -ne 0 ]]; then
+      status=1
+      echo "[bundle-a-interpretations] Error: ${talent_folder_name}" >&2
+      continue
+    fi
+
+    output_dir="${DATALAKE_ROOT}/${talent_folder_name}/${REPORT_SUBDIR}/${BUNDLE_NAME}"
+    cmd=("${RSCRIPT_BIN}" "--vanilla" "r_scripts/run/bundle_A/generate_bundle_A_interpretations.R"
+      "--talent" "${talent_query}"
+      "--output-dir" "${output_dir}"
+      "--data-source" "${INPUT_SOURCE}")
+    if [[ -n "${INPUT_ROOT}" ]]; then
+      cmd+=("--data-root" "${INPUT_ROOT}")
+    fi
+    if [[ -n "${WINDOW_DAYS}" ]]; then
+      cmd+=("--window-days" "${WINDOW_DAYS}")
+    fi
+    if [[ -n "${START_DATE}" ]]; then
+      cmd+=("--start-date" "${START_DATE}")
+    fi
+    if [[ -n "${END_DATE}" ]]; then
+      cmd+=("--end-date" "${END_DATE}")
+    fi
+    if [[ "${DRY_RUN}" == "true" ]]; then
+      cmd+=("--dry-run")
+    fi
+
+    echo
+    echo "[bundle-a-interpretations] Talent: ${talent_query}"
+    echo "[bundle-a-interpretations] Output dir: ${output_dir}"
+    echo "[bundle-a-interpretations] Command: ${cmd[*]}"
+    set +e
+    TALENT_DATALAKE_ROOT="${DATALAKE_ROOT}" TALENT_STAGING_ROOT="${STAGING_ROOT_ARG}" "${cmd[@]}"
+    rc=$?
+    set -e
+    if [[ ${rc} -ne 0 ]]; then
+      status=1
+      echo "[bundle-a-interpretations] Failed deterministic interpretation generation for: ${talent_query}" >&2
+    fi
+  done
+  exit "${status}"
+fi
+
 if [[ ! -d "${PROMPTS_ROOT_PATH}" ]]; then
   echo "Error: prompts root not found: ${PROMPTS_ROOT_PATH}" >&2
   exit 1
@@ -357,14 +446,6 @@ if ! command -v "${CODEX_BIN}" >/dev/null 2>&1; then
   echo "Error: codex CLI not found: ${CODEX_BIN}" >&2
   exit 1
 fi
-
-DATALAKE_ROOT="$(resolve_datalake_root)"
-if [[ -z "${DATALAKE_ROOT}" || ! -d "${DATALAKE_ROOT}" ]]; then
-  echo "Error: datalake root not found: ${DATALAKE_ROOT}" >&2
-  exit 1
-fi
-LOG_ROOT="$(resolve_logs_root "${DATALAKE_ROOT}")"
-mkdir -p "${LOG_ROOT}"
 
 mapfile -t ALL_PROMPT_FILES < <(find "${PROMPTS_ROOT_PATH}" -mindepth 2 -maxdepth 3 -name 'prompt.md' | sort)
 if [[ ${#ALL_PROMPT_FILES[@]} -eq 0 ]]; then

@@ -24,7 +24,7 @@ usage <- function() {
       "    [--config r_scripts/run/gdrive_push/config/config.yml] \\",
       "    [--sheet SHEET_ID_OR_URL] \\",
       "    [--client-drive-root DRIVE_FOLDER_ID_OR_URL] \\",
-      "    [--datalake-root /mnt/datalake/...] [--execute]",
+      "    [--datalake-root \"$TALENT_DATALAKE_ROOT\"] [--execute]",
       "",
       "Creates empty Google Drive folders as:",
       "  delivery_group / talent / allowed_data_folder_structure",

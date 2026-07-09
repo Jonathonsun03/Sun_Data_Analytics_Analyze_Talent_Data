@@ -48,6 +48,7 @@ if (file.exists(content_type_utils)) {
   source(content_type_utils)
 }
 
+source(file.path(utils_dir, "datalake_root.r"))
 source(file.path(clean_data_dir, "analytics_core.R"))
 source(file.path(clean_data_dir, "analytics_join.R"))
 source(file.path(clean_data_dir, "clean_columns.R"))

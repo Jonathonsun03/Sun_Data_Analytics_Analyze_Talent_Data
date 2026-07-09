@@ -31,6 +31,20 @@ has_flag <- function(flag) {
   any(args == flag)
 }
 
+source(repo_path("r_scripts", "lib", "utils", "datalake_root.r"))
+
+default_batch_run_root <- function() {
+  datalake_root <- normalizePath(get_datalake_root(), winslash = "/", mustWork = FALSE)
+  file.path(
+    dirname(datalake_root),
+    "Processed",
+    "Logs",
+    "classification",
+    "title_classification",
+    "batch_runs"
+  )
+}
+
 csv_path <- arg_value("--csv", "notes/titles.csv")
 talent_col <- arg_value("--talent-col", "talent")
 video_id_col <- arg_value("--video-id-col", "Video ID")
@@ -46,10 +60,7 @@ if (is.na(batch_size) || batch_size < 1) {
 run_id <- arg_value("--run-id", paste0("title_classification_batch_", format(Sys.time(), "%Y-%m-%d_%H-%M-%S_%z")))
 run_root <- arg_value(
   "--run-root",
-  Sys.getenv(
-    "TITLE_CLASSIFICATION_BATCH_RUN_ROOT",
-    unset = "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/batch_runs"
-  )
+  Sys.getenv("TITLE_CLASSIFICATION_BATCH_RUN_ROOT", unset = default_batch_run_root())
 )
 force_reclassify <- has_flag("--force-reclassify")
 classification_key <- "video_id"
@@ -59,7 +70,6 @@ if (!file.exists(full_csv)) {
   stop("CSV not found: ", full_csv)
 }
 
-source(repo_path("r_scripts", "lib", "utils", "datalake_root.r"))
 source(repo_path("r_scripts", "lib", "utils", "staging_root.R"))
 source(repo_path("r_scripts", "lib", "utils", "talent_select.R"))
 source(repo_path("r_scripts", "lib", "duckdb", "db_connect.R"))
@@ -125,6 +135,34 @@ write_request <- function(request) {
     append = TRUE,
     sep = ""
   )
+}
+
+custom_id_part <- function(x, max_len = 48L) {
+  x <- gsub("[^A-Za-z0-9_-]+", "_", as.character(x))
+  x <- gsub("^_+|_+$", "", x)
+  if (!nzchar(x)) {
+    x <- "unknown"
+  }
+  substr(x, 1L, max_len)
+}
+
+make_request_custom_id <- function(talent_name, batch_index, batch_df) {
+  talent_part <- custom_id_part(talent_name, max_len = 32L)
+  if (nrow(batch_df) == 1L) {
+    video_part <- custom_id_part(batch_df$video_id[[1]], max_len = 40L)
+    hash_part <- substr(as.character(batch_df$title_hash[[1]]), 1L, 10L)
+    return(paste("tc", talent_part, video_part, hash_part, sep = "__"))
+  }
+
+  batch_hash <- substr(
+    digest::digest(
+      paste(as.character(batch_df$video_id), collapse = "||"),
+      algo = "xxhash64"
+    ),
+    1L,
+    10L
+  )
+  paste("tc_batch", talent_part, sprintf("%04d", batch_index), batch_hash, sep = "__")
 }
 
 if (file.exists(batch_input_path)) {
@@ -199,13 +237,7 @@ for (talent_value in talents) {
     end_i <- min(start_i + batch_size - 1L, nrow(pending))
     batch_df <- pending[start_i:end_i, , drop = FALSE]
     request_count <- request_count + 1L
-    custom_id <- paste(
-      "titleclass",
-      run_id,
-      gsub("[^A-Za-z0-9]+", "_", talent_name),
-      sprintf("%04d", batch_index),
-      sep = "__"
-    )
+    custom_id <- make_request_custom_id(talent_name, batch_index, batch_df)
     messages <- build_title_classification_messages(
       batch_df = batch_df,
       user_prompt_template = prompt_bundle$user_prompt_template,

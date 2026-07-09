@@ -4,13 +4,21 @@ default_title_classifications_export_dir <- function() {
     return(override)
   }
 
-  if (.Platform$OS.type == "windows") {
-    return("Z:/DataLake/Sun_Data_Analytics/Processed/Title_classification")
+  if (!exists("get_datalake_root", mode = "function")) {
+    repo_root <- Sys.getenv("TALENT_REPO_ROOT", unset = "")
+    datalake_root_path <- if (nzchar(repo_root)) {
+      file.path(repo_root, "r_scripts", "lib", "utils", "datalake_root.r")
+    } else {
+      file.path("r_scripts", "lib", "utils", "datalake_root.r")
+    }
+    if (file.exists(datalake_root_path)) {
+      source(datalake_root_path)
+    }
   }
 
-  datalake_dir <- "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification"
-  if (dir.exists(dirname(datalake_dir))) {
-    return(datalake_dir)
+  if (exists("get_datalake_root", mode = "function")) {
+    datalake_root <- normalizePath(get_datalake_root(), winslash = "/", mustWork = FALSE)
+    return(file.path(dirname(datalake_root), "Processed", "Title_classification"))
   }
 
   file.path("classification", "output", "title_classifications")

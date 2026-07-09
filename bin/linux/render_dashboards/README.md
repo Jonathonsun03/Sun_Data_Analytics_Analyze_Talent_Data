@@ -5,7 +5,7 @@ dashboard for one talent at a time.
 
 Dashboard template:
 
-- `templates/dashboards/talent_dashboard/index.qmd`
+- `r_scripts/notebooks/dashboards/talent_dashboard/index.qmd`
 
 ## Basic Usage
 
@@ -49,16 +49,23 @@ bin/linux/render_dashboards/run_talent_dashboard.sh \
 - `--end-date YYYY-MM-DD`: optional publish-date end window.
 - `--content-types LIST`: comma-separated list, usually `live,video,short`.
 - `--reference-day DAY`: reference weekday for weekday comparison logic.
-- `--output-dir PATH`: directory for rendered HTML.
+- `--output-dir PATH`: explicit directory override for rendered HTML.
 - `--output FILE`: output HTML filename.
 - `--dry-run`: print the command and temporary params file path without rendering.
 
 ## Output
 
-By default, output is written under:
+By default, the wrapper resolves the selected talent folder and writes under
+that talent's report directory:
 
 ```text
-outputs/dashboards/talent_dashboard/
+<talent_data_root>/<resolved_talent_folder>/reports/dashboard_overall/
+```
+
+For example, `--talent "Leia Memoria"` resolves to:
+
+```text
+/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Leia Memoria【Variance Project】/reports/dashboard_overall/
 ```
 
 The default filename is:
@@ -67,5 +74,5 @@ The default filename is:
 creator_analytics_dashboard_<talent_slug>.html
 ```
 
-For repeated client runs, use a talent-specific output filename or archive the
-rendered HTML after review.
+Use `--output-dir` when you need to render to a local review directory instead
+of the talent delivery folder.

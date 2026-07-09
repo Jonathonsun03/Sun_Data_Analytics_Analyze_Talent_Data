@@ -94,7 +94,7 @@ The Bundle B template already supported interpretation inclusion via:
 
 The template was updated in:
 
-- `templates/reports/Bundle_B/Bundle_B.Rmd`
+- `r_scripts/notebooks/reports/Bundle_B/Bundle_B.Rmd`
 
 New client-facing placements:
 

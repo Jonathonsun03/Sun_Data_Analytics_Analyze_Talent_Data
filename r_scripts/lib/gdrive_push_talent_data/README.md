@@ -70,7 +70,7 @@ the worksheet contents. It also creates or refreshes a named range called
 ## Reports sheet sync
 
 The `reports` worksheet can be rebuilt from bundle description files under
-`r_scripts/run/`, report templates under `templates/reports/`, and rendered
+`r_scripts/run/`, report templates under `r_scripts/notebooks/reports/`, and rendered
 report files in the DataLake:
 
 ```r

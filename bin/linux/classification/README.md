@@ -13,11 +13,14 @@ Batch jobs are asynchronous and cheaper than synchronous API calls.
 ### Build and submit a full reclassification with current definitions
 `bin/linux/classification/run_title_classification_batch.sh --run-id "title_v7_full_$(date +%Y-%m-%d_%H-%M-%S)" --execute -- --batch-size 25 --force-reclassify`
 
+Batch JSON artifacts are written under:
+`/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/classification/title_classification/batch_runs/`
+
 ### Check and retrieve completed output
-`bin/linux/classification/run_title_classification_batch.sh --mode check --run-dir "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/batch_runs/<run_id>" --retrieve-output`
+`bin/linux/classification/run_title_classification_batch.sh --mode check --run-dir "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/classification/title_classification/batch_runs/<run_id>" --retrieve-output`
 
 ### Apply retrieved output and refresh current/archive CSVs
-`bin/linux/classification/run_title_classification_batch.sh --mode apply --run-dir "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/batch_runs/<run_id>"`
+`bin/linux/classification/run_title_classification_batch.sh --mode apply --run-dir "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/classification/title_classification/batch_runs/<run_id>"`
 
 Windows users can call:
 `bin\windows\classification\run_title_classification_batch.bat`
@@ -66,6 +69,57 @@ Set `TITLE_CLASSIFICATIONS_DIR` to override the export folder for a one-off run.
 
 ### Smoke test (5 rows per talent + export)
 `bin/linux/classification/run_title_classification_weekly.sh --limit-per-talent 5`
+
+## `run_title_classification_scheduled.sh`
+Durable scheduled OpenAI Batch API lifecycle for production title classification.
+
+This is the preferred scheduled entrypoint. It is idempotent and keeps a pending
+state pointer in `classifications.duckdb`:
+
+`/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/classifications.duckdb`
+
+Table:
+`title_classification_scheduled_state`
+
+Lifecycle:
+
+1. Refresh title rows from DataLake video analytics into `notes/titles.csv`.
+2. Detect unclassified or newly changed videos from DuckDB using the current
+   taxonomy, prompt version, and model.
+3. Build a timestamped run directory under
+   `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/classification/title_classification/batch_runs/`.
+4. Write `batch_input.jsonl` with one video per Batch API request.
+5. Use stable `custom_id` values based on talent, `video_id`, and title hash.
+6. Upload the JSONL file and create an OpenAI Batch job.
+7. Save `batch_id`, `input_file_id`, status metadata, manifest, input JSONL,
+   and submit response in the run directory and DuckDB state table.
+8. On later runs, check the existing batch before building anything new.
+9. Retrieve `batch_output.jsonl` and `batch_errors.jsonl` when available.
+10. Parse output by `custom_id`, validate the existing title-classification
+    schema, apply successful rows to DuckDB, and refresh the current/archive CSV
+    exports.
+11. If any request fails or is missing, create a retry run containing only those
+    failed/missing `custom_id`s.
+12. Clear pending state only after a run has been applied and no retry is needed.
+
+Logs are written to
+`/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/classification/title_classification_scheduled/`
+and each run also gets `logs/scheduled.log` inside its run directory.
+
+### Run the scheduled lifecycle once
+`bin/linux/classification/run_title_classification_scheduled.sh`
+
+### Recommended cron entry
+Do not overwrite the existing crontab automatically. Add this manually with
+`crontab -e` if cron is preferred:
+
+`30 9 * * 2 cd /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data && bin/linux/classification/run_title_classification_scheduled.sh >> /mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/classification/title_classification_scheduled/cron.log 2>&1`
+
+Because Batch API jobs are asynchronous, running the scheduled wrapper more than
+once per week is useful. A daily check can retrieve/apply a batch after it
+finishes without submitting duplicates:
+
+`30 9 * * * cd /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data && bin/linux/classification/run_title_classification_scheduled.sh >> /mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/classification/title_classification_scheduled/cron.log 2>&1`
 
 ## `run_talent_profile_builder.sh`
 Wrapper for:

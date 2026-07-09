@@ -71,7 +71,7 @@ gdrive_talent_extract_report_description <- function(text, max_chars = 320) {
 }
 
 gdrive_talent_report_template_inventory <- function(repo_root) {
-  template_root <- file.path(repo_root, "templates", "reports")
+  template_root <- file.path(repo_root, "r_scripts", "notebooks", "reports")
   if (!dir.exists(template_root)) {
     return(gdrive_talent_empty_df(c(
       "template_key",
@@ -152,7 +152,7 @@ gdrive_talent_report_status <- function(has_rmd, html_count, plot_count, table_c
 
 gdrive_talent_report_status_reason <- function(has_rmd, html_count, plot_count, table_count) {
   if (!isTRUE(has_rmd)) {
-    return("No report Rmd or Qmd found under templates/reports.")
+    return("No report Rmd or Qmd found under r_scripts/notebooks/reports.")
   }
 
   if (html_count > 0 && (plot_count > 0 || table_count > 0)) {

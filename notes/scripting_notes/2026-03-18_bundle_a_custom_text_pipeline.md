@@ -128,7 +128,7 @@ Because paragraph-level generation still tended to sound prompt-by-prompt, a sec
 
 ## Report inclusion
 
-- `templates/reports/Bundle_A/Bundle_A.Rmd`
+- `r_scripts/notebooks/reports/Bundle_A/Bundle_A.Rmd`
 
 The template was updated so it can:
 

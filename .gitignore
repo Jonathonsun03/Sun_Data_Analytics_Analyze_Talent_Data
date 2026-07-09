@@ -15,6 +15,12 @@ __pycache__/
 templates/reports/Bundle_*/plots/
 templates/reports/Bundle_*/tables/
 templates/reports/Bundle_*/**/*.html
+r_scripts/notebooks/reports/Bundle_*/plots/
+r_scripts/notebooks/reports/Bundle_*/tables/
+r_scripts/notebooks/reports/Bundle_*/**/*.html
+r_scripts/notebooks/reports/*/plots/
+r_scripts/notebooks/reports/*/tables/
+r_scripts/notebooks/reports/**/*.html
 reports/**/*.html
 
 # Script-generated classification exports/logs
@@ -23,6 +29,7 @@ classification/output/*
 classification/output/title_classifications/*
 !classification/output/title_classifications/classification_export_gpt-5-mini_from_duckdb.csv
 !classification/output/title_classifications/classification_export_gpt-5-mini_v6_v6.csv
+logs/title_classification_scheduled/
 
 # Local fallback output directory used by subtitle scripts
 Output/

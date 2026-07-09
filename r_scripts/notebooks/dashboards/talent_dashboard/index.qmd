@@ -24,11 +24,12 @@ params:
 #| include: false
 
 knitr::opts_knit$set(root.dir = normalizePath(getwd(), winslash = "/", mustWork = TRUE))
-dashboard_render_dir <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
 
-source("../../../r_scripts/lib/dashboard/dashboard_dependencies.R")
-source("../../../r_scripts/lib/dashboard/dashboard_data.R")
-source("../../../r_scripts/lib/dashboard/dashboard_sections.R")
+library(here)
+
+source(here::here("r_scripts", "lib", "dashboard", "dashboard_dependencies.R"))
+source(here::here("r_scripts", "lib", "dashboard", "dashboard_data.R"))
+source(here::here("r_scripts", "lib", "dashboard", "dashboard_sections.R"))
 
 dashboard_data <- build_creator_dashboard_data(
   talent = params$talent,
@@ -471,11 +472,4 @@ cat(
   "- When more than one rule could apply in the momentum plot, Bundle E labels the video in this order: Re-accelerating, then Evergreen, then Front-loaded, then Other.\n",
   sep = ""
 )
-```
-
-```{r}
-#| label: restore-render-dir
-#| include: false
-
-setwd(dashboard_render_dir)
 ```

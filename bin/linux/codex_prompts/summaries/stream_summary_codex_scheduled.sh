@@ -1,10 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="${REPO:-$HOME/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data}"
-DATA_ROOT="${DATA_ROOT:-/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data}"
+# Load repo .env defaults without overriding already-exported values.
+_ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+while [[ "${_ENV_ROOT}" != "/" ]]; do
+  if [[ -f "${_ENV_ROOT}/AGENTS.md" && -d "${_ENV_ROOT}/r_scripts" ]]; then
+    break
+  fi
+  _ENV_ROOT="$(dirname "${_ENV_ROOT}")"
+done
+if [[ -f "${_ENV_ROOT}/bin/linux/load_repo_env.sh" ]]; then
+  # shellcheck source=/dev/null
+  source "${_ENV_ROOT}/bin/linux/load_repo_env.sh"
+  load_repo_env "${_ENV_ROOT}"
+fi
+unset _ENV_ROOT
+
+REPO="${REPO:-${TALENT_REPO_ROOT:-$HOME/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data}}"
+TALENT_DATA_ROOT="${TALENT_DATALAKE_ROOT:-/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data}"
+ANALYTICS_ROOT="${TALENT_DATA_ROOT%/Talent_data}"
+DATA_ROOT="${DATA_ROOT:-${TALENT_DATA_ROOT}}"
 RUNNER="${RUNNER:-$REPO/bin/linux/codex_prompts/summaries/stream_summary_codex.sh}"
-LOG_DIR="${LOG_DIR:-/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/codex_prompts/summaries/stream_summary_codex_scheduled}"
+LOG_DIR="${LOG_DIR:-${ANALYTICS_ROOT}/Processed/Logs/codex_prompts/summaries/stream_summary_codex_scheduled}"
 LOCK_DIR="${LOCK_DIR:-/tmp/stream_summary_codex_scheduled.lock}"
 
 LIMIT="${STREAM_SUMMARY_LIMIT:-20}"

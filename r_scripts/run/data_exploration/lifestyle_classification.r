@@ -1,8 +1,15 @@
 library(tidyverse)
 library(dplyr)
 
+source("r_scripts/lib/utils/datalake_root.r")
 
-path <- "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/current/classification_export_current.csv"
+path <- file.path(
+  dirname(normalizePath(get_datalake_root(), winslash = "/", mustWork = FALSE)),
+  "Processed",
+  "Title_classification",
+  "current",
+  "classification_export_current.csv"
+)
 
 df <- read.csv(path)
 

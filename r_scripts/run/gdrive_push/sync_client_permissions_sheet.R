@@ -22,7 +22,7 @@ usage <- function() {
       "Usage:",
       "  Rscript r_scripts/run/gdrive_push/sync_client_permissions_sheet.R \\",
       "    [--config r_scripts/run/gdrive_push/config/config.yml] \\",
-      "    [--sheet SHEET_ID_OR_URL] [--datalake-root /mnt/datalake/...] \\",
+      "    [--sheet SHEET_ID_OR_URL] [--datalake-root \"$TALENT_DATALAKE_ROOT\"] \\",
       "    [--skip-talents] [--skip-reports] [--skip-schedule]",
       "",
       "Updates generated/control tabs in the client permissions spreadsheet:",

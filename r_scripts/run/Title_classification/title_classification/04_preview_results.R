@@ -68,26 +68,48 @@ cat("Rows by talent_profile for model ", model, ":\n", sep = "")
 print(by_profile)
 cat("\n")
 
+latest_video <- DBI::dbGetQuery(
+  con,
+  "SELECT
+     MAX(v.published_at) AS most_recent_video_published_at,
+     COUNT(DISTINCT c.video_id) AS classified_videos_with_model
+   FROM classifications c
+   LEFT JOIN videos v
+     ON c.video_id = v.video_id
+    AND c.talent_id = v.talent_id
+   WHERE c.model = ?",
+  params = list(model)
+)
+cat("Most recent video date included for model ", model, ":\n", sep = "")
+print(latest_video)
+cat("\n")
+
 sample_rows <- DBI::dbGetQuery(
   con,
   sprintf(
     "SELECT
-       video_id,
-       talent_profile,
-       model,
-       confidence,
-       collaborative_energy,
-       community_milestones,
-       interactive_entertainment,
-       meme_viral,
-       monetization,
-       narrative_serialization,
-       performance_artistry,
-       personality_conversation,
-       classification_json
-     FROM classifications
-     WHERE model = ?
-     ORDER BY created_at DESC
+       c.created_at,
+       v.published_at,
+       c.video_id,
+       v.title_raw,
+       c.talent_profile,
+       c.model,
+       c.confidence,
+       c.collaborative_energy,
+       c.community_milestones,
+       c.interactive_entertainment,
+       c.meme_viral,
+       c.monetization,
+       c.narrative_serialization,
+       c.performance_artistry,
+       c.personality_conversation,
+       c.classification_json
+     FROM classifications c
+     LEFT JOIN videos v
+       ON c.video_id = v.video_id
+      AND c.talent_id = v.talent_id
+     WHERE c.model = ?
+     ORDER BY c.created_at DESC
      LIMIT %d",
     as.integer(limit)
   ),
@@ -135,7 +157,10 @@ for (i in seq_len(nrow(sample_rows))) {
 }
 
 preview <- data.frame(
+  created_at = sample_rows$created_at,
+  published_at = sample_rows$published_at,
   video_id = sample_rows$video_id,
+  title_raw = sample_rows$title_raw,
   talent_profile = sample_rows$talent_profile,
   model = sample_rows$model,
   confidence = sample_rows$confidence,

@@ -97,7 +97,7 @@ args <- commandArgs(trailingOnly = TRUE)
 render_generated_at <- format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")
 render_cli <- paste(args, collapse = " ")
 
-input_rmd <- rr_arg_value(args, "--input", repo_path("templates", "reports", "bundle_g", "bundle_g.qmd"))
+input_rmd <- rr_arg_value(args, "--input", repo_path("r_scripts", "notebooks", "reports", "bundle_g", "bundle_g.qmd"))
 input_rmd <- resolve_repo_or_abs(input_rmd)
 if (!file.exists(input_rmd)) {
   stop("Input document not found: ", input_rmd)

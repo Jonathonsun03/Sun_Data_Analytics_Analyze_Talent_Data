@@ -1,0 +1,13 @@
+---
+
+
+---
+
+# General thoughts
+My thought is that relevant tags for debut will be a mix of what is currently going on related to vtubers, and a combination of what is working for vtubers. 
+
+Methodologically I think I need to first identify all Vtuber debuts that I can. 
+
+After I identify all vtuber debuts, I need to sort them by ascending desceding. Some of these vtubers will benefit from being in a corporation and other latent benefits. It will be unclear to me, what kind of preparation went into the vtuber debut, so I won't be able to control for those variables. Basically though it seems like I would need to ran a ANOVA to do a categorical comparison of the possible variables that contirbute to the total views. I need to extract what tags are useful and what tags are not useful. 
+
+So basically what I'm getting from this is I need to do a forward facing trajectory and a backward trajectory. The backward trajectory 

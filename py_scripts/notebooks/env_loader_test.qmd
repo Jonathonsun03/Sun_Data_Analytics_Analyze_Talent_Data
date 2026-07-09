@@ -1,0 +1,85 @@
+---
+title: "Python Env Loader Test"
+format: html
+execute:
+  echo: true
+  warning: false
+---
+
+```{python}
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+
+def find_repo_root(start: Path | None = None) -> Path:
+    current = (start or Path.cwd()).resolve()
+    for candidate in (current, *current.parents):
+        if (
+            (candidate / "AGENTS.md").exists()
+            and (candidate / "r_scripts").is_dir()
+            and (candidate / "py_scripts").is_dir()
+        ):
+            return candidate
+    raise RuntimeError(f"Could not locate repository root from: {current}")
+
+
+repo_root = find_repo_root()
+sys.path.insert(0, str(repo_root))
+```
+
+```{python}
+from py_scripts.lib.utils.env import load_repo_env
+from py_scripts.lib.utils.paths import default_talent_root, processed_root
+
+
+tracked_names = (
+    "CODEX_ENV_LOADER_TEST",
+    "CODEX_ENV_LOADER_EXISTING",
+    "TALENT_REPO_ROOT",
+    "TALENT_DATALAKE_ROOT",
+    "TALENT_PROCESSED_ROOT",
+)
+old_values = {name: os.environ.get(name) for name in tracked_names}
+
+try:
+    temp_root = Path(tempfile.mkdtemp(prefix="repo-env-notebook-"))
+    (temp_root / ".env").write_text(
+        "\n".join(
+            (
+                "CODEX_ENV_LOADER_TEST=from_python_notebook_env",
+                "CODEX_ENV_LOADER_EXISTING=from_env_file",
+                "TALENT_DATALAKE_ROOT=/tmp/python-notebook-talent-root",
+                "TALENT_PROCESSED_ROOT=/tmp/python-notebook-processed-root",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    os.environ["CODEX_ENV_LOADER_EXISTING"] = "already_exported"
+    os.environ["TALENT_REPO_ROOT"] = str(temp_root)
+    for name in ("CODEX_ENV_LOADER_TEST", "TALENT_DATALAKE_ROOT", "TALENT_PROCESSED_ROOT"):
+        os.environ.pop(name, None)
+
+    load_repo_env(repo_root=temp_root)
+
+    assert os.environ["CODEX_ENV_LOADER_TEST"] == "from_python_notebook_env"
+    assert os.environ["CODEX_ENV_LOADER_EXISTING"] == "already_exported"
+    assert str(default_talent_root()) == "/tmp/python-notebook-talent-root"
+    assert str(processed_root()) == "/tmp/python-notebook-processed-root"
+
+    [
+        {"check": "loads values from .env", "status": "pass"},
+        {"check": "preserves exported values", "status": "pass"},
+        {"check": "default_talent_root uses .env", "status": "pass"},
+        {"check": "processed_root uses .env", "status": "pass"},
+    ]
+finally:
+    for name, value in old_values.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
+```

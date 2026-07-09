@@ -42,6 +42,30 @@ init_duckdb_schema <- function(con) {
     "ALTER TABLE classifications
      ADD COLUMN IF NOT EXISTS talent_profile TEXT"
   )
+
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE IF NOT EXISTS title_classification_scheduled_state (
+       state_key TEXT,
+       run_dir TEXT,
+       manifest_path TEXT,
+       batch_id TEXT,
+       input_file_id TEXT,
+       output_file_id TEXT,
+       error_file_id TEXT,
+       status TEXT,
+       created_at TEXT,
+       submitted_at TEXT,
+       last_checked_at TEXT,
+       applied_at TEXT,
+       request_count BIGINT,
+       pending_rows BIGINT,
+       artifacts_json TEXT,
+       state_json TEXT,
+       updated_at TEXT,
+       UNIQUE(state_key)
+     )"
+  )
 }
 
 ensure_classification_boolean_columns <- function(con, column_names) {

@@ -38,7 +38,7 @@ Dashboard data assembly:
 
 Dashboard page usage:
 
-- `templates/dashboards/talent_dashboard/index.qmd`
+- `r_scripts/notebooks/dashboards/talent_dashboard/index.qmd`
 
 Main functions:
 

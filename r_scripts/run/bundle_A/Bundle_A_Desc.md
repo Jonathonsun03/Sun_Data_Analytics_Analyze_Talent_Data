@@ -60,7 +60,7 @@ Weekend vs weekday distribution, day-of-week contribution, collaboration effecti
 - Talent-level staging data must be available under the configured staging root.
 - Required source domains: analytics, monetary, and demographics for each talent.
 - Title classification export must be available for content-type/topic/tag enrichment.
-- Expected report template: `templates/reports/Bundle_A/Bundle_A.Rmd`.
+- Expected report template: `r_scripts/notebooks/reports/Bundle_A/Bundle_A.Rmd`.
 
 ### 8) Rendering Bundle A
 - Preferred wrapper (artifacts + interpretations + final report):
@@ -84,7 +84,7 @@ Weekend vs weekday distribution, day-of-week contribution, collaboration effecti
 - Custom output filename prefix:
   `Rscript r_scripts/run/bundle_A/render_bundle_A.R --talent Ava --output-prefix Bundle_A_client_v1`
 - Custom input Rmd:
-  `Rscript r_scripts/run/bundle_A/render_bundle_A.R --input templates/reports/Bundle_A/Bundle_A.Rmd --talent Ava`
+  `Rscript r_scripts/run/bundle_A/render_bundle_A.R --input r_scripts/notebooks/reports/Bundle_A/Bundle_A.Rmd --talent Ava`
 - Quiet render:
   `Rscript r_scripts/run/bundle_A/render_bundle_A.R --talent Ava --quiet`
 

@@ -1,6 +1,6 @@
 # Bundle A Wrap-up TODO
 
-Status: Removed from `templates/reports/Bundle_A/Bundle_A.Rmd` and pending custom client-facing write-up.
+Status: Removed from `r_scripts/notebooks/reports/Bundle_A/Bundle_A.Rmd` and pending custom client-facing write-up.
 
 ## What still needs to be updated
 
