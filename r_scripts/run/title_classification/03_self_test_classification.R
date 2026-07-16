@@ -7,7 +7,7 @@ tc_get_script_dir <- function() {
   normalizePath(getwd(), winslash = "/", mustWork = FALSE)
 }
 
-tc_repo_root <- normalizePath(file.path(tc_get_script_dir(), "..", "..", "..", ".."), winslash = "/", mustWork = FALSE)
+tc_repo_root <- rprojroot::find_root(rprojroot::is_git_root, path = tc_get_script_dir())
 tc_repo_path <- function(...) normalizePath(file.path(tc_repo_root, ...), winslash = "/", mustWork = FALSE)
 
 assert_true <- function(condition, message) {

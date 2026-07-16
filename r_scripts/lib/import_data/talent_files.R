@@ -100,6 +100,40 @@ infer_snapshot_type_key <- function(path) {
   enc2utf8(base)
 }
 
+latest_talent_snapshot_path <- function(talent_path, snapshot_type) {
+  snapshot_paths <- list_talent_snapshot_files(talent_path)
+  if (length(snapshot_paths) == 0) {
+    stop("No CSV snapshots found for talent: ", basename(talent_path))
+  }
+
+  snapshot_types <- vapply(
+    snapshot_paths,
+    infer_snapshot_type_key,
+    character(1)
+  )
+  candidates <- snapshot_paths[snapshot_types == snapshot_type]
+  if (length(candidates) == 0) {
+    stop(
+      "No `", snapshot_type, "` snapshots found for talent: ",
+      basename(talent_path)
+    )
+  }
+
+  snapshot_dates <- suppressWarnings(as.Date(
+    stringr::str_extract(basename(candidates), "\\d{4}-\\d{2}-\\d{2}")
+  ))
+  modification_times <- file.info(candidates)$mtime
+  newest_first <- order(
+    snapshot_dates,
+    modification_times,
+    basename(candidates),
+    decreasing = TRUE,
+    na.last = TRUE
+  )
+
+  candidates[[newest_first[[1]]]]
+}
+
 TalentFiles <- function(Paths) {
   if (is.character(Paths)) {
     # 1. Decode the parent directory path first

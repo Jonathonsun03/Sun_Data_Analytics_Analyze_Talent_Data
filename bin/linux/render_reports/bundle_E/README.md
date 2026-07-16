@@ -73,8 +73,8 @@ bin/linux/render_reports/bundle_E/run_bundle_E_full_pipeline.sh
 
 Bundle E currently runs:
 
-1. artifact generation via `r_scripts/run/bundle_e/import_data.R`
-2. report rendering via `r_scripts/run/bundle_e/render_bundle_e.R`
+1. artifact generation via `r_scripts/run/bundles/bundle_e/import_data.R`
+2. report rendering via `r_scripts/run/bundles/bundle_e/render_bundle_e.R`
 
 It does not yet have separate interpretation or editorial rewrite stages in the
 Linux wrapper tree. The full-pipeline wrapper accepts no-interpretation and skip

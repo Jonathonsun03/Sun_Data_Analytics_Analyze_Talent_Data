@@ -1,8 +1,8 @@
 ena_precoding_repo_root <- function(start = getwd()) {
   current <- normalizePath(start, winslash = "/", mustWork = FALSE)
   repeat {
-    if (file.exists(file.path(current, "AGENTS.md")) &&
-        dir.exists(file.path(current, "r_scripts"))) {
+    git_marker <- file.path(current, ".git")
+    if (dir.exists(git_marker) || file.exists(git_marker)) {
       return(current)
     }
     parent <- dirname(current)

@@ -784,12 +784,12 @@ def build_outputs(args: argparse.Namespace) -> dict:
         "title_classifications_path": str(titles_path),
         "render_examples": {
             "bundle_a": (
-                "Rscript r_scripts/run/bundle_A/render_bundle_A.R "
+                "Rscript r_scripts/run/bundles/bundle_A/render_bundle_A.R "
                 f"--talent \"{args.talent_name}\" --data-source datalake "
                 f"--titles-path \"{titles_path}\""
             ),
             "bundle_b": (
-                "Rscript r_scripts/run/bundle_B/render_bundle_B.R "
+                "Rscript r_scripts/run/bundles/bundle_B/render_bundle_B.R "
                 f"--talent \"{args.talent_name}\" --data-source datalake "
                 f"--titles-path \"{titles_path}\""
             ),

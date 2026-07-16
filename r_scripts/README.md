@@ -7,12 +7,12 @@ This directory contains the repository's maintained R code.
 - `r_scripts/lib/`
   - shared R helpers for data loading, cleaning, DuckDB, prompt assembly, report rendering, and stream summarization
 - `r_scripts/run/`
-  - runnable R entrypoints for title classification, subtitle cleaning, text replay, stream summarization, and report bundles
+  - runnable R entrypoints grouped by workflow
 
 ## Key workflows
 
 - Title classification
-  - entrypoints live under `r_scripts/run/Title_classification/`
+  - entrypoints live under `r_scripts/run/title_classification/`
   - shared DuckDB and prompt helpers live under `r_scripts/lib/duckdb/` and `r_scripts/lib/stream_classification/`
 - Subtitle cleaning and text replay
   - entrypoints live under `r_scripts/run/Subtitle_clean/` and `r_scripts/run/text_replay/`
@@ -20,7 +20,7 @@ This directory contains the repository's maintained R code.
   - the maintained runner is `r_scripts/run/Text_Replay_Analysis/Text_replay_analysis_openAI`
   - shared summarization helpers live under `r_scripts/lib/stream_summaries/`
 - Report bundles
-  - renderers live under `r_scripts/run/bundle_A/`, `r_scripts/run/bundle_B/`, `r_scripts/run/bundle_e/`, and `r_scripts/run/bundle_f/`
+  - renderers live under `r_scripts/run/bundles/`
 
 ## Python split
 
@@ -33,4 +33,5 @@ Python stream-summary analysis runners no longer live here.
 
 - Put new reusable R code in `r_scripts/lib/`.
 - Put new runnable R entrypoints in `r_scripts/run/`.
+- Resolve repository-relative paths from the `.git` root rather than relying on RStudio or the current working directory.
 - Keep Python code in `py_scripts/`, not under `r_scripts/`.

@@ -1,4 +1,4 @@
-repo_env_repo_root <- function(repo_root = NULL) {
+repo_env_repo_root <- function(repo_root = NULL, start = getwd()) {
   if (!is.null(repo_root) && nzchar(repo_root)) {
     return(normalizePath(repo_root, winslash = "/", mustWork = FALSE))
   }
@@ -8,23 +8,25 @@ repo_env_repo_root <- function(repo_root = NULL) {
     return(normalizePath(env_root, winslash = "/", mustWork = FALSE))
   }
 
-  start <- normalizePath(getwd(), winslash = "/", mustWork = FALSE)
-  candidates <- c(start, dirname(start))
-  while (!identical(tail(candidates, 1), dirname(tail(candidates, 1)))) {
-    candidates <- c(candidates, dirname(tail(candidates, 1)))
+  current <- normalizePath(start, winslash = "/", mustWork = FALSE)
+  if (file.exists(current) && !dir.exists(current)) {
+    current <- dirname(current)
   }
 
-  for (candidate in unique(candidates)) {
-    if (
-      file.exists(file.path(candidate, "AGENTS.md")) &&
-        dir.exists(file.path(candidate, "r_scripts")) &&
-        dir.exists(file.path(candidate, "py_scripts"))
-    ) {
-      return(candidate)
+  repeat {
+    git_marker <- file.path(current, ".git")
+    if (dir.exists(git_marker) || file.exists(git_marker)) {
+      return(current)
     }
+
+    parent <- dirname(current)
+    if (identical(parent, current)) {
+      break
+    }
+    current <- parent
   }
 
-  stop("Could not locate repository root from working directory: ", getwd(), call. = FALSE)
+  stop("Could not locate Git repository root from: ", start, call. = FALSE)
 }
 
 repo_env_name <- function(line) {
@@ -51,6 +53,7 @@ load_repo_env <- function(repo_root = NULL, env_file = ".env", override = FALSE)
   }
   if (!file.exists(env_path)) {
     repo_env_loaded_paths[[env_key]] <- TRUE
+    repo_env_apply_aliases(override = override)
     return(invisible(env_path))
   }
 
@@ -74,6 +77,21 @@ load_repo_env <- function(repo_root = NULL, env_file = ".env", override = FALSE)
     readRenviron(temp_env)
   }
 
+  repo_env_apply_aliases(override = override)
   repo_env_loaded_paths[[env_key]] <- TRUE
   invisible(env_path)
+}
+
+repo_env_apply_aliases <- function(override = FALSE) {
+  apply_alias <- function(canonical, alias) {
+    canonical_value <- Sys.getenv(canonical, unset = "")
+    alias_value <- Sys.getenv(alias, unset = "")
+    if ((override || !nzchar(canonical_value)) && nzchar(alias_value)) {
+      do.call(Sys.setenv, stats::setNames(list(alias_value), canonical))
+    }
+  }
+
+  apply_alias("TALENT_DATALAKE_ROOT", "TALENT_DATA_ROOT")
+  apply_alias("TALENT_STAGING_ROOT", "STAGING_ROOT")
+  invisible(NULL)
 }

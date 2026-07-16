@@ -7,7 +7,7 @@ tp_get_script_dir <- function() {
   normalizePath(getwd(), winslash = "/", mustWork = FALSE)
 }
 
-tp_repo_root <- normalizePath(file.path(tp_get_script_dir(), "..", "..", "..", ".."), winslash = "/", mustWork = FALSE)
+tp_repo_root <- rprojroot::find_root(rprojroot::is_git_root, path = tp_get_script_dir())
 tp_repo_path <- function(...) normalizePath(file.path(tp_repo_root, ...), winslash = "/", mustWork = FALSE)
 
 source(tp_repo_path("r_scripts", "lib", "stream_classification", "talent_profile", "load_all.R"))

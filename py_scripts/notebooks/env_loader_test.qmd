@@ -13,20 +13,18 @@ import tempfile
 from pathlib import Path
 
 
-def find_repo_root(start: Path | None = None) -> Path:
-    current = (start or Path.cwd()).resolve()
-    for candidate in (current, *current.parents):
-        if (
-            (candidate / "AGENTS.md").exists()
-            and (candidate / "r_scripts").is_dir()
-            and (candidate / "py_scripts").is_dir()
-        ):
-            return candidate
-    raise RuntimeError(f"Could not locate repository root from: {current}")
-
-
-repo_root = find_repo_root()
+current = Path.cwd().resolve()
+repo_root = next(
+    candidate
+    for candidate in (current, *current.parents)
+    if (candidate / ".git").exists()
+)
 sys.path.insert(0, str(repo_root))
+
+from py_scripts.lib.utils.repo_paths import find_repo_root
+
+
+repo_root = find_repo_root(current)
 ```
 
 ```{python}

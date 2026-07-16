@@ -2,8 +2,10 @@
 .Rproj.user
 *.json
 *.txt
+!py_scripts/requirements.txt
 
 # Local runtime and cache artifacts
+.venv/
 .Rhistory
 .RData
 .Ruserdata
@@ -12,6 +14,8 @@ __pycache__/
 *.py[cod]
 
 # Script-generated report artifacts
+*_files/
+site_libs/
 templates/reports/Bundle_*/plots/
 templates/reports/Bundle_*/tables/
 templates/reports/Bundle_*/**/*.html

@@ -311,7 +311,7 @@ tables_dir <- file.path(artifact_root, "tables")
 if (!dir.exists(tables_dir)) {
   stop(
     "Bundle E artifact tables not found: ", tables_dir, ". ",
-    "Run `r_scripts/run/bundle_e/import_data.R` first."
+    "Run `r_scripts/run/bundles/bundle_e/import_data.R` first."
   )
 }
 

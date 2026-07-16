@@ -4,7 +4,7 @@ set -euo pipefail
 # Load repo .env defaults without overriding already-exported values.
 _ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 while [[ "${_ENV_ROOT}" != "/" ]]; do
-  if [[ -f "${_ENV_ROOT}/AGENTS.md" && -d "${_ENV_ROOT}/r_scripts" ]]; then
+  if [[ -e "${_ENV_ROOT}/.git" ]]; then
     break
   fi
   _ENV_ROOT="$(dirname "${_ENV_ROOT}")"
@@ -31,7 +31,7 @@ CODEBOOK_SCOPE="current"
 DRY_RUN_SCOPE="false"
 REPROCESS_SCOPE="false"
 
-TALENT_DATA_ROOT_FOR_LOGS="${TALENT_DATALAKE_ROOT:-/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data}"
+TALENT_DATA_ROOT_FOR_LOGS="${TALENT_DATALAKE_ROOT:?Set TALENT_DATA_ROOT or TALENT_DATALAKE_ROOT in .env}"
 ANALYTICS_ROOT_FOR_LOGS="${TALENT_DATA_ROOT_FOR_LOGS%/Talent_data}"
 LOG_ROOT="${CODEX_PROMPTS_LOG_ROOT:-${ANALYTICS_ROOT_FOR_LOGS}/Processed/Logs/codex_prompts}"
 LOG_DIR="$LOG_ROOT/qualitative_coding/monetary_conversation"
@@ -204,8 +204,8 @@ cp "$PROMPT_FILE" "$RUN_PROMPT_FILE"
   echo "- Repository: $REPO"
   echo "- Prompt wrapper: $PROMPT_FILE"
   echo "- Talent query: $TALENT_SCOPE"
-  echo "- Do not search all of /mnt/datalake."
-  echo "- Resolve talent folders only under: /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data"
+  echo "- Do not search outside the configured data lake root."
+  echo "- Resolve talent folders only under: ${TALENT_DATALAKE_ROOT}"
   echo "- Prepared transcript folder under each talent: qualitative coding/$CODING_FOLDER_SCOPE"
   echo "- For dry-run inspection, do not call python or pandas. Use shell tools or Rscript with existing project helpers."
   echo "- Codebook selector: $CODEBOOK_SCOPE"

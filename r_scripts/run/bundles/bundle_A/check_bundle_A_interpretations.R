@@ -16,8 +16,8 @@ has_flag <- function(args, flag) {
 
 usage <- function() {
   cat(
-    "Usage: Rscript r_scripts/run/bundle_A/check_bundle_A_interpretations.R --output-dir DIR\n",
-    "       Rscript r_scripts/run/bundle_A/check_bundle_A_interpretations.R --interpret-root DIR\n",
+    "Usage: Rscript r_scripts/run/bundles/bundle_A/check_bundle_A_interpretations.R --output-dir DIR\n",
+    "       Rscript r_scripts/run/bundles/bundle_A/check_bundle_A_interpretations.R --interpret-root DIR\n",
     sep = ""
   )
 }

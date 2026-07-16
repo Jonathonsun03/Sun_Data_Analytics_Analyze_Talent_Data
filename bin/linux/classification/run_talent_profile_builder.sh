@@ -4,7 +4,7 @@ set -euo pipefail
 # Load repo .env defaults without overriding already-exported values.
 _ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 while [[ "${_ENV_ROOT}" != "/" ]]; do
-  if [[ -f "${_ENV_ROOT}/AGENTS.md" && -d "${_ENV_ROOT}/r_scripts" ]]; then
+  if [[ -e "${_ENV_ROOT}/.git" ]]; then
     break
   fi
   _ENV_ROOT="$(dirname "${_ENV_ROOT}")"
@@ -16,12 +16,12 @@ if [[ -f "${_ENV_ROOT}/bin/linux/load_repo_env.sh" ]]; then
 fi
 unset _ENV_ROOT
 
-# Runs r_scripts/run/Title_classification/talent_profile/build_talent_profile.R from repo root.
+# Runs r_scripts/run/title_classification/talent_profile/build_talent_profile.R from repo root.
 # Passes all CLI arguments through to the R script.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-R_SCRIPT="r_scripts/run/Title_classification/talent_profile/build_talent_profile.R"
+R_SCRIPT="r_scripts/run/title_classification/talent_profile/build_talent_profile.R"
 
 usage() {
   cat <<'EOF'
@@ -30,7 +30,7 @@ Usage:
 
 Description:
   Wrapper for the talent profile builder R script:
-  r_scripts/run/Title_classification/talent_profile/build_talent_profile.R
+  r_scripts/run/title_classification/talent_profile/build_talent_profile.R
 
 Examples:
   Single talent:

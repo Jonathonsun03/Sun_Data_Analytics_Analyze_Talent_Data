@@ -68,25 +68,25 @@ Weekend vs weekday distribution, day-of-week contribution, collaboration effecti
 - Render-only wrapper:
   `bin/linux/render_reports/bundle_A/run_bundle_A_render_only.sh --talent Ava --window-days 90`
 - Single talent:
-  `Rscript r_scripts/run/bundle_A/render_bundle_A.R --talent Ava`
+  `Rscript r_scripts/run/bundles/bundle_A/render_bundle_A.R --talent Ava`
 - Single talent + days-back window:
-  `Rscript r_scripts/run/bundle_A/render_bundle_A.R --talent Ava --window-days 90`
+  `Rscript r_scripts/run/bundles/bundle_A/render_bundle_A.R --talent Ava --window-days 90`
 - Batch (comma-separated):
-  `Rscript r_scripts/run/bundle_A/render_bundle_A.R --talents "Ava,Avaritia"`
+  `Rscript r_scripts/run/bundles/bundle_A/render_bundle_A.R --talents "Ava,Avaritia"`
 - Batch from file (one talent per line):
-  `Rscript r_scripts/run/bundle_A/render_bundle_A.R --talents-file notes/talent_list.txt`
+  `Rscript r_scripts/run/bundles/bundle_A/render_bundle_A.R --talents-file notes/talent_list.txt`
 - Render all available talents:
-  `Rscript r_scripts/run/bundle_A/render_bundle_A.R --all`
+  `Rscript r_scripts/run/bundles/bundle_A/render_bundle_A.R --all`
 - Default output routing for direct runs:
   `<datalake_root>/<talent>/reports/bundle_A/`
 - Custom output directory:
-  `Rscript r_scripts/run/bundle_A/render_bundle_A.R --talent Ava --output-dir /path/to/output`
+  `Rscript r_scripts/run/bundles/bundle_A/render_bundle_A.R --talent Ava --output-dir /path/to/output`
 - Custom output filename prefix:
-  `Rscript r_scripts/run/bundle_A/render_bundle_A.R --talent Ava --output-prefix Bundle_A_client_v1`
+  `Rscript r_scripts/run/bundles/bundle_A/render_bundle_A.R --talent Ava --output-prefix Bundle_A_client_v1`
 - Custom input Rmd:
-  `Rscript r_scripts/run/bundle_A/render_bundle_A.R --input r_scripts/notebooks/reports/Bundle_A/Bundle_A.Rmd --talent Ava`
+  `Rscript r_scripts/run/bundles/bundle_A/render_bundle_A.R --input r_scripts/notebooks/reports/Bundle_A/Bundle_A.Rmd --talent Ava`
 - Quiet render:
-  `Rscript r_scripts/run/bundle_A/render_bundle_A.R --talent Ava --quiet`
+  `Rscript r_scripts/run/bundles/bundle_A/render_bundle_A.R --talent Ava --quiet`
 
 Common window presets:
 - 90 days: `--window-days 90`

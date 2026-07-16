@@ -4,7 +4,7 @@ set -euo pipefail
 # Load repo .env defaults without overriding already-exported values.
 _ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 while [[ "${_ENV_ROOT}" != "/" ]]; do
-  if [[ -f "${_ENV_ROOT}/AGENTS.md" && -d "${_ENV_ROOT}/r_scripts" ]]; then
+  if [[ -e "${_ENV_ROOT}/.git" ]]; then
     break
   fi
   _ENV_ROOT="$(dirname "${_ENV_ROOT}")"
@@ -26,7 +26,7 @@ SINCE_DATE=""
 UNTIL_DATE=""
 PROFILE_DAYS="31"
 INCLUDE_STALE_PROFILES=0
-TALENT_DATA_ROOT_FOR_LOGS="${TALENT_DATALAKE_ROOT:-/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data}"
+TALENT_DATA_ROOT_FOR_LOGS="${TALENT_DATALAKE_ROOT:?Set TALENT_DATA_ROOT or TALENT_DATALAKE_ROOT in .env}"
 ANALYTICS_ROOT_FOR_LOGS="${TALENT_DATA_ROOT_FOR_LOGS%/Talent_data}"
 LOG_ROOT="${CODEX_PROMPTS_LOG_ROOT:-${ANALYTICS_ROOT_FOR_LOGS}/Processed/Logs/codex_prompts}"
 LOG_DIR="$LOG_ROOT/shared_qualities/shared_behavior_baseline"

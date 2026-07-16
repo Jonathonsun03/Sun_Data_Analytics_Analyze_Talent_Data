@@ -4,7 +4,7 @@ set -euo pipefail
 # Load repo .env defaults without overriding already-exported values.
 _ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 while [[ "${_ENV_ROOT}" != "/" ]]; do
-  if [[ -f "${_ENV_ROOT}/AGENTS.md" && -d "${_ENV_ROOT}/r_scripts" ]]; then
+  if [[ -e "${_ENV_ROOT}/.git" ]]; then
     break
   fi
   _ENV_ROOT="$(dirname "${_ENV_ROOT}")"
@@ -21,7 +21,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 INTERNAL_DIR="${SCRIPT_DIR}/internal"
 PREPARE_RUNNER="${INTERNAL_DIR}/prepare_transcript_python.sh"
 DIRECT_RUNNER="${INTERNAL_DIR}/code_qualitative_transcripts.sh"
-DEFAULT_RUN_ROOT="/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/qualitative_batch_runs"
+DEFAULT_RUN_ROOT="${TALENT_DATALAKE_ROOT%/Talent_data}/Processed/Talent_Data/qualitative_batch_runs"
 
 RUN_ROOT="${QUALITATIVE_BATCH_RUN_ROOT:-$DEFAULT_RUN_ROOT}"
 RUN_ID=""

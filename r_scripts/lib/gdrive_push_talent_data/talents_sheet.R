@@ -2,7 +2,8 @@ gdrive_talent_repo_root <- function(start = getwd()) {
   cur <- normalizePath(start, winslash = "/", mustWork = FALSE)
 
   repeat {
-    if (file.exists(file.path(cur, "Sun_Data_Analytics_Analyze_Talent_Data.Rproj"))) {
+    git_marker <- file.path(cur, ".git")
+    if (dir.exists(git_marker) || file.exists(git_marker)) {
       return(cur)
     }
 

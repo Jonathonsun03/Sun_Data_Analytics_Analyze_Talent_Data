@@ -1,0 +1,7 @@
+# Notebook execution in VS Code and Quarto
+ipykernel
+jupyter
+
+# Unified DuckDB notebook
+duckdb
+pandas

@@ -1,3 +1,12 @@
+bundle_script_args <- commandArgs(trailingOnly = FALSE)
+bundle_file_arg <- grep("^--file=", bundle_script_args, value = TRUE)
+bundle_start <- if (length(bundle_file_arg) > 0) {
+  dirname(normalizePath(sub("^--file=", "", bundle_file_arg[[1]]), winslash = "/", mustWork = FALSE))
+} else {
+  getwd()
+}
+setwd(rprojroot::find_root(rprojroot::is_git_root, path = bundle_start))
+
 library(tidyverse)
 library(here)
 library(purrr)

@@ -25,6 +25,9 @@ A list (one element per input folder) where each element is a list of data frame
 
 - Missing paths are warned and skipped.
 - The `date` column is parsed from the first `YYYY-MM-DD` found in the filename; if not found, `date` is `NA`.
+- `latest_talent_snapshot_path()` selects the newest file for one snapshot type,
+  using the filename date, modification time, and filename as deterministic
+  descending sort keys.
 
 ## Text Playback Stream Lookup
 

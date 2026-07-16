@@ -9,6 +9,39 @@ This folder contains Linux wrapper scripts that standardize how Bundle reports a
 - `run_bundle_G_report.sh`
 - `run_monthly_bundle_reports.sh`
 - `run_scheduled_reports.sh`
+- `run_variance_numbers.sh`
+
+## Variance Numbers
+
+Path: `bin/linux/render_reports/run_variance_numbers.sh`
+
+With no arguments, this wrapper renders the Variance Numbers notebook for
+Katya Sable, Leia Memoria, and Avaritia Hawthorne. Each self-contained HTML is
+written to the corresponding talent folder:
+
+```text
+<datalake_root>/<talent>/reports/variance_numbers/
+```
+
+Run all three defaults:
+
+```bash
+bash bin/linux/render_reports/run_variance_numbers.sh
+```
+
+Render one talent or check output routing without rendering:
+
+```bash
+bash bin/linux/render_reports/run_variance_numbers.sh \
+  --talent "Leia Memoria【Variance Project】"
+
+bash bin/linux/render_reports/run_variance_numbers.sh --dry-run
+```
+
+The wrapper checks all required R packages before rendering and prints one
+installation command if the project `renv` library is incomplete. Its strict
+Bash settings are isolated inside the child script and do not modify the
+calling terminal.
 
 These wrappers call the R render scripts, resolve roots, resolve talent folder names, and route outputs into the datalake structure.
 
@@ -180,7 +213,7 @@ in addition to the common talent, window, and data-source flags.
 
 ## Defaults (Bundle A)
 
-- Render script: `r_scripts/run/bundle_A/render_bundle_A.R`
+- Render script: `r_scripts/run/bundles/bundle_A/render_bundle_A.R`
 - Bundle name: `bundle_A`
 - Output prefix: `Bundle_A`
 - Report subdir: `reports`
@@ -267,14 +300,14 @@ That generator creates one dated file per snapshot:
 For synthetic/demo talents, render Bundles A and B directly with the R render scripts and pass the isolated title CSV through `--titles-path`:
 
 ```bash
-Rscript r_scripts/run/bundle_A/render_bundle_A.R \
+Rscript r_scripts/run/bundles/bundle_A/render_bundle_A.R \
   --talent "Northstar Story Lab Demo" \
   --data-source datalake \
   --titles-path "/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Northstar Story Lab Demo/reports/demo_inputs/demo_title_classifications.csv"
 ```
 
 ```bash
-Rscript r_scripts/run/bundle_B/render_bundle_B.R \
+Rscript r_scripts/run/bundles/bundle_B/render_bundle_B.R \
   --talent "Northstar Story Lab Demo" \
   --data-source datalake \
   --titles-path "/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/Northstar Story Lab Demo/reports/demo_inputs/demo_title_classifications.csv"
@@ -332,7 +365,7 @@ bin/linux/render_reports/run_bundle_G_report.sh \
 ```
 
 Bundle C is not currently runnable from the Linux report wrappers. The repo has
-`r_scripts/run/bundle_C/Bundle_C_Desc.md`, but there is not yet a
+`r_scripts/run/bundles/bundle_C/Bundle_C_Desc.md`, but there is not yet a
 `run_bundle_C_report.sh` wrapper or Bundle C report template.
 
 ```bash
@@ -423,7 +456,7 @@ Render script not found:
 
 - Main wrapper: `bin/linux/render_reports/run_bundle_B_report.sh`
 - Full pipeline wrapper: `bin/linux/render_reports/bundle_B/run_bundle_B_full_pipeline.sh`
-- Render script: `r_scripts/run/bundle_B/render_bundle_B.R`
+- Render script: `r_scripts/run/bundles/bundle_B/render_bundle_B.R`
 - Bundle name: `bundle_B`
 - Output prefix: `Bundle_B`
 - Report subdir: `reports`
@@ -443,7 +476,7 @@ Use `--help` on either wrapper for full flag details.
 Artifact builder:
 
 - Path: `bin/linux/render_reports/bundle_A/run_bundle_A_artifacts.sh`
-- Calls: `r_scripts/run/bundle_A/import_data.r`
+- Calls: `r_scripts/run/bundles/bundle_A/import_data.r`
 - Writes:
   - `<datalake_root>/<talent>/reports/bundle_A/artifacts/figures/`
   - `<datalake_root>/<talent>/reports/bundle_A/artifacts/tables/`
@@ -543,7 +576,7 @@ bin/linux/render_reports/run_bundle_A_report.sh \
 Artifact builder:
 
 - Path: `bin/linux/render_reports/bundle_B/run_bundle_B_artifacts.sh`
-- Calls: `r_scripts/run/bundle_B/import_data.r`
+- Calls: `r_scripts/run/bundles/bundle_B/import_data.r`
 - Writes:
   - `<datalake_root>/<talent>/reports/bundle_B/artifacts/figures/`
   - `<datalake_root>/<talent>/reports/bundle_B/artifacts/tables/`
@@ -577,7 +610,7 @@ Editorial rewrite:
 Render-only step:
 
 - Path: `bin/linux/render_reports/bundle_B/run_bundle_B_render_only.sh`
-- Calls: `r_scripts/run/bundle_B/render_bundle_B.R`
+- Calls: `r_scripts/run/bundles/bundle_B/render_bundle_B.R`
 - Writes final HTML into the same talent `reports/bundle_B` folder used by artifacts and interpretations
 
 Full pipeline wrapper:

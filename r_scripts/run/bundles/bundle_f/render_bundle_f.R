@@ -24,17 +24,14 @@ bootstrap_get_script_dir <- function() {
   normalizePath(getwd(), winslash = "/", mustWork = FALSE)
 }
 
-bootstrap_find_repo_root <- function(
-  start_dirs = c(bootstrap_get_script_dir(), getwd()),
-  marker_rel = file.path("r_scripts", "lib", "utils", "staging_root.R")
-) {
+bootstrap_find_repo_root <- function(start_dirs = c(bootstrap_get_script_dir(), getwd())) {
   starts <- unique(normalizePath(start_dirs, winslash = "/", mustWork = FALSE))
 
   for (start in starts) {
     current <- start
     repeat {
-      marker_path <- file.path(current, marker_rel)
-      if (file.exists(marker_path)) {
+      git_marker <- file.path(current, ".git")
+      if (dir.exists(git_marker) || file.exists(git_marker)) {
         return(current)
       }
       parent <- dirname(current)

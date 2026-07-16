@@ -8,11 +8,11 @@ This keeps reusable code centralized while allowing classification logic to evol
 
 ## Current Layout
 Entry points:
-- `r_scripts/run/Title_classification/title_classification/01_ingest_titles.R`
-- `r_scripts/run/Title_classification/title_classification/02_classify_pending_titles.R`
-- `r_scripts/run/Title_classification/title_classification/05_export_results_csv.R`
-- `r_scripts/run/Title_classification/talent_profile/build_talent_profile.R`
-- `r_scripts/run/Title_classification/talent_profile/sync_talent_profiles.R`
+- `r_scripts/run/title_classification/01_ingest_titles.R`
+- `r_scripts/run/title_classification/02_classify_pending_titles.R`
+- `r_scripts/run/title_classification/05_export_results_csv.R`
+- `r_scripts/run/title_classification/talent_profile/build_talent_profile.R`
+- `r_scripts/run/title_classification/talent_profile/sync_talent_profiles.R`
 
 Shared helpers:
 - `r_scripts/lib/duckdb/db_connect.R`
@@ -34,8 +34,8 @@ Prompt architecture:
 1. Build the `Classification` dataframe:
    - Columns: `Video ID`, `Title`, `Content Type`, `Published At`
 2. Set `Talent` to the talent selector used by `select_talent()`.
-3. Run `r_scripts/run/Title_classification/title_classification/01_ingest_titles.R` to upsert rows into DuckDB.
-4. Run `r_scripts/run/Title_classification/title_classification/02_classify_pending_titles.R` to classify pending titles:
+3. Run `r_scripts/run/title_classification/01_ingest_titles.R` to upsert rows into DuckDB.
+4. Run `r_scripts/run/title_classification/02_classify_pending_titles.R` to classify pending titles:
    - select talent profile from `talent_profiles.json`
    - compile prompt deterministically from:
      - base `system.txt`
@@ -78,25 +78,25 @@ Recommended workflow:
    - Required columns are equivalent to: talent, title, and content type.
    - A publish date column is helpful and should be included when available.
 2. Run the profile builder for one talent:
-   - `Rscript r_scripts/run/Title_classification/talent_profile/build_talent_profile.R --csv <path/to/titles.csv> --talent "<Talent Name>" --talent-col talent --title-col title --content-type-col content_type --write-overlay --update-master-config`
+   - `Rscript r_scripts/run/title_classification/talent_profile/build_talent_profile.R --csv <path/to/titles.csv> --talent "<Talent Name>" --talent-col talent --title-col title --content-type-col content_type --write-overlay --update-master-config`
 3. Review the generated profile assets:
    - `classification/config/talents/<talent_slug>.json`
    - `classification/prompts/talents/<talent_slug>/overlay.txt`
    - `classification/config/talent_profiles.json`
 4. If prompt folders were changed manually or you want to rebuild the matcher file from disk, run:
-   - `Rscript r_scripts/run/Title_classification/talent_profile/sync_talent_profiles.R`
+   - `Rscript r_scripts/run/title_classification/talent_profile/sync_talent_profiles.R`
 5. Run the local self-test before classifying production rows:
-   - `Rscript r_scripts/run/Title_classification/title_classification/03_self_test_classification.R`
+   - `Rscript r_scripts/run/title_classification/03_self_test_classification.R`
 
 All talents in one pass:
-- `Rscript r_scripts/run/Title_classification/talent_profile/build_talent_profile.R --csv notes/titles.csv --all-talents --talent-col talent --title-col "Title" --content-type-col "Content Type" --write-overlay --update-master-config`
+- `Rscript r_scripts/run/title_classification/talent_profile/build_talent_profile.R --csv notes/titles.csv --all-talents --talent-col talent --title-col "Title" --content-type-col "Content Type" --write-overlay --update-master-config`
 
 Optional canonical-name mapping file:
 - `--talent-map notes/talent_name_map.csv`
 - Expected columns: `source_talent,canonical_talent`
 
 GPT-assisted discovery is optional when you want a richer first-pass overlay:
-- `Rscript r_scripts/run/Title_classification/talent_profile/build_talent_profile.R --csv <path/to/titles.csv> --talent "<Talent Name>" --talent-col talent --title-col title --content-type-col content_type --write-overlay --update-master-config --use-gpt --sample-size 250 --model gpt-5-mini`
+- `Rscript r_scripts/run/title_classification/talent_profile/build_talent_profile.R --csv <path/to/titles.csv> --talent "<Talent Name>" --talent-col talent --title-col title --content-type-col content_type --write-overlay --update-master-config --use-gpt --sample-size 250 --model gpt-5-mini`
 
 GPT discovery prompt assets:
 - `classification/prompts/discovery/system.txt`

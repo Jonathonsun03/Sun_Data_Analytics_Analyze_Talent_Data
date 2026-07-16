@@ -36,7 +36,7 @@ Bundle B now follows the same customized-text pipeline pattern as Bundle A, incl
 Artifacts stage:
 
 - Script: `bin/linux/render_reports/bundle_B/run_bundle_B_artifacts.sh`
-- Calls: `r_scripts/run/bundle_B/import_data.r`
+- Calls: `r_scripts/run/bundles/bundle_B/import_data.r`
 - Writes:
   - `<datalake_root>/<talent>/reports/bundle_B/artifacts/figures/`
   - `<datalake_root>/<talent>/reports/bundle_B/artifacts/tables/`
@@ -68,7 +68,7 @@ Editorial rewrite stage:
 Render-only stage:
 
 - Script: `bin/linux/render_reports/bundle_B/run_bundle_B_render_only.sh`
-- Calls: `r_scripts/run/bundle_B/render_bundle_B.R`
+- Calls: `r_scripts/run/bundles/bundle_B/render_bundle_B.R`
 - Renders final HTML into the same `<datalake_root>/<talent>/reports/bundle_B/` folder
 
 Main wrapper:

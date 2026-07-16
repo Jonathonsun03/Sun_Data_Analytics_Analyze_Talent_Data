@@ -4,7 +4,7 @@ set -euo pipefail
 # Load repo .env defaults without overriding already-exported values.
 _ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 while [[ "${_ENV_ROOT}" != "/" ]]; do
-  if [[ -f "${_ENV_ROOT}/AGENTS.md" && -d "${_ENV_ROOT}/r_scripts" ]]; then
+  if [[ -e "${_ENV_ROOT}/.git" ]]; then
     break
   fi
   _ENV_ROOT="$(dirname "${_ENV_ROOT}")"
@@ -26,7 +26,7 @@ CHECK_RUNNER="${INTERNAL_DIR}/check_qualitative_batch.sh"
 EXPORT_REVIEW_RUNNER="${INTERNAL_DIR}/export_coding_review.sh"
 APPLY_RUNNER="${INTERNAL_DIR}/apply_qualitative_batch.sh"
 DIRECT_TEST_RUNNER="${INTERNAL_DIR}/run_direct_qualitative_coding_test.sh"
-DEFAULT_RUN_ROOT="/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/qualitative_batch_runs"
+DEFAULT_RUN_ROOT="${TALENT_DATALAKE_ROOT%/Talent_data}/Processed/Talent_Data/qualitative_batch_runs"
 
 MODE="build"
 RUN_ID=""
@@ -95,29 +95,29 @@ Run the whole Batch API flow and wait for output:
 Submit after reviewing the run folder:
   bin/linux/ena_precoding/run_qualitative_coding_batch.sh \
     --mode submit \
-    --run-dir "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/qualitative_batch_runs/<run_id>" \
+    --run-dir "${TALENT_DATALAKE_ROOT%/Talent_data}/Processed/Talent_Data/qualitative_batch_runs/<run_id>" \
     --execute
 
 Check and retrieve output later:
   bin/linux/ena_precoding/run_qualitative_coding_batch.sh \
     --mode check \
-    --run-dir "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/qualitative_batch_runs/<run_id>" \
+    --run-dir "${TALENT_DATALAKE_ROOT%/Talent_data}/Processed/Talent_Data/qualitative_batch_runs/<run_id>" \
     --retrieve-output
 
 Export review CSV after retrieval:
   bin/linux/ena_precoding/run_qualitative_coding_batch.sh \
     --mode export-review \
-    --run-dir "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/qualitative_batch_runs/<run_id>"
+    --run-dir "${TALENT_DATALAKE_ROOT%/Talent_data}/Processed/Talent_Data/qualitative_batch_runs/<run_id>"
 
 Dry-run the save-back step into the talent library:
   bin/linux/ena_precoding/run_qualitative_coding_batch.sh \
     --mode apply \
-    --run-dir "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/qualitative_batch_runs/<run_id>"
+    --run-dir "${TALENT_DATALAKE_ROOT%/Talent_data}/Processed/Talent_Data/qualitative_batch_runs/<run_id>"
 
 Apply reviewed codes back to the prepared transcript CSVs:
   bin/linux/ena_precoding/run_qualitative_coding_batch.sh \
     --mode apply \
-    --run-dir "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Talent_Data/qualitative_batch_runs/<run_id>" \
+    --run-dir "${TALENT_DATALAKE_ROOT%/Talent_data}/Processed/Talent_Data/qualitative_batch_runs/<run_id>" \
     --execute
 
 Direct Codex test mode, kept only for small immediate test runs:

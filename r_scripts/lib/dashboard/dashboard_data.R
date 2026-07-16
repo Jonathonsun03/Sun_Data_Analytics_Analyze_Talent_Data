@@ -368,9 +368,20 @@ build_creator_dashboard_data <- function(
   talent_folder <- basename(talent_path)
 
   talent_files <- TalentFiles(talent_path)
+  latest_analytics_path <- latest_talent_snapshot_path(
+    talent_path,
+    snapshot_type = "video_analytics"
+  )
+  latest_analytics <- .get_type_data(
+    TalentFiles(list(latest_analytics_path)),
+    type = "video_analytics"
+  )
+  dashboard_files <- .normalize_talent_files(talent_files)
+  dashboard_files$video_analytics <- latest_analytics
+
   title_classifications <- load_title_classifications(talent = talent_folder)
   prepared <- video_preps_with_titles(
-    files = talent_files,
+    files = dashboard_files,
     titles = title_classifications,
     talent = talent_folder,
     dedupe = TRUE,

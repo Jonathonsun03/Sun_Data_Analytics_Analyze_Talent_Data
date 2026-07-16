@@ -4,7 +4,7 @@ set -euo pipefail
 # Load repo .env defaults without overriding already-exported values.
 _ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 while [[ "${_ENV_ROOT}" != "/" ]]; do
-  if [[ -f "${_ENV_ROOT}/AGENTS.md" && -d "${_ENV_ROOT}/r_scripts" ]]; then
+  if [[ -e "${_ENV_ROOT}/.git" ]]; then
     break
   fi
   _ENV_ROOT="$(dirname "${_ENV_ROOT}")"
@@ -20,10 +20,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 BATCH_RUNNER="bin/linux/classification/run_title_classification_batch.sh"
-STATE_TOOL="r_scripts/run/Title_classification/title_classification/update_scheduled_state.R"
+STATE_TOOL="r_scripts/run/title_classification/update_scheduled_state.R"
 RETRY_TOOL="py_scripts/run/title_classification/build_retry_batch.py"
 
-TALENT_DATA_ROOT="${TALENT_DATALAKE_ROOT:-/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data}"
+TALENT_DATA_ROOT="${TALENT_DATALAKE_ROOT:?Set TALENT_DATA_ROOT or TALENT_DATALAKE_ROOT in .env}"
 TALENT_DATA_ROOT="${TALENT_DATA_ROOT%/}"
 ANALYTICS_ROOT="${TALENT_DATA_ROOT%/Talent_data}"
 EXPORT_ROOT="${TITLE_CLASSIFICATIONS_DIR:-${ANALYTICS_ROOT}/Processed/Title_classification}"

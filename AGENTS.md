@@ -22,6 +22,8 @@
 - New Python scripts belong under `py_scripts/`.
 - Put reusable Python helper functions and shared modules in `py_scripts/lib/`.
 - Put runnable Python entrypoint scripts in `py_scripts/run/`.
+- Put reusable, language-neutral SQL query files in `sql_queries/`.
+- Keep Python and R query loaders in their respective `lib/` directories; do not store SQL queries under `prompts/`.
 - Do not create new Python scripts in legacy locations such as `r_scripts/`, `Scripts/tasks/`, `Scripts/lib/`, or other non-`py_scripts/` folders.
 - Before creating a new Python script, check whether an existing script or helper can be extended or reused.
 - Keep prompt experiments in `prompts/experimental/` unless told otherwise.
@@ -36,6 +38,7 @@
 - Before editing a file, look for relevant READMEs from the repository root down to the file's directory. Read the nearest README first, then any parent READMEs that explain the subsystem.
 - For work under `r_scripts/`, read `r_scripts/README.md` before making changes. Also read any README in the target subdirectory or its nearest documented parent, such as `r_scripts/lib/ENA_prep/README.md`.
 - For work under `py_scripts/`, read `py_scripts/README.md` before making changes. Also read the nearest README under the target path when one exists.
+- For work under `sql_queries/`, read `sql_queries/README.md` before adding or editing SQL queries.
 - For work under `prompts/`, read `prompts/README.md` and the nearest prompt-family README before editing prompt text.
 - If no README exists for the target area, inspect neighboring files to infer the local pattern before editing.
 - In the work summary, mention which README or local context files were consulted when the task changes code, prompts, or analysis workflow.

@@ -4,7 +4,7 @@ set -euo pipefail
 # Load repo .env defaults without overriding already-exported values.
 _ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 while [[ "${_ENV_ROOT}" != "/" ]]; do
-  if [[ -f "${_ENV_ROOT}/AGENTS.md" && -d "${_ENV_ROOT}/r_scripts" ]]; then
+  if [[ -e "${_ENV_ROOT}/.git" ]]; then
     break
   fi
   _ENV_ROOT="$(dirname "${_ENV_ROOT}")"
@@ -51,7 +51,7 @@ Examples:
 
   Custom root and quote sampling:
     bin/linux/subtitles/run_subtitle_clean.sh \
-      --datalake-root /mnt/datalake/Datalake/Sun_Data_Analytics/Talent_data \
+      --datalake-root ${TALENT_DATALAKE_ROOT} \
       --quotes-per-talent 5 \
       --context-rows 12 \
       --top-k-sheets 2 \

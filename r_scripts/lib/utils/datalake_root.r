@@ -12,6 +12,9 @@ get_datalake_root <- function() {
   env_root <- Sys.getenv("TALENT_DATALAKE_ROOT", unset = "")
   if (nzchar(env_root)) return(env_root)
 
+  env_root <- Sys.getenv("TALENT_DATA_ROOT", unset = "")
+  if (nzchar(env_root)) return(env_root)
+
   chat_output_root <- Sys.getenv("CHAT_OUTPUT_ROOT", unset = "")
   if (nzchar(chat_output_root)) return(chat_output_root)
 
@@ -27,5 +30,5 @@ get_datalake_root <- function() {
   linux_existing <- linux_candidates[dir.exists(linux_candidates)]
   if (length(linux_existing) > 0) return(linux_existing[[1]])
 
-  stop("Datalake root not configured. Set TALENT_DATALAKE_ROOT.")
+  stop("Datalake root not configured. Set TALENT_DATALAKE_ROOT or TALENT_DATA_ROOT.")
 }

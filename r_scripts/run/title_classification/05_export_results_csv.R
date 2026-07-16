@@ -7,7 +7,7 @@ ex_get_script_dir <- function() {
   normalizePath(getwd(), winslash = "/", mustWork = FALSE)
 }
 
-ex_repo_root <- normalizePath(file.path(ex_get_script_dir(), "..", "..", "..", ".."), winslash = "/", mustWork = FALSE)
+ex_repo_root <- rprojroot::find_root(rprojroot::is_git_root, path = ex_get_script_dir())
 ex_repo_path <- function(...) normalizePath(file.path(ex_repo_root, ...), winslash = "/", mustWork = FALSE)
 
 source(ex_repo_path("r_scripts", "lib", "utils", "datalake_root.r"))

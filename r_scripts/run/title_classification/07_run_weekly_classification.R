@@ -7,12 +7,9 @@ get_script_dir <- function() {
   normalizePath(getwd(), winslash = "/", mustWork = FALSE)
 }
 
-repo_root <- normalizePath(
-  file.path(get_script_dir(), "..", "..", "..", ".."),
-  winslash = "/",
-  mustWork = FALSE
-)
+repo_root <- rprojroot::find_root(rprojroot::is_git_root, path = get_script_dir())
 repo_path <- function(...) normalizePath(file.path(repo_root, ...), winslash = "/", mustWork = FALSE)
+setwd(repo_root)
 
 args <- commandArgs(trailingOnly = TRUE)
 arg_value <- function(flag, default = NULL) {
@@ -64,10 +61,10 @@ if (!file.exists(full_csv)) {
   stop("CSV not found: ", full_csv)
 }
 
-ingest_script <- repo_path("r_scripts", "run", "Title_classification", "title_classification", "01_ingest_titles.R")
-classify_script <- repo_path("r_scripts", "run", "Title_classification", "title_classification", "02_classify_pending_titles.R")
+ingest_script <- repo_path("r_scripts", "run", "title_classification", "01_ingest_titles.R")
+classify_script <- repo_path("r_scripts", "run", "title_classification", "02_classify_pending_titles.R")
 if (!file.exists(ingest_script) || !file.exists(classify_script)) {
-  stop("Missing ingest/classify scripts under r_scripts/run/Title_classification/title_classification/")
+  stop("Missing ingest/classify scripts under r_scripts/run/title_classification/")
 }
 
 x <- read.csv(

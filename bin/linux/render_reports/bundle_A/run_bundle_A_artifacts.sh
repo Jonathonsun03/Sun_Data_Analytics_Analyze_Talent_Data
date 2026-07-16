@@ -4,7 +4,7 @@ set -euo pipefail
 # Load repo .env defaults without overriding already-exported values.
 _ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 while [[ "${_ENV_ROOT}" != "/" ]]; do
-  if [[ -f "${_ENV_ROOT}/AGENTS.md" && -d "${_ENV_ROOT}/r_scripts" ]]; then
+  if [[ -e "${_ENV_ROOT}/.git" ]]; then
     break
   fi
   _ENV_ROOT="$(dirname "${_ENV_ROOT}")"
@@ -19,7 +19,7 @@ unset _ENV_ROOT
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 
-DEFAULT_IMPORT_SCRIPT="r_scripts/run/bundle_A/import_data.r"
+DEFAULT_IMPORT_SCRIPT="r_scripts/run/bundles/bundle_A/import_data.r"
 RSCRIPT_BIN="${RSCRIPT_BIN:-Rscript}"
 IMPORT_SCRIPT="${DEFAULT_IMPORT_SCRIPT}"
 INPUT_SOURCE="datalake"
@@ -47,7 +47,7 @@ Description:
     <datalake_root>/<talent>/reports/bundle_A/artifacts/
 
   It calls:
-    r_scripts/run/bundle_A/import_data.r
+    r_scripts/run/bundles/bundle_A/import_data.r
 
 Talent selection:
   --talent NAME

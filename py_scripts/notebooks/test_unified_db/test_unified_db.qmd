@@ -1,0 +1,179 @@
+---
+title: "Test Unified DuckDB Access"
+format:
+  html:
+    toc: true
+    code-fold: false
+execute:
+  echo: true
+  warning: true
+  message: true
+jupyter: python3
+---
+
+## Connect to the unified database
+
+The unified database is opened in read-only mode so this notebook cannot
+modify the database while testing access.
+
+```{python}
+import sys
+from pathlib import Path
+
+import duckdb
+
+
+current = Path.cwd().resolve()
+repo_root = next(
+    candidate
+    for candidate in (current, *current.parents)
+    if (candidate / "AGENTS.md").is_file() and (candidate / "prompts").is_dir()
+)
+sys.path.insert(0, str(repo_root))
+
+from py_scripts.lib.utils.env import load_repo_env
+from py_scripts.lib.utils.paths import unified_database_path
+from py_scripts.lib.utils.repo_paths import find_repo_root
+from py_scripts.lib.utils.sql_queries import load_sql_query
+
+
+repo_root = find_repo_root(current)
+load_repo_env(repo_root=repo_root)
+
+database_path = unified_database_path().resolve()
+if not database_path.is_file():
+    raise FileNotFoundError(f"Unified DuckDB database not found: {database_path}")
+
+connection = duckdb.connect(str(database_path), read_only=True)
+print(f"Connected read-only to {database_path}")
+```
+
+
+
+
+## List available tables
+
+```{python}
+tables = connection.execute(
+    load_sql_query("unified_db", "metadata", "list_tables.sql")
+).fetchdf()
+
+tables
+```
+
+
+
+
+## Test a query
+
+```{python}
+talents = connection.execute(
+    load_sql_query("unified_db", "talents", "sample_talents.sql")
+).fetchdf()
+
+talents
+```
+
+
+
+
+## Select all Leia data for one day
+
+Change `selected_date` to the day you want. This uses the same six dataset types
+discovered by `TalentFiles()`: `public_subscribers`, `subs_daily`,
+`video_analytics`, `video_demographics`, `video_geography`, and
+`video_monetary`. The results are kept as separate DataFrames to match the R
+list structure and avoid duplicating rows in a many-to-many join.
+
+For the five dated snapshot types, `selected_date` is the snapshot filename
+date that `TalentFiles()` attaches as `date`. The undated `subs_daily.csv` file
+has no filename date, so its DuckDB query uses the daily observation `date`.
+
+```{python}
+from datetime import date
+
+
+talent_search = "Leia"
+selected_date = date(2026, 7, 10)
+
+talent_matches = connection.execute(
+    load_sql_query("unified_db", "talents", "find_talent.sql"),
+    [talent_search, talent_search],
+).fetchall()
+
+if len(talent_matches) != 1:
+    raise ValueError(
+        f"Expected one talent matching {talent_search!r}; found {talent_matches}"
+    )
+
+talent_code = talent_matches[0][0]
+print(f"Selected {talent_matches[0][1]} ({talent_code}) on {selected_date}")
+```
+
+
+The `queries` dictionary maps each dataset name to SQL text loaded from its
+file in `sql_queries/unified_db/daily/`. Each of those SQL files contains two
+`?` placeholders: the first receives `talent_code`, and the second receives
+`selected_date`. DuckDB binds those values safely when `connection.execute()`
+is called; the date placeholder is cast to DuckDB's `DATE` type inside the SQL
+file.
+
+The loop runs every query with the same talent and date, converts each result
+to a pandas DataFrame with `fetchdf()`, and stores it in `data_for_day` under
+the corresponding dataset name. The datasets remain separate because they
+have different row structures and joining them could duplicate observations.
+Finally, `row_counts` reports the number of returned rows for each dataset as
+a quick check of which sources contain data for the selected day.
+
+```{python}
+queries = {
+    "public_subscribers": load_sql_query(
+        "unified_db", "daily", "public_subscribers.sql"
+    ),
+    "subs_daily": load_sql_query(
+        "unified_db", "daily", "subscriber_daily.sql"
+    ),
+    "video_analytics": load_sql_query(
+        "unified_db", "daily", "video_analytics.sql"
+    ),
+    "video_demographics": load_sql_query(
+        "unified_db", "daily", "video_demographics.sql"
+    ),
+    "video_geography": load_sql_query(
+        "unified_db", "daily", "video_geography.sql"
+    ),
+    "video_monetary": load_sql_query(
+        "unified_db", "daily", "video_monetary.sql"
+    ),
+}
+
+data_for_day = {}
+for dataset, query in queries.items():
+    data_for_day[dataset] = connection.execute(
+        query,
+        [talent_code, selected_date],
+    ).fetchdf()
+
+row_counts = {
+    dataset: len(dataframe)
+    for dataset, dataframe in data_for_day.items()
+}
+row_counts
+```
+
+
+
+Access any result by its dataset name. For example:
+
+```{python}
+data_for_day["video_analytics"]
+```
+
+
+
+
+## Close the connection
+
+```{python}
+connection.close()
+```

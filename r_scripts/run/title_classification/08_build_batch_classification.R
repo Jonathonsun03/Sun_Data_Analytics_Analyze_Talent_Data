@@ -7,11 +7,7 @@ get_script_dir <- function() {
   normalizePath(getwd(), winslash = "/", mustWork = FALSE)
 }
 
-repo_root <- normalizePath(
-  file.path(get_script_dir(), "..", "..", "..", ".."),
-  winslash = "/",
-  mustWork = FALSE
-)
+repo_root <- rprojroot::find_root(rprojroot::is_git_root, path = get_script_dir())
 repo_path <- function(...) normalizePath(file.path(repo_root, ...), winslash = "/", mustWork = FALSE)
 
 args <- commandArgs(trailingOnly = TRUE)

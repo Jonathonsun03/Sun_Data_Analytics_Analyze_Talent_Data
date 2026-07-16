@@ -36,14 +36,24 @@ def talent_slugify(value: str) -> str:
 
 def default_talent_root() -> Path:
     load_repo_env()
-    for key in ("TALENT_DATALAKE_ROOT", "CHAT_OUTPUT_ROOT"):
+    for key in ("TALENT_DATALAKE_ROOT", "TALENT_DATA_ROOT", "CHAT_OUTPUT_ROOT"):
         raw = os.environ.get(key, "").strip()
         if raw:
             return Path(raw).expanduser()
     for candidate in DEFAULT_TALENT_ROOTS:
         if candidate.exists():
             return candidate
-    raise SystemExit("Datalake root not configured. Set TALENT_DATALAKE_ROOT.")
+    raise SystemExit("Datalake root not configured. Set TALENT_DATALAKE_ROOT or TALENT_DATA_ROOT.")
+
+
+def unified_database_path() -> Path:
+    """Return the configured path to the unified talent DuckDB database."""
+    load_repo_env()
+    configured_path = os.environ.get("UNIFIED_CATALOG_DB_PATH", "").strip()
+    if configured_path:
+        return Path(configured_path).expanduser()
+
+    return default_talent_root() / "Data_lakehouse" / "talent_lakehouse.duckdb"
 
 
 def processed_root(talent_root: Path | None = None) -> Path:

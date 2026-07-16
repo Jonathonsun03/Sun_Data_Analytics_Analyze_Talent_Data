@@ -29,7 +29,7 @@ Windows users can call:
 Legacy synchronous runner.
 
 Wrapper for:
-`r_scripts/run/Title_classification/title_classification/07_run_weekly_classification.R`
+`r_scripts/run/title_classification/07_run_weekly_classification.R`
 
 This runs the title classification pipeline from a CSV by talent:
 - ingests rows into DuckDB `videos`
@@ -123,7 +123,7 @@ finishes without submitting duplicates:
 
 ## `run_talent_profile_builder.sh`
 Wrapper for:
-`r_scripts/run/Title_classification/talent_profile/build_talent_profile.R`
+`r_scripts/run/title_classification/talent_profile/build_talent_profile.R`
 
 This runs the talent profile builder, which creates/updates:
 - `classification/config/talents/<talent_slug>.json`

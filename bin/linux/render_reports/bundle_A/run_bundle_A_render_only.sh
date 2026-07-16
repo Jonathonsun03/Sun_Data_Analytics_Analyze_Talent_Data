@@ -4,7 +4,7 @@ set -euo pipefail
 # Load repo .env defaults without overriding already-exported values.
 _ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 while [[ "${_ENV_ROOT}" != "/" ]]; do
-  if [[ -f "${_ENV_ROOT}/AGENTS.md" && -d "${_ENV_ROOT}/r_scripts" ]]; then
+  if [[ -e "${_ENV_ROOT}/.git" ]]; then
     break
   fi
   _ENV_ROOT="$(dirname "${_ENV_ROOT}")"
@@ -19,7 +19,7 @@ unset _ENV_ROOT
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 
-DEFAULT_RENDER_SCRIPT="r_scripts/run/bundle_A/render_bundle_A.R"
+DEFAULT_RENDER_SCRIPT="r_scripts/run/bundles/bundle_A/render_bundle_A.R"
 DEFAULT_BUNDLE_NAME="bundle_A"
 DEFAULT_OUTPUT_PREFIX="Bundle_A"
 DEFAULT_REPORT_SUBDIR="reports"
@@ -66,7 +66,7 @@ Description:
   (for example: Bundle_A_2026-04-30_window_90d_ava.html).
 
   It calls:
-    r_scripts/run/bundle_A/render_bundle_A.R
+    r_scripts/run/bundles/bundle_A/render_bundle_A.R
 
 Required:
   At least one talent selector OR --all (defaults to Ava if none supplied).
@@ -93,7 +93,7 @@ Output routing:
 Render behavior:
   --input-source NAME          Data source for report input: staging|datalake (default: datalake)
   --input-root PATH            Explicit report input root override (talent folders root)
-  --render-script PATH         Override render script path (default: r_scripts/run/bundle_A/render_bundle_A.R)
+  --render-script PATH         Override render script path (default: r_scripts/run/bundles/bundle_A/render_bundle_A.R)
   --input PATH                 Optional input Rmd override passed to render script
   --rscript-bin PATH           Rscript binary (default: Rscript)
   --staging-root PATH          Override TALENT_STAGING_ROOT (used for --all and render)
@@ -115,7 +115,7 @@ Examples:
     bin/linux/render_reports/bundle_A/run_bundle_A_render_only.sh \
       --all \
       --staging-root /mnt/staging/staging/Talent_data \
-      --datalake-root /mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data \
+      --datalake-root ${TALENT_DATALAKE_ROOT} \
       --window-days 60
 USAGE
 }

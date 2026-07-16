@@ -1,3 +1,6 @@
+# One-time backfill for the synthetic Northstar Story Lab demo classification export.
+# This replaces existing Northstar demo rows and creates a timestamped CSV backup.
+
 library(dplyr)
 library(jsonlite)
 library(readr)

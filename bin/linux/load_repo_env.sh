@@ -8,7 +8,7 @@ load_repo_env() {
     start_dir="$(pwd)"
     repo_root="${start_dir}"
     while [[ "${repo_root}" != "/" ]]; do
-      if [[ -f "${repo_root}/AGENTS.md" && -d "${repo_root}/r_scripts" ]]; then
+      if [[ -e "${repo_root}/.git" ]]; then
         break
       fi
       repo_root="$(dirname "${repo_root}")"
@@ -38,6 +38,13 @@ load_repo_env() {
     [[ "${key}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
     [[ -z "${!key+x}" ]] && export "${key}=${value}"
   done < "${env_file}"
+
+  if [[ -z "${TALENT_DATALAKE_ROOT+x}" && -n "${TALENT_DATA_ROOT:-}" ]]; then
+    export TALENT_DATALAKE_ROOT="${TALENT_DATA_ROOT}"
+  fi
+  if [[ -z "${TALENT_STAGING_ROOT+x}" && -n "${STAGING_ROOT:-}" ]]; then
+    export TALENT_STAGING_ROOT="${STAGING_ROOT}"
+  fi
 
   return 0
 }

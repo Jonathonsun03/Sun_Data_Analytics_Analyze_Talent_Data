@@ -12,8 +12,8 @@ bootstrap_find_repo_root <- function(start_dirs = c(bootstrap_get_script_dir(), 
   for (start in starts) {
     current <- start
     repeat {
-      marker <- file.path(current, "r_scripts", "README.md")
-      if (file.exists(marker)) {
+      git_marker <- file.path(current, ".git")
+      if (dir.exists(git_marker) || file.exists(git_marker)) {
         return(current)
       }
       parent <- dirname(current)
@@ -236,7 +236,7 @@ build_bundle_a_interpretation_context <- function(talent, data_source, data_root
 
 usage <- function() {
   cat(
-    "Usage: Rscript r_scripts/run/bundle_A/generate_bundle_A_interpretations.R --talent NAME --output-dir DIR [options]\n",
+    "Usage: Rscript r_scripts/run/bundles/bundle_A/generate_bundle_A_interpretations.R --talent NAME --output-dir DIR [options]\n",
     "\nOptions:\n",
     "  --talent NAME\n",
     "  --output-dir DIR       Bundle A report output dir, containing/receiving interpretations/\n",

@@ -4,7 +4,7 @@ set -euo pipefail
 # Load repo .env defaults without overriding already-exported values.
 _ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 while [[ "${_ENV_ROOT}" != "/" ]]; do
-  if [[ -f "${_ENV_ROOT}/AGENTS.md" && -d "${_ENV_ROOT}/r_scripts" ]]; then
+  if [[ -e "${_ENV_ROOT}/.git" ]]; then
     break
   fi
   _ENV_ROOT="$(dirname "${_ENV_ROOT}")"
@@ -402,7 +402,7 @@ if [[ "${USE_LLM}" != "true" ]]; then
     fi
 
     output_dir="${DATALAKE_ROOT}/${talent_folder_name}/${REPORT_SUBDIR}/${BUNDLE_NAME}"
-    cmd=("${RSCRIPT_BIN}" "--vanilla" "r_scripts/run/bundle_A/generate_bundle_A_interpretations.R"
+    cmd=("${RSCRIPT_BIN}" "--vanilla" "r_scripts/run/bundles/bundle_A/generate_bundle_A_interpretations.R"
       "--talent" "${talent_query}"
       "--output-dir" "${output_dir}"
       "--data-source" "${INPUT_SOURCE}")

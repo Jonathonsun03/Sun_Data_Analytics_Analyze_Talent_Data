@@ -1,6 +1,6 @@
 # Bundle A Interpretation Prompts
 
-This folder stores prompt specs for Bundle A interpretations, organized to match the report's section structure and the goals described in `r_scripts/run/bundle_A/Bundle_A_Desc.md`.
+This folder stores prompt specs for Bundle A interpretations, organized to match the report's section structure and the goals described in `r_scripts/run/bundles/bundle_A/Bundle_A_Desc.md`.
 
 Structure:
 

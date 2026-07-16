@@ -7,7 +7,7 @@ cmp_get_script_dir <- function() {
   normalizePath(getwd(), winslash = "/", mustWork = FALSE)
 }
 
-cmp_repo_root <- normalizePath(file.path(cmp_get_script_dir(), "..", "..", "..", ".."), winslash = "/", mustWork = FALSE)
+cmp_repo_root <- rprojroot::find_root(rprojroot::is_git_root, path = cmp_get_script_dir())
 cmp_repo_path <- function(...) normalizePath(file.path(cmp_repo_root, ...), winslash = "/", mustWork = FALSE)
 
 args <- commandArgs(trailingOnly = TRUE)

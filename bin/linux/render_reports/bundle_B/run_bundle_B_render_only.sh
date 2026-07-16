@@ -4,7 +4,7 @@ set -euo pipefail
 # Load repo .env defaults without overriding already-exported values.
 _ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 while [[ "${_ENV_ROOT}" != "/" ]]; do
-  if [[ -f "${_ENV_ROOT}/AGENTS.md" && -d "${_ENV_ROOT}/r_scripts" ]]; then
+  if [[ -e "${_ENV_ROOT}/.git" ]]; then
     break
   fi
   _ENV_ROOT="$(dirname "${_ENV_ROOT}")"
@@ -19,7 +19,7 @@ unset _ENV_ROOT
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 
-DEFAULT_RENDER_SCRIPT="r_scripts/run/bundle_B/render_bundle_B.R"
+DEFAULT_RENDER_SCRIPT="r_scripts/run/bundles/bundle_B/render_bundle_B.R"
 DEFAULT_BUNDLE_NAME="bundle_B"
 DEFAULT_OUTPUT_PREFIX="Bundle_B"
 DEFAULT_REPORT_SUBDIR="reports"
@@ -66,7 +66,7 @@ Description:
   (for example: Bundle_B_2026-04-30_window_90d_avaritia_hawthorne_variance_project.html).
 
   It calls:
-    r_scripts/run/bundle_B/render_bundle_B.R
+    r_scripts/run/bundles/bundle_B/render_bundle_B.R
 
 Key options:
   --all                        Render all talents from the selected input root

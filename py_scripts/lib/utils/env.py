@@ -37,6 +37,18 @@ def _env_value(line: str) -> str:
     return value
 
 
+def _apply_env_aliases(override: bool = False) -> None:
+    aliases = {
+        "TALENT_DATALAKE_ROOT": "TALENT_DATA_ROOT",
+        "TALENT_STAGING_ROOT": "STAGING_ROOT",
+    }
+    for canonical, alias in aliases.items():
+        if override or not os.environ.get(canonical, "").strip():
+            alias_value = os.environ.get(alias, "").strip()
+            if alias_value:
+                os.environ[canonical] = alias_value
+
+
 def load_repo_env(
     repo_root: Path | str | None = None,
     env_file: str = ".env",
@@ -54,6 +66,7 @@ def load_repo_env(
         return env_path
     if not env_path.exists():
         _LOADED_ENV_FILES.add(env_path)
+        _apply_env_aliases(override=override)
         return env_path
 
     for raw_line in env_path.read_text(encoding="utf-8").splitlines():
@@ -64,5 +77,6 @@ def load_repo_env(
             continue
         os.environ[name] = _env_value(raw_line)
 
+    _apply_env_aliases(override=override)
     _LOADED_ENV_FILES.add(env_path)
     return env_path

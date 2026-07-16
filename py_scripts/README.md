@@ -2,6 +2,20 @@
 
 This directory contains the maintained Python code for the repository.
 
+## Environment setup
+
+Create a project-local virtual environment and install the Python dependencies:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -r py_scripts/requirements.txt
+```
+
+Select `.venv/bin/python` as the Python interpreter and notebook kernel in VS Code.
+The runnable Python scripts currently use only the standard library; the packages
+in `requirements.txt` support VS Code/Quarto notebooks and DuckDB dataframe output.
+
 ## Structure
 
 - `run/`

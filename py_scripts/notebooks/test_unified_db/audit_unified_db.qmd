@@ -1,0 +1,622 @@
+---
+title: "Unified DuckDB and DataLake Completeness Audit"
+format:
+  html:
+    toc: true
+    code-fold: false
+execute:
+  echo: true
+  warning: true
+  message: true
+jupyter: python3
+---
+
+## Purpose
+
+This notebook performs a read-only audit of the unified DuckDB and its source
+DataLake. It checks the entire configured catalog rather than one talent or one
+date.
+
+It does not call external APIs or modify DataLake files. Run it after the
+nightly ingestion service finishes when you want a final completeness result.
+Each database section opens DuckDB briefly and closes it immediately so the
+notebook does not hold a long-lived lock against the ingestion writer.
+
+## Configuration and read-only helpers
+
+```{python}
+from contextlib import contextmanager
+from datetime import date, datetime, timezone
+from pathlib import Path
+import re
+import sys
+
+import duckdb
+import pandas as pd
+
+
+current = Path.cwd().resolve()
+repo_root = next(
+    candidate
+    for candidate in (current, *current.parents)
+    if (candidate / "AGENTS.md").is_file() and (candidate / "prompts").is_dir()
+)
+sys.path.insert(0, str(repo_root))
+
+from py_scripts.lib.utils.env import load_repo_env
+from py_scripts.lib.utils.paths import default_talent_root, unified_database_path
+from py_scripts.lib.utils.repo_paths import find_repo_root
+from py_scripts.lib.utils.sql_queries import load_sql_query
+
+
+repo_root = find_repo_root(current)
+load_repo_env(repo_root=repo_root)
+
+database_path = unified_database_path().resolve()
+talent_root = default_talent_root().resolve()
+
+if not database_path.is_file():
+    raise FileNotFoundError(f"Unified DuckDB database not found: {database_path}")
+if not talent_root.is_dir():
+    raise FileNotFoundError(f"Talent DataLake root not found: {talent_root}")
+
+
+@contextmanager
+def read_connection():
+    """Open the unified database read-only and always close it promptly."""
+    connection = duckdb.connect(str(database_path), read_only=True)
+    try:
+        yield connection
+    finally:
+        connection.close()
+
+
+def read_query(sql, parameters=None):
+    with read_connection() as connection:
+        return connection.execute(sql, parameters or []).fetchdf()
+
+
+DATASETS = {
+    "public_subscribers": {
+        "table": "clean.public_subscriber_snapshots",
+        "date_column": "snapshot_date",
+        "keys": ["channel_id", "subscriber_channel_id", "snapshot_date"],
+    },
+    "subs_daily": {
+        "table": "clean.subscriber_daily",
+        "date_column": "date",
+        "keys": ["channel_id", "date"],
+    },
+    "video_analytics": {
+        "table": "clean.video_analytics_snapshots",
+        "date_column": "snapshot_date",
+        "keys": ["video_id", "snapshot_date"],
+    },
+    "video_demographics": {
+        "table": "clean.video_demographics",
+        "date_column": "snapshot_date",
+        "keys": [
+            "video_id",
+            "snapshot_date",
+            "viewer_age",
+            "viewer_gender",
+        ],
+    },
+    "video_geography": {
+        "table": "clean.video_geography",
+        "date_column": "snapshot_date",
+        "keys": ["video_id", "snapshot_date", "country"],
+    },
+    "video_monetary": {
+        "table": "clean.video_monetary_snapshots",
+        "date_column": "snapshot_date",
+        "keys": ["video_id", "snapshot_date"],
+    },
+}
+
+EXPECTED_CORE_TABLES = {
+    "catalog.channels",
+    "catalog.talents",
+    "catalog.videos",
+    "clean.public_subscriber_snapshots",
+    "clean.subscriber_daily",
+    "clean.video_analytics_snapshots",
+    "clean.video_demographics",
+    "clean.video_geography",
+    "clean.video_monetary_snapshots",
+    "ops.ingestion_events",
+    "ops.pipeline_runs",
+    "ops.source_files",
+    "text.chat_messages",
+    "text.subtitle_units",
+}
+
+# Sample/demo talent folders are intentionally outside production reconciliation.
+EXCLUDED_TALENT_FOLDERS = {"northstar story lab demo"}
+
+configuration = pd.DataFrame(
+    [
+        {"setting": "database", "value": str(database_path)},
+        {"setting": "talent_root", "value": str(talent_root)},
+        {"setting": "audit_time_utc", "value": datetime.now(timezone.utc)},
+        {"setting": "audit_date", "value": date.today()},
+    ]
+)
+configuration
+```
+
+
+## Schema and table inventory
+
+This confirms that every required catalog, clean, text, and operations table
+exists, then counts every table currently present in DuckDB.
+
+```{python}
+tables = read_query(load_sql_query("unified_db", "metadata", "list_tables.sql"))
+tables["full_name"] = tables["schema_name"] + "." + tables["table_name"]
+
+available_tables = set(tables["full_name"])
+missing_core_tables = sorted(EXPECTED_CORE_TABLES - available_tables)
+
+schema_check = pd.DataFrame(
+    [
+        {
+            "check": "required core tables",
+            "status": "PASS" if not missing_core_tables else "FAIL",
+            "details": (
+                "All required tables exist"
+                if not missing_core_tables
+                else ", ".join(missing_core_tables)
+            ),
+        }
+    ]
+)
+schema_check
+```
+
+```{python}
+identifier_pattern = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+table_counts = []
+
+with read_connection() as connection:
+    for row in tables.itertuples(index=False):
+        if not identifier_pattern.fullmatch(row.schema_name):
+            raise ValueError(f"Unsafe schema identifier: {row.schema_name}")
+        if not identifier_pattern.fullmatch(row.table_name):
+            raise ValueError(f"Unsafe table identifier: {row.table_name}")
+        row_count = connection.execute(
+            f'SELECT COUNT(*) FROM "{row.schema_name}"."{row.table_name}"'
+        ).fetchone()[0]
+        table_counts.append(
+            {
+                "schema": row.schema_name,
+                "table": row.table_name,
+                "row_count": row_count,
+            }
+        )
+
+table_inventory = pd.DataFrame(table_counts).sort_values(["schema", "table"])
+table_inventory
+```
+
+
+## Coverage for every talent and clean dataset
+
+The report below shows row counts, earliest and latest observation dates, and
+the most recent ingestion timestamp for every talent/dataset combination. A
+zero row count is a coverage gap to review, although some datasets—especially
+monetary and public subscribers—can legitimately be unavailable for a channel.
+
+```{python}
+talents = read_query(
+    """
+    SELECT
+      t.talent_code,
+      t.talent_name,
+      COUNT(DISTINCT c.channel_id) AS channel_count
+    FROM catalog.talents AS t
+    LEFT JOIN catalog.channels AS c USING (talent_code)
+    WHERE t.active
+    GROUP BY t.talent_code, t.talent_name
+    ORDER BY t.talent_code
+    """
+)
+
+coverage_frames = []
+with read_connection() as connection:
+    for dataset, spec in DATASETS.items():
+        result = connection.execute(
+            f"""
+            SELECT
+              talent_code,
+              COUNT(*) AS row_count,
+              COUNT(DISTINCT channel_id) AS represented_channels,
+              MIN({spec['date_column']}) AS earliest_date,
+              MAX({spec['date_column']}) AS latest_date,
+              MAX(ingested_at) AS latest_ingested_at
+            FROM {spec['table']}
+            GROUP BY talent_code
+            """
+        ).fetchdf()
+        result.insert(1, "dataset", dataset)
+        coverage_frames.append(result)
+
+observed_coverage = pd.concat(coverage_frames, ignore_index=True)
+dataset_names = pd.DataFrame({"dataset": list(DATASETS)})
+coverage_grid = (
+    talents.assign(_join=1)
+    .merge(dataset_names.assign(_join=1), on="_join")
+    .drop(columns="_join")
+)
+coverage = coverage_grid.merge(
+    observed_coverage,
+    on=["talent_code", "dataset"],
+    how="left",
+)
+coverage[["row_count", "represented_channels"]] = coverage[
+    ["row_count", "represented_channels"]
+].fillna(0).astype("int64")
+
+coverage.sort_values(["talent_code", "dataset"])
+```
+
+
+## Is today's data present?
+
+This checks exact observation/snapshot dates, not only file modification times.
+`latest_ingested_at` in the preceding table is also useful because an ingestion
+today may legitimately publish an observation dated yesterday.
+
+```{python}
+today_frames = []
+with read_connection() as connection:
+    for dataset, spec in DATASETS.items():
+        result = connection.execute(
+            f"""
+            SELECT talent_code, COUNT(*) AS rows_today
+            FROM {spec['table']}
+            WHERE {spec['date_column']} = CURRENT_DATE
+            GROUP BY talent_code
+            """
+        ).fetchdf()
+        result.insert(1, "dataset", dataset)
+        today_frames.append(result)
+
+today_observed = pd.concat(today_frames, ignore_index=True)
+today_coverage = coverage_grid.merge(
+    today_observed,
+    on=["talent_code", "dataset"],
+    how="left",
+)
+today_coverage["rows_today"] = today_coverage["rows_today"].fillna(0).astype("int64")
+today_coverage["status"] = today_coverage["rows_today"].map(
+    lambda count: "PRESENT" if count > 0 else "NO ROWS TODAY"
+)
+
+today_coverage.sort_values(["talent_code", "dataset"])
+```
+
+
+## Duplicate and missing-key checks
+
+These checks use the same natural keys used by the ingestion publisher. The
+expected result is zero duplicate groups, zero excess rows, and zero rows with
+missing keys.
+
+```{python}
+quality_rows = []
+
+with read_connection() as connection:
+    for dataset, spec in DATASETS.items():
+        key_sql = ", ".join(spec["keys"])
+        duplicate_groups, excess_rows = connection.execute(
+            f"""
+            SELECT
+              COUNT(*) AS duplicate_groups,
+              COALESCE(SUM(group_count - 1), 0) AS excess_rows
+            FROM (
+              SELECT COUNT(*) AS group_count
+              FROM {spec['table']}
+              GROUP BY {key_sql}
+              HAVING COUNT(*) > 1
+            )
+            """
+        ).fetchone()
+
+        missing_conditions = " OR ".join(
+            f"NULLIF(TRIM(CAST({key} AS VARCHAR)), '') IS NULL"
+            for key in spec["keys"]
+        )
+        missing_key_rows = connection.execute(
+            f"""
+            SELECT COUNT(*)
+            FROM {spec['table']}
+            WHERE {missing_conditions}
+            """
+        ).fetchone()[0]
+
+        quality_rows.append(
+            {
+                "dataset": dataset,
+                "duplicate_groups": duplicate_groups,
+                "excess_rows": excess_rows,
+                "missing_key_rows": missing_key_rows,
+                "status": (
+                    "PASS"
+                    if duplicate_groups == 0 and missing_key_rows == 0
+                    else "FAIL"
+                ),
+            }
+        )
+
+quality_checks = pd.DataFrame(quality_rows).sort_values("dataset")
+quality_checks
+```
+
+
+## DataLake source-file reconciliation
+
+This builds the same supported-file manifest used by the lakehouse sync:
+structured raw CSVs, subscriber history, original chat, and original
+subtitles. It then compares every eligible path with `ops.source_files`.
+
+An unregistered empty chat/subtitle file can be benign because the publisher
+skips empty files. Other unregistered eligible files should be investigated or
+reconciled with `sync_lakehouse.sh`.
+
+```{python}
+date_pattern = re.compile(r"\d{4}-\d{2}-\d{2}")
+manifest_rows = []
+
+
+def add_manifest_path(dataset, path, eligible=True, reason="eligible"):
+    relative = path.relative_to(talent_root)
+    talent_folder = relative.parts[0]
+    excluded = talent_folder.casefold() in EXCLUDED_TALENT_FOLDERS
+    manifest_rows.append(
+        {
+            "dataset": dataset,
+            "talent_folder": talent_folder,
+            "source_path": str(path.resolve()),
+            "file_size": path.stat().st_size,
+            "modified_at": datetime.fromtimestamp(
+                path.stat().st_mtime,
+                tz=timezone.utc,
+            ),
+            "sync_eligible": eligible and not excluded,
+            "reason": "excluded talent" if excluded else reason,
+        }
+    )
+
+
+for dataset in (
+    "video_analytics",
+    "video_monetary",
+    "video_demographics",
+    "video_geography",
+    "public_subscribers",
+):
+    for path in talent_root.glob(f"*/raw_data/{dataset}/*.csv"):
+        has_snapshot_date = bool(date_pattern.search(path.name))
+        add_manifest_path(
+            dataset,
+            path,
+            eligible=has_snapshot_date,
+            reason="eligible" if has_snapshot_date else "filename has no snapshot date",
+        )
+
+for path in talent_root.glob("*/raw_data/subs_daily/*.csv"):
+    has_snapshot_sibling = path.name == "subs_daily.csv" and any(
+        sibling.name.startswith("subs_daily_")
+        for sibling in path.parent.glob("*.csv")
+    )
+    add_manifest_path(
+        "subs_daily",
+        path,
+        eligible=not has_snapshot_sibling,
+        reason=(
+            "canonical file superseded by timestamped snapshots"
+            if has_snapshot_sibling
+            else "eligible"
+        ),
+    )
+
+for path in talent_root.glob("*/Chat/Original/*_chat.csv"):
+    add_manifest_path("chat", path)
+
+for path in talent_root.glob("*/Subtitles/Original/*_subtitles.csv"):
+    add_manifest_path("subtitles", path)
+
+source_manifest = pd.DataFrame(manifest_rows).drop_duplicates("source_path")
+source_manifest = source_manifest.sort_values(["dataset", "talent_folder", "source_path"])
+
+registered_sources = read_query(
+    """
+    SELECT
+      source_path,
+      source_type,
+      file_size AS registered_file_size,
+      modified_at AS registered_modified_at,
+      discovered_at,
+      ingestion_status
+    FROM ops.source_files
+    """
+)
+registered_sources["source_path"] = registered_sources["source_path"].map(
+    lambda value: str(Path(value).resolve())
+)
+
+eligible_manifest = source_manifest[source_manifest["sync_eligible"]].copy()
+source_reconciliation = eligible_manifest.merge(
+    registered_sources,
+    on="source_path",
+    how="left",
+)
+source_reconciliation["registered"] = source_reconciliation["source_type"].notna()
+
+source_coverage = (
+    source_reconciliation.groupby("dataset", as_index=False)
+    .agg(
+        eligible_files=("source_path", "size"),
+        registered_files=("registered", "sum"),
+        latest_file=("modified_at", "max"),
+    )
+)
+source_coverage["unregistered_files"] = (
+    source_coverage["eligible_files"] - source_coverage["registered_files"]
+)
+source_coverage["status"] = source_coverage["unregistered_files"].map(
+    lambda count: "PASS" if count == 0 else "REVIEW"
+)
+source_coverage.sort_values("dataset")
+```
+
+
+### Eligible DataLake files not registered in DuckDB
+
+```{python}
+unregistered_sources = source_reconciliation[
+    ~source_reconciliation["registered"]
+][
+    ["dataset", "talent_folder", "source_path", "file_size", "modified_at"]
+]
+
+if unregistered_sources.empty:
+    print("PASS: every eligible DataLake source file is registered in DuckDB.")
+else:
+    print(f"REVIEW: {len(unregistered_sources)} eligible files are not registered.")
+    display(unregistered_sources.head(100))
+```
+
+
+### Registered DuckDB source paths missing from disk
+
+```{python}
+registered_sources["exists_on_disk"] = registered_sources["source_path"].map(
+    lambda value: Path(value).is_file()
+)
+missing_registered_files = registered_sources[
+    ~registered_sources["exists_on_disk"]
+].copy()
+
+if missing_registered_files.empty:
+    print("PASS: every registered source path still exists on disk.")
+else:
+    print(
+        f"REVIEW: {len(missing_registered_files)} registered source paths "
+        "are missing from disk."
+    )
+    display(missing_registered_files.head(100))
+```
+
+
+### Files intentionally skipped by reconciliation
+
+```{python}
+skipped_sources = source_manifest[~source_manifest["sync_eligible"]]
+(
+    skipped_sources.groupby(["dataset", "reason"], as_index=False)
+    .size()
+    .rename(columns={"size": "file_count"})
+    .sort_values(["dataset", "reason"])
+)
+```
+
+
+## Pipeline and ingestion history
+
+Recent failed runs remain visible even after a later successful retry. Check
+the timestamps and error summaries rather than treating any historical failure
+as proof that the latest run failed.
+
+```{python}
+recent_pipeline_runs = read_query(
+    """
+    SELECT
+      pipeline_name,
+      status,
+      started_at,
+      completed_at,
+      error_summary
+    FROM ops.pipeline_runs
+    ORDER BY started_at DESC
+    LIMIT 50
+    """
+)
+recent_pipeline_runs
+```
+
+```{python}
+ingestion_summary = read_query(
+    """
+    SELECT
+      destination_table,
+      COUNT(*) AS ingestion_events,
+      SUM(rows_read) AS rows_read,
+      SUM(rows_published) AS rows_published,
+      MAX(event_at) AS latest_event_at
+    FROM ops.ingestion_events
+    GROUP BY destination_table
+    ORDER BY destination_table
+    """
+)
+ingestion_summary
+```
+
+
+## Overall audit summary
+
+`FAIL` indicates a structural or key-integrity problem. `REVIEW` indicates a
+coverage/freshness issue that may be legitimate but should be explained.
+
+```{python}
+missing_clean_coverage = int((coverage["row_count"] == 0).sum())
+today_gaps = int((today_coverage["rows_today"] == 0).sum())
+duplicate_or_null_failures = int((quality_checks["status"] == "FAIL").sum())
+unregistered_count = len(unregistered_sources)
+missing_registered_count = len(missing_registered_files)
+
+audit_summary = pd.DataFrame(
+    [
+        {
+            "check": "required DuckDB tables",
+            "status": "PASS" if not missing_core_tables else "FAIL",
+            "details": f"{len(missing_core_tables)} missing",
+        },
+        {
+            "check": "natural-key integrity",
+            "status": "PASS" if duplicate_or_null_failures == 0 else "FAIL",
+            "details": f"{duplicate_or_null_failures} datasets failed",
+        },
+        {
+            "check": "talent/dataset coverage",
+            "status": "PASS" if missing_clean_coverage == 0 else "REVIEW",
+            "details": f"{missing_clean_coverage} combinations have no rows",
+        },
+        {
+            "check": "today's observations",
+            "status": "PASS" if today_gaps == 0 else "REVIEW",
+            "details": f"{today_gaps} combinations have no rows dated today",
+        },
+        {
+            "check": "eligible DataLake files registered",
+            "status": "PASS" if unregistered_count == 0 else "REVIEW",
+            "details": f"{unregistered_count} eligible files unregistered",
+        },
+        {
+            "check": "registered source paths exist",
+            "status": "PASS" if missing_registered_count == 0 else "REVIEW",
+            "details": f"{missing_registered_count} registered files missing",
+        },
+    ]
+)
+audit_summary
+```
+
+
+Use the detailed tables above to explain every `REVIEW` or `FAIL`. A complete
+nightly run should end with the service message:
+
+```text
+[PullYouTubeText] Completed nightly lakehouse reconciliation
+```
