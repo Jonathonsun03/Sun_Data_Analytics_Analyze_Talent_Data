@@ -125,7 +125,3 @@ dashboard_lifecycle_type_age_curve_plot <- function(dashboard_data, talent, cont
     tickangle = -35
   )
 }
-dashboard_lifecycle_recommendations_table <- function(dashboard_data) {
-  # TODO: wire this after Bundle E artifact loading is extracted from bundle_e.Rmd.
-  dashboard_datatable(dashboard_data$recommendations$lifecycle, page_length = 10, scroll_x = TRUE)
-}

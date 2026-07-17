@@ -37,8 +37,8 @@ dashboard_source("r_scripts", "lib", "clean_data", "title_classification_join.R"
 # Only the report plotting modules used by the creator dashboard are loaded.
 dashboard_source("r_scripts", "lib", "plots", "PlottingThemes.R")
 dashboard_source("r_scripts", "lib", "plots", "report", "bundle_A", "00_Bundle_A_Helpers.R")
+dashboard_source("r_scripts", "lib", "plots", "domains", "load.R")
 dashboard_source("r_scripts", "lib", "plots", "report", "bundle_A", "Audience_Demographic_Trends.R")
-dashboard_source("r_scripts", "lib", "plots", "report", "bundle_A", "Content_Breakdown_Deep_Dive.R")
 dashboard_source("r_scripts", "lib", "plots", "report", "bundle_A", "Engagement_By_Content_Type.R")
 dashboard_source("r_scripts", "lib", "plots", "report", "bundle_A", "Performance_Trends_Overview.R")
 dashboard_source("r_scripts", "lib", "plots", "report", "bundle_A", "Total_Metric_Content_Type.R")

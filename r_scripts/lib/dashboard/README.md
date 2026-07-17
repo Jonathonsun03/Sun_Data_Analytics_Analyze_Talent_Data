@@ -13,9 +13,10 @@ dashboard modules in an explicit order.
 - `adapters/`: dashboard-specific adapters around reusable report plots
 - `load.R`: the composition root and public loading entrypoint
 
-Reusable plot implementations remain under `r_scripts/lib/plots/`. Adapters
-may select data, handle dashboard empty states, and apply dashboard-specific
-Plotly or card formatting, but should not become a second plot library.
+Reusable plot implementations live under `r_scripts/lib/plots/domains/`.
+Adapters may select data, handle dashboard empty states, and apply
+dashboard-specific Plotly or card formatting, but should not become a second
+plot library.
 
 ## Naming
 

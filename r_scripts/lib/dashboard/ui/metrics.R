@@ -1,10 +1,5 @@
 # Overview metric card UI.
 
-dashboard_overview_value_boxes <- function(dashboard_data) {
-  # index.qmd can map this compact table into Quarto value boxes.
-  dashboard_data$overview
-}
-
 dashboard_metric_value <- function(dashboard_data, metric) {
   analytics <- dashboard_data$source_data$analytics
   monetary <- dashboard_data$source_data$monetary

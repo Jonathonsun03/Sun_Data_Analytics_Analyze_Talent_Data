@@ -38,6 +38,7 @@ source(file.path(repo_root, "r_scripts", "lib", "utils", "talent_select.R"))
 
 list.files(file.path(repo_root, "r_scripts", "lib", "plots", "report", "bundle_A"), pattern = "[rR]$", full.names = TRUE) %>%
   purrr::walk(source)
+source(file.path(repo_root, "r_scripts", "lib", "plots", "domains", "load.R"))
 list.files(file.path(repo_root, "r_scripts", "lib", "utils"), pattern = "[rR]$", full.names = TRUE) %>%
   purrr::walk(source)
 list.files(file.path(repo_root, "r_scripts", "lib", "import_data"), pattern = "[rR]$", full.names = TRUE) %>%

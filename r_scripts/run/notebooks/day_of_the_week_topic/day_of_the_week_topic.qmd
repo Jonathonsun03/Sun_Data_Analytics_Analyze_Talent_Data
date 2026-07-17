@@ -25,6 +25,7 @@ source(here::here("r_scripts", "lib", "import_data", "talent_files.R"))
 source(here::here("r_scripts", "lib", "clean_data", "CleanData.R"))
 source(here::here("r_scripts", "lib", "clean_data", "title_classification_join.R"))
 source(here::here("r_scripts", "lib", "plots", "PlottingThemes.R"))
+source(here::here("r_scripts", "lib", "plots", "domains", "publishing", "topic_weekday.R"))
 source(here::here("r_scripts", "lib", "linear_regression", "day_of_week", "weekday_transform.R"))
 source(here::here("r_scripts", "lib", "linear_regression", "day_of_week", "topic_weekday_recommendations.R"))
 
@@ -214,8 +215,8 @@ weekday_datatable(
 
 ## Topic-Day Heatmap
 
-```{r topic_day_heatmap}
-topic_day_heatmap(live_topic_weekday_summary)
+```{r topic_weekday_heatmap}
+topic_weekday_heatmap_ggplot(live_topic_weekday_summary)
 ```
 
 ## Final Topic-Day Recommendations

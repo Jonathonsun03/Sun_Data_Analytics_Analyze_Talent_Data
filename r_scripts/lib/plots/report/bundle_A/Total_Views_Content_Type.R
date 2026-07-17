@@ -33,19 +33,6 @@ total_views_content_type_plot <- function(plot_df, talent) {
     )
 }
 
-total_views_content_type <- function(df, talent) {
-  plot_df <- total_views_content_type_prep(df)
-  total_views_content_type_plot(plot_df, talent)
-}
-
-total_views_content_type_with_data <- function(df, talent) {
-  plot_df <- total_views_content_type_prep(df)
-  list(
-    data = plot_df,
-    plot = total_views_content_type_plot(plot_df, talent)
-  )
-}
-
 average_views_content_type_prep <- function(df) {
   df %>%
     mutate(.views = suppressWarnings(as.numeric(.data$views))) %>%
@@ -89,19 +76,6 @@ average_views_content_type_plot <- function(plot_df, talent) {
       labels = scales::comma,
       expand = expansion(mult = c(0, 0.12))
     )
-}
-
-average_views_content_type <- function(df, talent) {
-  plot_df <- average_views_content_type_prep(df)
-  average_views_content_type_plot(plot_df, talent)
-}
-
-average_views_content_type_with_data <- function(df, talent) {
-  plot_df <- average_views_content_type_prep(df)
-  list(
-    data = plot_df,
-    plot = average_views_content_type_plot(plot_df, talent)
-  )
 }
 
 views_content_type_comparison_prep <- function(df) {

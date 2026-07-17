@@ -17,6 +17,7 @@ source("r_scripts/lib/utils/datalake_root.r")
 
 list.files(here("r_scripts","lib","plots","report","bundle_A"), full.names = TRUE) %>%
     walk(source)
+source(here("r_scripts", "lib", "plots", "domains", "load.R"))
 list.files(here("r_scripts","lib","utils"), full.names = TRUE) %>%
     walk(source)
 list.files(here("r_scripts", "lib", "import_data"), pattern = "[rR]$", full.names = TRUE) %>%

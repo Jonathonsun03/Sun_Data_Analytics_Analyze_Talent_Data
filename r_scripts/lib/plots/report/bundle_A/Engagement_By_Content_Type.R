@@ -154,38 +154,6 @@ engagement_distribution_content_type <- function(
   )
 }
 
-engagement_distribution_content_type_with_data <- function(
-  df,
-  talent,
-  metric_col = "averageViewPercentage",
-  metric_label = metric_col,
-  content_col = "Content Type",
-  min_videos = 3,
-  title_col = NULL,
-  video_id_col = NULL,
-  show_points = TRUE,
-  y_as_percent = grepl("percentage|rate|ratio", metric_col, ignore.case = TRUE)
-) {
-  plot_df <- engagement_distribution_content_type_prep(
-    df = df,
-    metric_col = metric_col,
-    content_col = content_col,
-    min_videos = min_videos,
-    title_col = title_col,
-    video_id_col = video_id_col
-  )
-  list(
-    data = plot_df,
-    plot = engagement_distribution_content_type_plot(
-      plot_df = plot_df,
-      talent = talent,
-      metric_label = metric_label,
-      show_points = show_points,
-      y_as_percent = y_as_percent
-    )
-  )
-}
-
 engagement_summary_content_type_prep <- function(
   df,
   metric_col = "averageViewPercentage",

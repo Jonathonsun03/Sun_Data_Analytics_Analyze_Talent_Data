@@ -40,10 +40,6 @@ dashboard_static_table <- function(df) {
   )
 }
 
-dashboard_overview_table <- function(dashboard_data) {
-  dashboard_datatable(dashboard_data$overview, page_length = nrow(dashboard_data$overview), scroll_x = TRUE)
-}
-
 dashboard_empty_state <- function(message) {
   htmltools::div(
     class = "dashboard-empty-state",

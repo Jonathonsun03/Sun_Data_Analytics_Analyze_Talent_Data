@@ -181,41 +181,6 @@ total_metric_content_type_plot <- function(plot_df,
   }
 }
 
-total_metric_content_type <- function(df,
-                                      talent,
-                                      metric_col,
-                                      metric_label = metric_col,
-                                      window_months = 2,
-                                      date_col = "publish_date",
-                                      max_months = NULL,
-                                      bar_position = c("dodge", "stack"),
-                                      show_counts = FALSE,
-                                      unique_bar_colors = FALSE) {
-  plot_df <- total_metric_content_type_prep(
-    df,
-    metric_col,
-    window_months = window_months,
-    date_col = date_col,
-    max_months = max_months
-  )
-  subtitle_text <- if (!is.null(max_months)) {
-    paste0("Most recent ", max_months, " months")
-  } else {
-    NULL
-  }
-  x_axis_label <- if (window_months > 1) "Window (start to end month)" else "Month"
-  total_metric_content_type_plot(
-    plot_df,
-    talent,
-    metric_label = metric_label,
-    subtitle_text = subtitle_text,
-    x_axis_label = x_axis_label,
-    bar_position = bar_position,
-    show_counts = show_counts,
-    unique_bar_colors = unique_bar_colors
-  )
-}
-
 total_metric_content_type_with_data <- function(df,
                                                 talent,
                                                 metric_col,

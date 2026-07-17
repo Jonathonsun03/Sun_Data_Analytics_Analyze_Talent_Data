@@ -6,6 +6,7 @@ This directory contains the repository's maintained R code.
 
 - `r_scripts/lib/`
   - shared R helpers for data loading, cleaning, DuckDB, prompt assembly, report rendering, and stream summarization
+  - reusable plot implementations are organized by analytical domain under `r_scripts/lib/plots/domains/`
 - `r_scripts/run/`
   - runnable R entrypoints grouped by workflow
 

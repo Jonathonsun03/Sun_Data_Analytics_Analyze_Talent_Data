@@ -275,31 +275,3 @@ model_recommend_weekday_by_topic <- function(
       .data$topic_lumped
     )
 }
-
-topic_day_heatmap <- function(summary_df) {
-  plot_theme <- if (exists("theme_nyt", mode = "function")) {
-    theme_nyt()
-  } else {
-    ggplot2::theme_minimal()
-  }
-
-  ggplot2::ggplot(
-    summary_df,
-    ggplot2::aes(
-      x = .data$publish_wday,
-      y = .data$topic_lumped,
-      fill = .data$median_views
-    )
-  ) +
-    ggplot2::geom_tile(color = "white") +
-    ggplot2::geom_text(ggplot2::aes(label = .data$streams), size = 3) +
-    ggplot2::scale_fill_viridis_c(option = "C", labels = scales::comma) +
-    ggplot2::labs(
-      x = "Publish weekday",
-      y = "Topic",
-      fill = "Median views",
-      title = "Observed median views by live stream topic and weekday",
-      subtitle = "Tile color is observed median views; labels are stream counts."
-    ) +
-    plot_theme
-}

@@ -803,11 +803,11 @@ Interpretation Notes
 <div id="publish_dates" class="shiny-date-range-input form-group shiny-input-container">
 <label class="control-label" id="publish_dates-label" for="publish_dates">Published between</label>
 <div class="input-daterange input-group input-group-sm">
-<input class="form-control" type="text" aria-labelledby="publish_dates-label" title="Date format: yyyy-mm-dd" data-date-language="en" data-date-week-start="0" data-date-format="yyyy-mm-dd" data-date-start-view="month" data-min-date="2022-02-16" data-max-date="2026-07-16" data-initial-date="2025-06-30" data-date-autoclose="true">
+<input class="form-control" type="text" aria-labelledby="publish_dates-label" title="Date format: yyyy-mm-dd" data-date-language="en" data-date-week-start="0" data-date-format="yyyy-mm-dd" data-date-start-view="month" data-min-date="2022-02-16" data-max-date="2026-07-17" data-initial-date="2025-06-30" data-date-autoclose="true">
 <span class="input-group-addon input-group-prepend input-group-append">
 <span class="input-group-text"> to </span>
 </span>
-<input class="form-control" type="text" aria-labelledby="publish_dates-label" title="Date format: yyyy-mm-dd" data-date-language="en" data-date-week-start="0" data-date-format="yyyy-mm-dd" data-date-start-view="month" data-min-date="2022-02-16" data-max-date="2026-07-16" data-initial-date="2026-07-15" data-date-autoclose="true">
+<input class="form-control" type="text" aria-labelledby="publish_dates-label" title="Date format: yyyy-mm-dd" data-date-language="en" data-date-week-start="0" data-date-format="yyyy-mm-dd" data-date-start-view="month" data-min-date="2022-02-16" data-max-date="2026-07-17" data-initial-date="2026-07-15" data-date-autoclose="true">
 </div>
 </div>
 </div>
@@ -843,9 +843,7 @@ if (dir.exists(dashboard_machine_library)) {
 library(here)
 library(shiny)
 
-source(here::here("r_scripts", "lib", "dashboard", "dashboard_dependencies.R"))
-source(here::here("r_scripts", "lib", "dashboard", "dashboard_data.R"))
-source(here::here("r_scripts", "lib", "dashboard", "dashboard_sections.R"))
+source(here::here("r_scripts", "lib", "dashboard", "load.R"))
 
 dashboard_database_path <- dashboard_resolve_database_path()
 dashboard_talents <- dashboard_unified_talent_catalog(dashboard_database_path)

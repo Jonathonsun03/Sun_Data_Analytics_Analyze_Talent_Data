@@ -4,31 +4,6 @@ content_duration_views_prep <- function(df) {
     summarize(Total_Views = sum(views), .groups = "drop")
 }
 
-Content_duration_views <- function(
-  df,
-  talent,
-  span = 0.35,
-  show_ci = TRUE,
-  raw_linewidth = 0.55,
-  smooth_linewidth = 0.9,
-  smooth_alpha = 0.18,
-  y_label = "Total views",
-  title_suffix = "- Views Over Time by Content Type"
-) {
-  plot_df <- content_duration_views_prep(df)
-  content_duration_views_plot(
-    plot_df,
-    talent,
-    span = span,
-    show_ci = show_ci,
-    raw_linewidth = raw_linewidth,
-    smooth_linewidth = smooth_linewidth,
-    smooth_alpha = smooth_alpha,
-    y_label = y_label,
-    title_suffix = title_suffix
-  )
-}
-
 content_duration_views_plot <- function(
   plot_df,
   talent,
@@ -87,32 +62,4 @@ content_duration_views_plot <- function(
       date_breaks = "1 month",
       date_labels = "%b %Y"
     )
-}
-
-Content_duration_views_with_data <- function(
-  df,
-  talent,
-  span = 0.35,
-  show_ci = TRUE,
-  raw_linewidth = 0.55,
-  smooth_linewidth = 0.9,
-  smooth_alpha = 0.18,
-  y_label = "Total views",
-  title_suffix = "- Views Over Time by Content Type"
-) {
-  plot_df <- content_duration_views_prep(df)
-  list(
-    data = plot_df,
-    plot = content_duration_views_plot(
-      plot_df,
-      talent,
-      span = span,
-      show_ci = show_ci,
-      raw_linewidth = raw_linewidth,
-      smooth_linewidth = smooth_linewidth,
-      smooth_alpha = smooth_alpha,
-      y_label = y_label,
-      title_suffix = title_suffix
-    )
-  )
 }
