@@ -31,6 +31,7 @@ dashboard_source_dir <- function(..., pattern = "[rR]$", recursive = FALSE) {
 
 # Core path and sourcing helpers first.
 dashboard_source("r_scripts", "lib", "utils", "source_dir.r")
+dashboard_source("r_scripts", "lib", "utils", "repo_env.R")
 dashboard_source("r_scripts", "lib", "utils", "staging_root.R")
 dashboard_source("r_scripts", "lib", "utils", "datalake_root.r")
 dashboard_source("r_scripts", "lib", "utils", "talent_select.R")

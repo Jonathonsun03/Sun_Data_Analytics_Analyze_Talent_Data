@@ -327,41 +327,80 @@ video_preps_with_titles <- function(
   key_cols = "Video ID",
   sort_cols = c("confidence", "published_at"),
   dedupe_sets = c("analytics", "monetary", "demo", "geo"),
+  prep_sets = c("analytics", "monetary", "demo", "geo"),
+  title_sets = c("analytics", "monetary", "demo", "geo"),
   standardize_content_type = TRUE,
+  content_type_sets = c("analytics", "monetary", "demo", "geo"),
   content_type_keep_diagnostics = TRUE,
   content_type_live_min_seconds = 20 * 60,
   content_type_short_max_seconds = 70
 ) {
-  out <- list(
-    analytics = video_analytics_prep_with_titles(
+  valid_sets <- c("analytics", "monetary", "demo", "geo")
+  unknown_sets <- setdiff(prep_sets, valid_sets)
+  if (length(unknown_sets) > 0) {
+    stop("Unknown preparation set(s): ", paste(unknown_sets, collapse = ", "))
+  }
+  prep_sets <- intersect(valid_sets, prep_sets)
+  title_sets <- intersect(prep_sets, title_sets)
+  content_type_sets <- intersect(prep_sets, content_type_sets)
+
+  out <- list()
+  if ("analytics" %in% prep_sets) {
+    analytics_prep <- if ("analytics" %in% title_sets) {
+      video_analytics_prep_with_titles
+    } else {
+      video_analytics_prep
+    }
+    out$analytics <- rlang::exec(
+      analytics_prep,
       files = files,
-      titles = titles,
       talent = talent,
       talent_index = talent_index,
-      by = by
-    ),
-    monetary = video_monetary_prep_with_titles(
-      files = files,
-      titles = titles,
-      talent = talent,
-      talent_index = talent_index,
-      by = by
-    ),
-    demo = video_demographic_prep_with_titles(
-      files = files,
-      titles = titles,
-      talent = talent,
-      talent_index = talent_index,
-      by = by
-    ),
-    geo = video_geographic_prep_with_titles(
-      files = files,
-      titles = titles,
-      talent = talent,
-      talent_index = talent_index,
-      by = by
+      !!!if ("analytics" %in% title_sets) list(titles = titles, by = by) else list()
     )
-  )
+  }
+  if ("monetary" %in% prep_sets) {
+    monetary_prep <- if ("monetary" %in% title_sets) {
+      video_monetary_prep_with_titles
+    } else {
+      video_monetary_prep
+    }
+    out$monetary <- rlang::exec(
+      monetary_prep,
+      files = files,
+      talent = talent,
+      talent_index = talent_index,
+      !!!if ("monetary" %in% title_sets) list(titles = titles, by = by) else list()
+    )
+  }
+  if ("demo" %in% prep_sets) {
+    demo_prep <- if ("demo" %in% title_sets) {
+      video_demographic_prep_with_titles
+    } else {
+      video_demographic_prep
+    }
+    out$demo <- rlang::exec(
+      demo_prep,
+      files = files,
+      talent = talent,
+      talent_index = talent_index,
+      !!!if ("demo" %in% title_sets) list(titles = titles, by = by) else list()
+    )
+  }
+  if ("geo" %in% prep_sets) {
+    geo_prep <- if ("geo" %in% title_sets) {
+      video_geographic_prep_with_titles
+    } else {
+      video_geographic_prep
+    }
+    out$geo <- rlang::exec(
+      geo_prep,
+      files = files,
+      talent = talent,
+      talent_index = talent_index,
+      !!!if ("geo" %in% title_sets) list(titles = titles, by = by) else list()
+    )
+  }
 
   if (isTRUE(dedupe)) {
     target_sets <- intersect(names(out), dedupe_sets)
@@ -381,7 +420,7 @@ video_preps_with_titles <- function(
         "skipping standardized content-type filtering."
       )
     } else {
-      for (nm in names(out)) {
+      for (nm in content_type_sets) {
         out[[nm]] <- apply_content_type_filter(
           out[[nm]],
           output_col = "Content Type",

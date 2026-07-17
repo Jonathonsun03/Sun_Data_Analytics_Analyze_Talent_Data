@@ -21,6 +21,333 @@ dashboard_resolve_data_root <- function(data_source = c("datalake", "staging"), 
   normalizePath(get_staging_root(), winslash = "/", mustWork = FALSE)
 }
 
+dashboard_resolve_database_path <- function(database_path = NULL) {
+  if (!is.null(database_path) && length(database_path) > 0 &&
+      !is.na(database_path[[1]]) && nzchar(trimws(as.character(database_path[[1]])))) {
+    path <- trimws(as.character(database_path[[1]]))
+  } else {
+    load_repo_env()
+    path <- trimws(Sys.getenv("UNIFIED_CATALOG_DB_PATH", unset = ""))
+    if (!nzchar(path)) {
+      path <- file.path(
+        get_datalake_root(),
+        "Data_lakehouse",
+        "talent_lakehouse.duckdb"
+      )
+    }
+  }
+
+  path <- normalizePath(path, winslash = "/", mustWork = FALSE)
+  if (!file.exists(path)) {
+    stop("Unified DuckDB database not found: ", path, call. = FALSE)
+  }
+  path
+}
+
+dashboard_normalize_talent_key <- function(x) {
+  x <- tolower(enc2utf8(as.character(x)))
+  gsub("[^a-z0-9]+", "", x)
+}
+
+dashboard_select_unified_talent <- function(con, talent) {
+  talents <- DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT talent_code, talent_name, legacy_talent_id",
+      "FROM catalog.talents",
+      "WHERE active",
+      "ORDER BY talent_code"
+    )
+  )
+  if (nrow(talents) == 0) {
+    stop("The unified database has no active talents.", call. = FALSE)
+  }
+
+  query_key <- dashboard_normalize_talent_key(talent[[1]])
+  talent_keys <- apply(
+    talents[c("talent_code", "talent_name", "legacy_talent_id")],
+    1,
+    dashboard_normalize_talent_key
+  )
+  exact <- apply(talent_keys, 2, function(keys) query_key %in% keys)
+  matches <- talents[exact, , drop = FALSE]
+
+  if (nrow(matches) == 0 && nzchar(query_key)) {
+    fuzzy <- apply(
+      talents[c("talent_code", "talent_name", "legacy_talent_id")],
+      1,
+      function(fields) {
+        tokens <- unlist(strsplit(tolower(as.character(fields)), "[^a-z0-9]+"))
+        tokens <- tokens[nzchar(tokens) & nchar(tokens) >= 3]
+        any(startsWith(tokens, query_key) | startsWith(query_key, tokens))
+      }
+    )
+    matches <- talents[fuzzy, , drop = FALSE]
+  }
+
+  if (nrow(matches) == 0) {
+    stop("No active unified-database talent matched `", talent[[1]], "`.", call. = FALSE)
+  }
+  if (nrow(matches) > 1) {
+    stop(
+      "Talent query `", talent[[1]], "` matched multiple active talents: ",
+      paste(matches$talent_name, collapse = ", "),
+      call. = FALSE
+    )
+  }
+  matches[1, , drop = FALSE]
+}
+
+dashboard_unified_talent_catalog <- function(database_path = NULL) {
+  if (!requireNamespace("DBI", quietly = TRUE) ||
+      !requireNamespace("duckdb", quietly = TRUE)) {
+    stop("Packages `DBI` and `duckdb` are required for the unified database.", call. = FALSE)
+  }
+
+  database_path <- dashboard_resolve_database_path(database_path)
+  con <- DBI::dbConnect(
+    duckdb::duckdb(),
+    dbdir = database_path,
+    read_only = TRUE
+  )
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  catalog <- DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT",
+      "  t.talent_code,",
+      "  t.talent_name,",
+      "  MIN(CAST(v.published_at AS DATE)) AS earliest_publish_date,",
+      "  MAX(CAST(v.published_at AS DATE)) AS latest_publish_date",
+      "FROM catalog.talents AS t",
+      "LEFT JOIN catalog.videos AS v USING (talent_code)",
+      "WHERE t.active",
+      "GROUP BY t.talent_code, t.talent_name",
+      "ORDER BY t.talent_name"
+    )
+  )
+  if (nrow(catalog) == 0) {
+    stop("The unified database has no active talents.", call. = FALSE)
+  }
+
+  catalog %>%
+    dplyr::mutate(
+      earliest_publish_date = as.Date(.data$earliest_publish_date),
+      latest_publish_date = as.Date(.data$latest_publish_date)
+    )
+}
+
+dashboard_load_unified_database <- function(database_path, talent) {
+  if (!requireNamespace("DBI", quietly = TRUE) ||
+      !requireNamespace("duckdb", quietly = TRUE) ||
+      !requireNamespace("jsonlite", quietly = TRUE)) {
+    stop(
+      "Packages `DBI`, `duckdb`, and `jsonlite` are required for the unified database.",
+      call. = FALSE
+    )
+  }
+
+  con <- DBI::dbConnect(
+    duckdb::duckdb(),
+    dbdir = database_path,
+    read_only = TRUE
+  )
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  talent_row <- dashboard_select_unified_talent(con, talent)
+  talent_code <- talent_row$talent_code[[1]]
+  params <- list(talent_code)
+
+  analytics <- DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT",
+      "  a.video_id AS \"Video ID\",",
+      "  a.channel_id AS \"Channel ID\",",
+      "  c.channel_name AS \"Channel Name\",",
+      "  v.title AS \"Title\",",
+      "  v.published_at AS \"Published At\",",
+      "  a.snapshot_date AS date,",
+      "  v.content_type AS \"Content Type\",",
+      "  a.views,",
+      "  a.estimated_minutes_watched AS estimatedMinutesWatched,",
+      "  a.average_view_duration AS averageViewDuration,",
+      "  a.average_view_percentage AS averageViewPercentage,",
+      "  a.subscribers_gained AS subscribersGained,",
+      "  a.subscribers_lost AS subscribersLost,",
+      "  v.duration_seconds AS DurationSeconds,",
+      "  v.duration_iso AS DurationISO",
+      "FROM clean.video_analytics_snapshots AS a",
+      "JOIN catalog.videos AS v USING (video_id, channel_id, talent_code)",
+      "JOIN catalog.channels AS c USING (channel_id, talent_code)",
+      "WHERE a.talent_code = ?",
+      "ORDER BY a.snapshot_date, a.video_id"
+    ),
+    params = params
+  )
+
+  monetary <- DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT",
+      "  m.video_id AS \"Video ID\",",
+      "  m.channel_id AS \"Channel ID\",",
+      "  c.channel_name AS \"Channel Name\",",
+      "  v.title AS \"Title\",",
+      "  v.published_at AS \"Published At\",",
+      "  m.snapshot_date AS date,",
+      "  v.content_type AS \"Content Type\",",
+      "  m.views_monetary_check,",
+      "  m.estimated_revenue AS \"Estimated Revenue\",",
+      "  m.cpm AS CPM,",
+      "  v.duration_seconds AS DurationSeconds,",
+      "  v.duration_iso AS DurationISO",
+      "FROM clean.video_monetary_snapshots AS m",
+      "JOIN catalog.videos AS v USING (video_id, channel_id, talent_code)",
+      "JOIN catalog.channels AS c USING (channel_id, talent_code)",
+      "WHERE m.talent_code = ?",
+      "ORDER BY m.snapshot_date, m.video_id"
+    ),
+    params = params
+  )
+
+  demographics <- DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT",
+      "  d.video_id AS \"Video ID\",",
+      "  d.channel_id AS \"Channel ID\",",
+      "  c.channel_name AS \"Channel Name\",",
+      "  d.snapshot_date AS date,",
+      "  d.viewer_age AS \"Viewer Age\",",
+      "  d.viewer_gender AS \"Viewer Gender\",",
+      "  d.viewer_percentage AS \"Viewer Percentage\"",
+      "FROM clean.video_demographics AS d",
+      "JOIN catalog.channels AS c USING (channel_id, talent_code)",
+      "WHERE d.talent_code = ?",
+      "ORDER BY d.snapshot_date, d.video_id, d.viewer_age, d.viewer_gender"
+    ),
+    params = params
+  )
+
+  geography <- DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT",
+      "  g.video_id AS \"Video ID\",",
+      "  g.channel_id AS \"Channel ID\",",
+      "  c.channel_name AS \"Channel Name\",",
+      "  g.snapshot_date AS date,",
+      "  g.country AS Country,",
+      "  g.viewer_percentage AS \"Viewer Percentage\",",
+      "  g.estimated_views AS \"Est Views (calc)\",",
+      "  g.estimated_minutes_watched AS estimatedMinutesWatched",
+      "FROM clean.video_geography AS g",
+      "JOIN catalog.channels AS c USING (channel_id, talent_code)",
+      "WHERE g.talent_code = ?",
+      "ORDER BY g.snapshot_date, g.video_id, g.country"
+    ),
+    params = params
+  )
+
+  titles <- DBI::dbGetQuery(
+    con,
+    paste(
+      "WITH ranked AS (",
+      "  SELECT *,",
+      "    ROW_NUMBER() OVER (",
+      "      PARTITION BY video_id",
+      "      ORDER BY created_at DESC NULLS LAST, confidence DESC NULLS LAST",
+      "    ) AS row_number",
+      "  FROM classification.title_classification_results",
+      "  WHERE talent_code = ?",
+      ")",
+      "SELECT",
+      "  r.video_id AS \"Video ID\",",
+      "  t.talent_name,",
+      "  r.confidence,",
+      "  v.title AS title_raw,",
+      "  v.content_type,",
+      "  v.published_at,",
+      "  r.classification_json,",
+      "  r.collaborative_energy,",
+      "  r.community_milestones,",
+      "  r.interactive_entertainment,",
+      "  r.meme_viral,",
+      "  r.monetization,",
+      "  r.narrative_serialization,",
+      "  r.performance_artistry,",
+      "  r.personality_conversation",
+      "FROM ranked AS r",
+      "JOIN catalog.videos AS v USING (video_id, talent_code, channel_id)",
+      "JOIN catalog.talents AS t USING (talent_code)",
+      "WHERE r.row_number = 1",
+      "ORDER BY r.video_id"
+    ),
+    params = params
+  )
+
+  classification_details <- lapply(titles$classification_json, function(value) {
+    if (is.na(value) || !nzchar(trimws(value))) {
+      return(list())
+    }
+    tryCatch(
+      jsonlite::fromJSON(value, simplifyVector = TRUE),
+      error = function(e) list()
+    )
+  })
+  classification_value <- function(details, field) {
+    value <- details[[field]]
+    if (is.null(value) || length(value) == 0) NA_character_ else as.character(value[[1]])
+  }
+  titles$topic <- vapply(classification_details, classification_value, character(1), field = "topic")
+  titles$tags <- vapply(
+    classification_details,
+    function(details) {
+      tags <- details$tags
+      if (is.null(tags) || length(tags) == 0) NA_character_ else paste(tags, collapse = ", ")
+    },
+    character(1)
+  )
+  titles$primary_reference <- vapply(
+    classification_details,
+    classification_value,
+    character(1),
+    field = "primary_reference"
+  )
+  titles$is_music <- vapply(
+    classification_details,
+    function(details) {
+      value <- details$is_music
+      if (is.null(value) || length(value) == 0) NA else as.logical(value[[1]])
+    },
+    logical(1)
+  )
+  titles <- titles %>%
+    dplyr::select(-"classification_json")
+
+  if (nrow(analytics) == 0) {
+    stop("No analytics rows found for talent `", talent_row$talent_name[[1]], "`.", call. = FALSE)
+  }
+
+  latest_snapshot_date <- max(as.Date(analytics$date), na.rm = TRUE)
+  latest_analytics <- analytics[as.Date(analytics$date) == latest_snapshot_date, , drop = FALSE]
+
+  list(
+    talent_code = talent_code,
+    talent_name = talent_row$talent_name[[1]],
+    talent_files = list(
+      video_analytics = analytics,
+      video_monetary = monetary,
+      video_demographics = demographics,
+      video_geography = geography
+    ),
+    latest_analytics = latest_analytics,
+    title_classifications = titles
+  )
+}
+
 dashboard_apply_publish_window <- function(df, start_date = NULL, end_date = NULL) {
   if (is.null(df) || nrow(df) == 0) {
     return(df)
@@ -85,12 +412,17 @@ dashboard_build_overview <- function(analytics, monetary, demo, talent, data_sou
   video_id_col <- bundle_a_optional_col(analytics, candidates = c("Video ID", "video_id"))
   date_col <- bundle_a_optional_col(analytics, candidates = c("publish_date", "Published At", "date"))
   publish_dates <- if (is.null(date_col)) as.Date(character()) else bundle_a_as_date(analytics[[date_col]])
+  source_location_label <- if (identical(data_source, "unified_db")) {
+    "Database path"
+  } else {
+    "Data root"
+  }
 
   tibble::tibble(
     metric = c(
       "Talent",
       "Data source",
-      "Data root",
+      source_location_label,
       "Analytics rows",
       "Monetary rows",
       "Audience rows",
@@ -353,8 +685,9 @@ dashboard_build_audience_geography <- function(geo_df) {
 
 build_creator_dashboard_data <- function(
   talent,
-  data_source = c("datalake", "staging"),
+  data_source = c("unified_db", "datalake", "staging"),
   data_root = NULL,
+  database_path = NULL,
   start_date = NULL,
   end_date = NULL,
   content_types = c("live", "video", "short"),
@@ -362,24 +695,35 @@ build_creator_dashboard_data <- function(
   min_topic_n = 3,
   top_n_videos = 20
 ) {
-  data_source <- match.arg(tolower(data_source), c("datalake", "staging"))
-  data_root <- dashboard_resolve_data_root(data_source = data_source, data_root = data_root)
-  talent_path <- select_talent(talent, root = data_root)
-  talent_folder <- basename(talent_path)
+  data_source <- match.arg(tolower(data_source), c("unified_db", "datalake", "staging"))
+  if (identical(data_source, "unified_db")) {
+    database_path <- dashboard_resolve_database_path(database_path)
+    unified_data <- dashboard_load_unified_database(database_path, talent)
+    data_root <- database_path
+    talent_path <- NA_character_
+    talent_folder <- unified_data$talent_name
+    talent_files <- unified_data$talent_files
+    latest_analytics <- unified_data$latest_analytics
+    title_classifications <- unified_data$title_classifications
+  } else {
+    data_root <- dashboard_resolve_data_root(data_source = data_source, data_root = data_root)
+    talent_path <- select_talent(talent, root = data_root)
+    talent_folder <- basename(talent_path)
+    talent_files <- TalentFiles(talent_path)
+    latest_analytics_path <- latest_talent_snapshot_path(
+      talent_path,
+      snapshot_type = "video_analytics"
+    )
+    latest_analytics <- .get_type_data(
+      TalentFiles(list(latest_analytics_path)),
+      type = "video_analytics"
+    )
+    title_classifications <- load_title_classifications(talent = talent_folder)
+  }
 
-  talent_files <- TalentFiles(talent_path)
-  latest_analytics_path <- latest_talent_snapshot_path(
-    talent_path,
-    snapshot_type = "video_analytics"
-  )
-  latest_analytics <- .get_type_data(
-    TalentFiles(list(latest_analytics_path)),
-    type = "video_analytics"
-  )
   dashboard_files <- .normalize_talent_files(talent_files)
   dashboard_files$video_analytics <- latest_analytics
 
-  title_classifications <- load_title_classifications(talent = talent_folder)
   prepared <- video_preps_with_titles(
     files = dashboard_files,
     titles = title_classifications,
@@ -389,7 +733,10 @@ build_creator_dashboard_data <- function(
     sort_cols = c("confidence", "published_at", "Published At"),
     # Match Bundle A/B dashboard-facing imports: dedupe video-level analytics
     # and monetary rows, but preserve demographic segment rows for audience plots.
-    dedupe_sets = c("analytics", "monetary")
+    dedupe_sets = c("analytics", "monetary"),
+    prep_sets = c("analytics", "monetary", "demo"),
+    title_sets = c("analytics", "monetary"),
+    content_type_sets = c("analytics", "monetary")
   )
 
   analytics <- dashboard_apply_publish_window(prepared$analytics, start_date, end_date)

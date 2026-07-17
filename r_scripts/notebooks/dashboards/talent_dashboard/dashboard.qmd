@@ -1,0 +1,638 @@
+---
+title: "Creator Analytics Dashboard"
+format:
+  dashboard:
+    orientation: rows
+server: shiny
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+<style>
+@media (max-width: 768px) {
+  .card:not(.bslib-value-box) {
+    min-height: 24rem;
+  }
+
+  .js-plotly-plot {
+    min-height: 20rem;
+  }
+
+  .js-plotly-plot .xtick text,
+  .js-plotly-plot .ytick text,
+  .js-plotly-plot .legendtext {
+    font-size: 9px !important;
+  }
+
+  .js-plotly-plot .xtitle,
+  .js-plotly-plot .ytitle,
+  .js-plotly-plot .gtitle {
+    font-size: 11px !important;
+  }
+
+  .dataTables_wrapper {
+    font-size: 0.78rem;
+  }
+
+  .dashboard-recommendation-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .js-plotly-plot .xtick text,
+  .js-plotly-plot .ytick text,
+  .js-plotly-plot .legendtext {
+    font-size: 8px !important;
+  }
+}
+</style>
+
+```{r}
+#| label: setup
+#| context: setup
+#| include: false
+
+knitr::opts_knit$set(root.dir = normalizePath(getwd(), winslash = "/", mustWork = TRUE))
+
+dashboard_machine_library <- file.path(
+  path.expand("~/R"),
+  paste0(R.version$platform, "-library"),
+  paste(R.version$major, sub("\\..*$", "", R.version$minor), sep = ".")
+)
+if (dir.exists(dashboard_machine_library)) {
+  .libPaths(unique(c(.libPaths(), dashboard_machine_library)))
+}
+
+library(here)
+library(shiny)
+
+source(here::here("r_scripts", "lib", "dashboard", "dashboard_dependencies.R"))
+source(here::here("r_scripts", "lib", "dashboard", "dashboard_data.R"))
+source(here::here("r_scripts", "lib", "dashboard", "dashboard_sections.R"))
+
+dashboard_database_path <- dashboard_resolve_database_path()
+dashboard_talents <- dashboard_unified_talent_catalog(dashboard_database_path)
+
+dashboard_default_talent_index <- grep(
+  "^Avaritia",
+  dashboard_talents$talent_name,
+  ignore.case = TRUE
+)[1]
+if (is.na(dashboard_default_talent_index)) {
+  dashboard_default_talent_index <- 1
+}
+dashboard_default_talent <- dashboard_talents[dashboard_default_talent_index, , drop = FALSE]
+dashboard_talent_choices <- stats::setNames(
+  dashboard_talents$talent_code,
+  gsub("_", " ", dashboard_talents$talent_name, fixed = TRUE)
+)
+
+dashboard_global_min_date <- min(dashboard_talents$earliest_publish_date, na.rm = TRUE)
+dashboard_global_max_date <- max(dashboard_talents$latest_publish_date, na.rm = TRUE)
+if (!is.finite(dashboard_global_min_date)) {
+  dashboard_global_min_date <- Sys.Date()
+}
+if (!is.finite(dashboard_global_max_date)) {
+  dashboard_global_max_date <- Sys.Date()
+}
+
+dashboard_default_start_date <- dashboard_default_talent$earliest_publish_date[[1]]
+dashboard_default_end_date <- dashboard_default_talent$latest_publish_date[[1]]
+if (is.na(dashboard_default_start_date)) {
+  dashboard_default_start_date <- dashboard_global_min_date
+}
+if (is.na(dashboard_default_end_date)) {
+  dashboard_default_end_date <- dashboard_global_max_date
+}
+
+dashboard_render_ui <- function(value_fn, empty_message = "No data are available for the active filters.") {
+  shiny::renderUI({
+    value <- value_fn()
+    if (is.null(value)) {
+      return(dashboard_empty_state(empty_message))
+    }
+    if (inherits(value, "ggplot")) {
+      value <- dashboard_ggplotly(value)
+    }
+    htmltools::as.tags(value)
+  })
+}
+
+dashboard_talent_label <- function(data) {
+  data$overview$value[data$overview$metric == "Talent"][[1]]
+}
+
+dashboard_optional_input_date <- function(date_range, index) {
+  if (is.null(date_range) || length(date_range) < index || is.na(date_range[[index]])) {
+    return(NULL)
+  }
+  as.Date(date_range[[index]])
+}
+```
+
+# {.sidebar}
+
+```{r}
+selectInput(
+  inputId = "talent",
+  label = "Talent",
+  choices = dashboard_talent_choices,
+  selected = dashboard_default_talent$talent_code[[1]]
+)
+
+dateRangeInput(
+  inputId = "publish_dates",
+  label = "Published between",
+  start = dashboard_default_start_date,
+  end = dashboard_default_end_date,
+  min = dashboard_global_min_date,
+  max = dashboard_global_max_date,
+  format = "yyyy-mm-dd",
+  separator = " to "
+)
+
+actionButton(
+  inputId = "apply_filters",
+  label = "Apply filters",
+  class = "btn-primary"
+)
+
+helpText("Date filters use each video's publication date. Clear both dates to use the talent's entire lifespan. Applying a new selection can take a minute while lifecycle and audience summaries rebuild.")
+```
+
+# Overview
+
+This page summarizes the selected creator, publication window, source data, and top-performing videos.
+
+## Row {height=22%}
+
+```{r}
+#| title: "Total Views"
+uiOutput("overview_total_views")
+```
+
+```{r}
+#| title: "Total Revenue"
+uiOutput("overview_total_revenue")
+```
+
+```{r}
+#| title: "Videos / Streams"
+uiOutput("overview_total_videos")
+```
+
+```{r}
+#| title: "Average Views"
+uiOutput("overview_average_views")
+```
+
+## Row {height=55%}
+
+```{r}
+#| title: "Performance Over Time"
+uiOutput("overview_performance_over_time")
+```
+
+```{r}
+#| title: "Average View % by Content Type"
+uiOutput("overview_engagement_distribution")
+```
+
+## Row {height=33%}
+
+```{r}
+#| title: "Top Videos"
+uiOutput("overview_top_videos")
+```
+
+# Creator Performance
+
+This page summarizes lifecycle performance for the active talent and publication window.
+
+## Row {height=45%}
+
+```{r}
+#| title: "Latest Views vs Video Age"
+uiOutput("creator_latest_views_age")
+```
+
+```{r}
+#| title: "Recent Momentum vs Lifetime Rate"
+uiOutput("creator_recent_vs_lifetime")
+```
+
+```{r}
+#| title: "Lifecycle Classification Guide"
+uiOutput("creator_lifecycle_guide")
+```
+
+## Row {height=45%}
+
+```{r}
+#| title: "Shorts"
+uiOutput("creator_short_lifecycle")
+```
+
+```{r}
+#| title: "Videos"
+uiOutput("creator_video_lifecycle")
+```
+
+```{r}
+#| title: "Live Streams"
+uiOutput("creator_live_lifecycle")
+```
+
+# Content Strategy
+
+This page focuses on topic, tag, and collaboration patterns that can guide future content planning.
+
+## Row {height=50%}
+
+### Column {width=33%}
+
+```{r}
+#| title: "Topic Performance"
+uiOutput("strategy_topic_performance")
+```
+
+### Column {width=33%}
+
+```{r}
+#| title: "Tag Performance"
+uiOutput("strategy_tag_performance")
+```
+
+### Column {width=34%}
+
+```{r}
+#| title: "Topic Longevity by Video Type"
+uiOutput("strategy_topic_longevity")
+```
+
+## Row {height=50%}
+
+### Column {width=33%}
+
+```{r}
+#| title: "Topic Table"
+uiOutput("strategy_topic_table")
+```
+
+### Column {width=33%}
+
+```{r}
+#| title: "Tag Table"
+uiOutput("strategy_tag_table")
+```
+
+### Column {width=34%}
+
+```{r}
+#| title: "Collaboration Performance"
+uiOutput("strategy_collaboration_performance")
+```
+
+# Publishing Schedule
+
+This page evaluates timing patterns for the active talent and publication window.
+
+## Row {height=50%}
+
+```{r}
+#| title: "Day-of-Week Deviation from Average"
+uiOutput("schedule_day_of_week_deviation")
+```
+
+```{r}
+#| title: "Weekend vs Weekday Distribution"
+uiOutput("schedule_weekend_weekday_distribution")
+```
+
+```{r}
+#| title: "Topic-Weekday Heatmap"
+uiOutput("schedule_topic_heatmap")
+```
+
+## Row {height=50%}
+
+```{r}
+#| title: "Day-of-Week Performance"
+uiOutput("schedule_day_of_week_performance")
+```
+
+```{r}
+#| title: "Weekday Summary"
+uiOutput("schedule_weekday_summary")
+```
+
+# Audience
+
+This page summarizes audience composition and audience geography where data are available.
+
+## Row
+
+```{r}
+#| title: "Audience Age and Gender Trends"
+uiOutput("audience_trends")
+```
+
+```{r}
+#| title: "Audience Geography"
+uiOutput("audience_geography_map")
+```
+
+## Row {height=34%}
+
+```{r}
+#| title: "Audience Summary"
+uiOutput("audience_summary")
+```
+
+# Recommendations
+
+These recommendations are generated from the active talent/publication window and should be read as descriptive signals, not causal claims.
+
+## Row {height=42%}
+
+```{r}
+#| title: "Highest-Priority Recommendations"
+uiOutput("recommendations_top")
+```
+
+## Row {height=42%}
+
+```{r}
+#| title: "Publishing Strategy"
+uiOutput("recommendations_publishing")
+```
+
+```{r}
+#| title: "Content Strategy"
+uiOutput("recommendations_content")
+```
+
+## Row {height=42%}
+
+```{r}
+#| title: "Audience Strategy"
+uiOutput("recommendations_audience")
+```
+
+```{r}
+#| title: "Performance Strategy"
+uiOutput("recommendations_performance")
+```
+
+## Row {height=26%}
+
+```{r}
+#| title: "Caveats and Data Limits"
+uiOutput("recommendations_caveats")
+```
+
+# Method Notes
+
+Use this dashboard as a descriptive operating view. Model-informed recommendations are planning signals, not proof of causality.
+
+## Row
+
+```{r}
+#| title: "Active Filters"
+uiOutput("method_filters")
+```
+
+```{r}
+#| title: "Interpretation Notes"
+#| results: asis
+
+cat(
+  "- The date range filters videos by publication date, not by analytics snapshot date.\n",
+  "- Content type filters limit topic-weekday modeling and lifecycle displays to the requested formats.\n",
+  "- Descriptive statistics can be affected by outliers, posting volume, and missing data.\n",
+  "- Model-based recommendations are planning signals, not guarantees.\n",
+  "- Correlation is not causation: timing, topic, collaboration, title, format, and external context can move together.\n",
+  sep = ""
+)
+```
+
+```{r}
+#| label: server
+#| context: server
+#| include: false
+
+observeEvent(input$talent, {
+  selected <- dashboard_talents %>%
+    dplyr::filter(.data$talent_code == input$talent) %>%
+    dplyr::slice_head(n = 1)
+  if (nrow(selected) == 1 &&
+      !is.na(selected$earliest_publish_date[[1]]) &&
+      !is.na(selected$latest_publish_date[[1]])) {
+    updateDateRangeInput(
+      session,
+      inputId = "publish_dates",
+      start = selected$earliest_publish_date[[1]],
+      end = selected$latest_publish_date[[1]],
+      min = selected$earliest_publish_date[[1]],
+      max = selected$latest_publish_date[[1]]
+    )
+  }
+}, ignoreInit = TRUE)
+
+dashboard_data_reactive <- eventReactive(
+  input$apply_filters,
+  {
+    req(input$talent)
+
+    start_date <- dashboard_optional_input_date(input$publish_dates, 1)
+    end_date <- dashboard_optional_input_date(input$publish_dates, 2)
+
+    withProgress(message = "Building dashboard", value = 0, {
+      incProgress(0.15, detail = "Loading unified database data")
+      data <- build_creator_dashboard_data(
+        talent = input$talent,
+        data_source = "unified_db",
+        database_path = dashboard_database_path,
+        start_date = start_date,
+        end_date = end_date,
+        content_types = c("live", "video", "short"),
+        reference_day = "Monday"
+      )
+      incProgress(0.85, detail = "Preparing dashboard components")
+      data
+    })
+  },
+  ignoreNULL = FALSE
+)
+
+dashboard_filter_summary_reactive <- reactive({
+  data <- dashboard_data_reactive()
+  start_date <- dashboard_optional_input_date(input$publish_dates, 1)
+  end_date <- dashboard_optional_input_date(input$publish_dates, 2)
+  tibble::tibble(
+    setting = c(
+      "Talent",
+      "Data source",
+      "Published from",
+      "Published through"
+    ),
+    value = c(
+      dashboard_talent_label(data),
+      "Unified DuckDB",
+      if (is.null(start_date)) "All available" else as.character(start_date),
+      if (is.null(end_date)) "All available" else as.character(end_date)
+    )
+  )
+})
+
+output$overview_total_views <- dashboard_render_ui(function() {
+  dashboard_metric_card(dashboard_data_reactive(), "total_views")
+})
+output$overview_total_revenue <- dashboard_render_ui(function() {
+  dashboard_metric_card(dashboard_data_reactive(), "total_revenue")
+})
+output$overview_total_videos <- dashboard_render_ui(function() {
+  dashboard_metric_card(dashboard_data_reactive(), "video_count")
+})
+output$overview_average_views <- dashboard_render_ui(function() {
+  dashboard_metric_card(dashboard_data_reactive(), "average_views")
+})
+output$overview_performance_over_time <- dashboard_render_ui(function() {
+  data <- dashboard_data_reactive()
+  dashboard_monthly_performance_plot(data, dashboard_talent_label(data))
+})
+output$overview_engagement_distribution <- dashboard_render_ui(function() {
+  data <- dashboard_data_reactive()
+  dashboard_content_engagement_plot(data, dashboard_talent_label(data))
+})
+output$overview_top_videos <- dashboard_render_ui(function() {
+  dashboard_top_videos_table(dashboard_data_reactive())
+})
+
+output$creator_latest_views_age <- dashboard_render_ui(function() {
+  data <- dashboard_data_reactive()
+  dashboard_lifecycle_latest_views_age_plot(data, dashboard_talent_label(data))
+})
+output$creator_recent_vs_lifetime <- dashboard_render_ui(function() {
+  data <- dashboard_data_reactive()
+  dashboard_lifecycle_recent_vs_lifetime_plot(data, dashboard_talent_label(data))
+})
+output$creator_lifecycle_guide <- dashboard_render_ui(dashboard_lifecycle_classification_guide)
+output$creator_short_lifecycle <- dashboard_render_ui(function() {
+  data <- dashboard_data_reactive()
+  dashboard_lifecycle_type_age_curve_plot(data, dashboard_talent_label(data), "short")
+})
+output$creator_video_lifecycle <- dashboard_render_ui(function() {
+  data <- dashboard_data_reactive()
+  dashboard_lifecycle_type_age_curve_plot(data, dashboard_talent_label(data), "video")
+})
+output$creator_live_lifecycle <- dashboard_render_ui(function() {
+  data <- dashboard_data_reactive()
+  dashboard_lifecycle_type_age_curve_plot(data, dashboard_talent_label(data), "live")
+})
+
+output$strategy_topic_performance <- dashboard_render_ui(function() {
+  data <- dashboard_data_reactive()
+  dashboard_topic_performance_plot(data, dashboard_talent_label(data))
+})
+output$strategy_tag_performance <- dashboard_render_ui(function() {
+  data <- dashboard_data_reactive()
+  dashboard_tag_performance_plot(data, dashboard_talent_label(data))
+})
+output$strategy_topic_longevity <- dashboard_render_ui(function() {
+  data <- dashboard_data_reactive()
+  dashboard_lifecycle_topic_longevity_plot(data, dashboard_talent_label(data))
+})
+output$strategy_topic_table <- dashboard_render_ui(function() {
+  dashboard_topic_performance_table(dashboard_data_reactive(), page_length = 10)
+})
+output$strategy_tag_table <- dashboard_render_ui(function() {
+  dashboard_tag_performance_table(dashboard_data_reactive(), page_length = 15)
+})
+output$strategy_collaboration_performance <- dashboard_render_ui(function() {
+  dashboard_collaboration_performance_compact_plot(dashboard_data_reactive())
+})
+
+output$schedule_day_of_week_deviation <- dashboard_render_ui(function() {
+  data <- dashboard_data_reactive()
+  dashboard_day_of_week_deviation_plot(data, dashboard_talent_label(data))
+})
+output$schedule_weekend_weekday_distribution <- dashboard_render_ui(function() {
+  data <- dashboard_data_reactive()
+  dashboard_weekend_weekday_distribution_plot(data, dashboard_talent_label(data))
+})
+output$schedule_topic_heatmap <- dashboard_render_ui(function() {
+  data <- dashboard_data_reactive()
+  available_types <- names(data$topic_weekday_summary)[
+    purrr::map_lgl(data$topic_weekday_summary, function(result) {
+      !is.null(result) && !is.null(result$topic_weekday) && nrow(result$topic_weekday) > 0
+    })
+  ]
+  if (length(available_types) == 0) {
+    return(dashboard_empty_state("Topic-weekday heatmap is unavailable for the active filters."))
+  }
+  content_type <- available_types[[1]]
+  dashboard_topic_weekday_heatmap(
+    data,
+    content_type = content_type,
+    content_label = dow_report_content_label(content_type)
+  )
+})
+output$schedule_day_of_week_performance <- dashboard_render_ui(function() {
+  data <- dashboard_data_reactive()
+  dashboard_weekday_plot(data, dashboard_talent_label(data))
+})
+output$schedule_weekday_summary <- dashboard_render_ui(function() {
+  dashboard_weekday_table(dashboard_data_reactive())
+})
+
+output$audience_trends <- dashboard_render_ui(function() {
+  data <- dashboard_data_reactive()
+  dashboard_audience_plot(data, dashboard_talent_label(data))
+})
+output$audience_geography_map <- dashboard_render_ui(function() {
+  data <- dashboard_data_reactive()
+  dashboard_audience_geography_map(data, dashboard_talent_label(data))
+})
+output$audience_summary <- dashboard_render_ui(function() {
+  dashboard_datatable(dashboard_data_reactive()$audience_summary, page_length = 15)
+})
+
+output$recommendations_top <- dashboard_render_ui(function() {
+  dashboard_recommendation_cards(dashboard_data_reactive()$recommendations$story$top)
+})
+output$recommendations_publishing <- dashboard_render_ui(function() {
+  dashboard_recommendation_cards(
+    dashboard_data_reactive()$recommendations$story,
+    domain = "publishing"
+  )
+})
+output$recommendations_content <- dashboard_render_ui(function() {
+  dashboard_recommendation_cards(
+    dashboard_data_reactive()$recommendations$story,
+    domain = "content"
+  )
+})
+output$recommendations_audience <- dashboard_render_ui(function() {
+  dashboard_recommendation_cards(
+    dashboard_data_reactive()$recommendations$story,
+    domain = "audience"
+  )
+})
+output$recommendations_performance <- dashboard_render_ui(function() {
+  dashboard_recommendation_cards(
+    dashboard_data_reactive()$recommendations$story,
+    domain = "performance"
+  )
+})
+output$recommendations_caveats <- dashboard_render_ui(function() {
+  dashboard_recommendation_caveat_cards(dashboard_data_reactive()$recommendations$story)
+})
+
+output$method_filters <- dashboard_render_ui(function() {
+  dashboard_filter_context_card(dashboard_filter_summary_reactive())
+})
+```

@@ -11,8 +11,8 @@ execute:
   keep-md: true
 params:
   talent: "Ava"
-  data_source: "datalake"
-  data_root: null
+  data_source: "unified_db"
+  database_path: null
   start_date: null
   end_date: null
   content_types: ["live", "video", "short"]
@@ -34,7 +34,7 @@ source(here::here("r_scripts", "lib", "dashboard", "dashboard_sections.R"))
 dashboard_data <- build_creator_dashboard_data(
   talent = params$talent,
   data_source = params$data_source,
-  data_root = params$data_root,
+  database_path = params$database_path,
   start_date = params$start_date,
   end_date = params$end_date,
   content_types = params$content_types,
