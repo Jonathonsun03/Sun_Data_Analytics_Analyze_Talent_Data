@@ -7,6 +7,46 @@ Dashboard template:
 
 - `r_scripts/notebooks/dashboards/talent_dashboard/index.qmd`
 
+The wrapper produces a static HTML dashboard. The interactive Shiny dashboard
+is a separate entrypoint:
+
+- `r_scripts/notebooks/dashboards/talent_dashboard/dashboard.qmd`
+
+## Container Environment Setup
+
+In a restricted container, disable renv's optional system-library sandbox while
+retaining its project-local package library, then restore the checked-in R
+environment from the repository root:
+
+```bash
+export RENV_CONFIG_SANDBOX_ENABLED=FALSE
+Rscript --vanilla setup_R_env.R
+```
+
+The dashboard runtime is R/Quarto-only and does not require Python. If the
+repository's Python notebooks or pipeline tools are also needed, create their
+separate environment with the tracked requirements file:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -r py_scripts/requirements.txt
+```
+
+## Run the Interactive Dashboard Continuously
+
+From the repository root, bind the Shiny dashboard to all container interfaces:
+
+```bash
+quarto serve r_scripts/notebooks/dashboards/talent_dashboard/dashboard.qmd \
+  --host 0.0.0.0 \
+  --port 3838
+```
+
+Use that command as the container's foreground command and publish container
+port `3838`. Configure the container runtime's restart policy separately if the
+process should restart after a failure or host reboot.
+
 ## Basic Usage
 
 Render the dashboard for one talent from the datalake:

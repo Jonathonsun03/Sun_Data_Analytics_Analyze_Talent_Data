@@ -25,14 +25,19 @@ content_type_parse_iso8601 <- function(x) {
   pattern <- "^PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?$"
 
   out <- rep(NA_real_, length(vals))
-  for (i in seq_along(vals)) {
-    xi <- vals[[i]]
-    if (is.na(xi) || !nzchar(xi)) {
-      next
-    }
-    m <- regmatches(xi, regexec(pattern, xi, perl = TRUE))[[1]]
+  valid <- !is.na(vals) & nzchar(vals)
+  if (!any(valid)) {
+    return(out)
+  }
+
+  unique_vals <- unique(vals[valid])
+  matches <- regmatches(
+    unique_vals,
+    regexec(pattern, unique_vals, perl = TRUE)
+  )
+  unique_seconds <- vapply(matches, function(m) {
     if (length(m) == 0) {
-      next
+      return(NA_real_)
     }
     h <- suppressWarnings(as.numeric(m[[2]]))
     mn <- suppressWarnings(as.numeric(m[[3]]))
@@ -40,8 +45,10 @@ content_type_parse_iso8601 <- function(x) {
     if (is.na(h)) h <- 0
     if (is.na(mn)) mn <- 0
     if (is.na(s)) s <- 0
-    out[[i]] <- h * 3600 + mn * 60 + s
-  }
+    h * 3600 + mn * 60 + s
+  }, numeric(1))
+
+  out[valid] <- unique_seconds[match(vals[valid], unique_vals)]
   out
 }
 

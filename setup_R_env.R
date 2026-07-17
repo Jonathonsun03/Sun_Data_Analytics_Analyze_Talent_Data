@@ -12,26 +12,48 @@ if (length(file_arg) > 0) {
 
 cat("\n")
 cat("==========================================\n")
-cat(" VtuberNewsScraper - R Env Setup\n")
+cat(" Analyze Talent Data - R Env Setup\n")
 cat("==========================================\n")
 cat("Repo root:", getwd(), "\n\n")
 
-packages <- c(
+fallback_packages <- c(
   "renv",
   "here",
   "tidyverse",
+  "DBI",
+  "DT",
+  "bslib",
   "dplyr",
-  "purrr",
-  "jsonlite",
-  "rENA",
+  "duckdb",
   "ggplot2",
   "ggrepel",
+  "htmltools",
+  "jsonlite",
+  "knitr",
+  "lubridate",
+  "plotly",
+  "purrr",
+  "readr",
+  "rENA",
+  "rlang",
+  "scales",
+  "shiny",
   "stringr",
   "tidyr",
-  "rlang",
-  "tidyselect",
-  "lubridate"
+  "tidyselect"
 )
+
+ensure_cran_repo <- function() {
+  repos <- getOption("repos")
+  if (
+    is.null(repos) ||
+      !("CRAN" %in% names(repos)) ||
+      is.na(repos[["CRAN"]]) ||
+      repos[["CRAN"]] == "@CRAN@"
+  ) {
+    options(repos = c(CRAN = "https://cloud.r-project.org"))
+  }
+}
 
 ensure_renv <- function() {
   if (!requireNamespace("renv", quietly = TRUE)) {
@@ -41,21 +63,14 @@ ensure_renv <- function() {
   }
 }
 
-init_or_activate_renv <- function() {
-  if (dir.exists("renv")) {
-    cat("renv already exists. Activating...\n")
-    renv::activate()
-  } else {
-    cat("Initializing renv...\n")
-    renv::init(bare = TRUE)
+initialize_renv_if_needed <- function() {
+  if (file.exists(file.path("renv", "activate.R"))) {
+    cat("renv project infrastructure already exists.\n")
+    return(invisible(TRUE))
   }
-}
 
-ensure_cran_repo <- function() {
-  repos <- getOption("repos")
-  if (is.null(repos) || repos["CRAN"] == "@CRAN@") {
-    options(repos = c(CRAN = "https://cloud.r-project.org"))
-  }
+  cat("Initializing renv...\n")
+  renv::init(project = getwd(), bare = TRUE)
 }
 
 install_if_missing <- function(pkgs) {
@@ -72,11 +87,21 @@ install_if_missing <- function(pkgs) {
   renv::install(missing, dependencies = c("Depends", "Imports"))
 }
 
+lockfile_exists <- file.exists("renv.lock")
+
+ensure_cran_repo()
 ensure_renv()
-init_or_activate_renv()
-install_if_missing(packages)
-cat("Snapshotting renv lockfile...\n")
-renv::snapshot(prompt = FALSE)
+initialize_renv_if_needed()
+
+if (lockfile_exists) {
+  cat("Restoring packages from renv.lock...\n")
+  renv::restore(project = getwd(), prompt = FALSE)
+} else {
+  cat("No renv.lock found; installing the fallback package set...\n")
+  install_if_missing(fallback_packages)
+  cat("Creating renv.lock...\n")
+  renv::snapshot(project = getwd(), prompt = FALSE)
+}
 
 cat("\n")
 cat("==========================================\n")
