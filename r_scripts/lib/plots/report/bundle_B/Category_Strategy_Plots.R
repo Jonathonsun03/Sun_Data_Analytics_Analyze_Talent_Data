@@ -364,8 +364,11 @@ bundle_b_collaboration_distribution_prep <- function(
 
 bundle_b_collaboration_delta_summary <- function(summary_df) {
   wide <- summary_df %>%
-    dplyr::select(.data$Metric, .data$collab_group, .data$MeanValue) %>%
-    tidyr::pivot_wider(names_from = .data$collab_group, values_from = .data$MeanValue)
+    dplyr::select("Metric", "collab_group", "MeanValue") %>%
+    tidyr::pivot_wider(
+      names_from = "collab_group",
+      values_from = "MeanValue"
+    )
 
   # Keep downstream plotting stable even when one collaboration group is absent.
   if (!("Collaborative" %in% names(wide))) {
@@ -739,8 +742,16 @@ bundle_b_day_of_week_lift_plot <- function(day_summary, talent) {
 
 bundle_b_weekend_weekday_delta_summary <- function(summary_df) {
   summary_df %>%
-    dplyr::select(.data$Metric, .data$weekend_group, .data$MeanValue) %>%
-    tidyr::pivot_wider(names_from = .data$weekend_group, values_from = .data$MeanValue) %>%
+    dplyr::select("Metric", "weekend_group", "MeanValue") %>%
+    dplyr::mutate(weekend_group = as.character(.data$weekend_group)) %>%
+    tidyr::complete(
+      Metric,
+      weekend_group = c("Weekday", "Weekend")
+    ) %>%
+    tidyr::pivot_wider(
+      names_from = "weekend_group",
+      values_from = "MeanValue"
+    ) %>%
     dplyr::mutate(
       AbsDelta = .data$Weekend - .data$Weekday,
       LiftPct = dplyr::if_else(
@@ -782,15 +793,18 @@ bundle_b_weekend_weekday_delta_summary <- function(summary_df) {
     )
 }
 
-bundle_b_weekend_weekday_distribution_plot <- function(wk_dist, talent) {
+bundle_b_weekend_weekday_distribution_plot <- function(wk_dist, talent, use_repel = TRUE) {
   if (!is.list(wk_dist) || !all(c("plot_data", "summary") %in% names(wk_dist))) {
     stop("wk_dist must be output from weekend_vs_weekday_distribution_prep().")
   }
 
   plot_df <- wk_dist$plot_data
   summary_raw <- wk_dist$summary
+  available_groups <- unique(as.character(summary_raw$weekend_group))
 
-  if (nrow(plot_df) == 0 || nrow(summary_raw) == 0) {
+  if (nrow(plot_df) == 0 ||
+      nrow(summary_raw) == 0 ||
+      !all(c("Weekday", "Weekend") %in% available_groups)) {
     return(
       ggplot2::ggplot() +
         ggplot2::annotate("text", x = 1, y = 1, label = "No weekend vs weekday distribution data available.") +
@@ -840,7 +854,8 @@ bundle_b_weekend_weekday_distribution_plot <- function(wk_dist, talent) {
       MeanValue = .data$Mean
     )
 
-  delta_df <- bundle_b_weekend_weekday_delta_summary(summary_df)
+  delta_df <- bundle_b_weekend_weekday_delta_summary(summary_df) %>%
+    dplyr::filter(is.finite(.data$Weekday), is.finite(.data$Weekend))
 
   mean_df <- summary_df %>%
     dplyr::transmute(
@@ -862,7 +877,7 @@ bundle_b_weekend_weekday_distribution_plot <- function(wk_dist, talent) {
       )
     )
 
-  label_layer <- if (requireNamespace("ggrepel", quietly = TRUE)) {
+  label_layer <- if (isTRUE(use_repel) && requireNamespace("ggrepel", quietly = TRUE)) {
     ggrepel::geom_label_repel(
       data = delta_df,
       ggplot2::aes(x = .data$LabelX, y = .data$LabelAnchorY, label = .data$DeltaLabel),
@@ -899,7 +914,7 @@ bundle_b_weekend_weekday_distribution_plot <- function(wk_dist, talent) {
   }
 
   plot_df %>%
-    ggplot2::ggplot(ggplot2::aes(x = .data$XPos, y = .data$metric_value, fill = .data$weekend_group, color = .data$weekend_group, text = .data$HoverText)) +
+    ggplot2::ggplot(ggplot2::aes(x = .data$XPos, y = .data$metric_value, fill = .data$weekend_group, color = .data$weekend_group)) +
     ggplot2::geom_boxplot(
       ggplot2::aes(group = .data$weekend_group),
       outlier.shape = NA,
@@ -907,7 +922,15 @@ bundle_b_weekend_weekday_distribution_plot <- function(wk_dist, talent) {
       alpha = 0.55,
       linewidth = 0.6
     ) +
-    ggplot2::geom_jitter(width = 0.13, alpha = 0.33, size = 1.4, stroke = 0) +
+    suppressWarnings(
+      ggplot2::geom_jitter(
+        ggplot2::aes(text = .data$HoverText),
+        width = 0.13,
+        alpha = 0.33,
+        size = 1.4,
+        stroke = 0
+      )
+    ) +
     ggplot2::geom_segment(
       data = delta_df,
       ggplot2::aes(
@@ -921,15 +944,17 @@ bundle_b_weekend_weekday_distribution_plot <- function(wk_dist, talent) {
       color = sun_data_brand_colors()[["midnight"]],
       alpha = 0.9
     ) +
-    ggplot2::geom_point(
-      data = mean_df,
-      ggplot2::aes(x = .data$XPos, y = .data$MeanValue, text = .data$HoverText),
-      inherit.aes = FALSE,
-      shape = 23,
-      size = 4.4,
-      stroke = 0.35,
-      fill = "white",
-      color = sun_data_brand_colors()[["midnight"]]
+    suppressWarnings(
+      ggplot2::geom_point(
+        data = mean_df,
+        ggplot2::aes(x = .data$XPos, y = .data$MeanValue, text = .data$HoverText),
+        inherit.aes = FALSE,
+        shape = 23,
+        size = 4.4,
+        stroke = 0.35,
+        fill = "white",
+        color = sun_data_brand_colors()[["midnight"]]
+      )
     ) +
     label_layer +
     ggplot2::facet_wrap(~Metric, scales = "free_y", ncol = 1) +

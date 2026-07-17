@@ -136,6 +136,7 @@ plot_bundle_e_latest_views_vs_age <- function(video_summary, talent) {
     ggplot2::geom_point(alpha = 0.75, size = 2.6) +
     ggplot2::geom_smooth(
       method = "lm",
+      formula = y ~ x,
       se = FALSE,
       color = sun_data_brand_colors()[["midnight"]],
       linewidth = 0.7,

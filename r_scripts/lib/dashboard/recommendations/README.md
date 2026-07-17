@@ -26,15 +26,15 @@ causal decision engine.
 
 Primary recommendation logic:
 
-- `r_scripts/lib/dashboard/dashboard_recommendations.R`
+- `r_scripts/lib/dashboard/recommendations/`
 
 Dashboard rendering helpers:
 
-- `r_scripts/lib/dashboard/dashboard_sections.R`
+- `r_scripts/lib/dashboard/ui/recommendations.R`
 
 Dashboard data assembly:
 
-- `r_scripts/lib/dashboard/dashboard_data.R`
+- `r_scripts/lib/dashboard/data/assemble.R`
 
 Dashboard page usage:
 
@@ -65,7 +65,7 @@ Main functions:
 - `dashboard_recommendation_caveat_cards()`: renders data-limit and weak-signal
   caveats.
 
-The final recommendation object is attached in `dashboard_data.R`:
+The final recommendation object is attached in `data/assemble.R`:
 
 ```r
 out$recommendations$story <- dashboard_build_recommendations(out)
@@ -813,4 +813,3 @@ Before merging a new recommendation rule, check:
 - Does it route to the correct domain subset?
 - Does it render correctly in the Recommendations tab?
 - Does it behave sensibly for both normal and sparse datasets?
-

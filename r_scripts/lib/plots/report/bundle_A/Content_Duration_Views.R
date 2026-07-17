@@ -65,6 +65,7 @@ content_duration_views_plot <- function(
     ) +
     geom_smooth(
       method = "loess",
+      formula = y ~ x,
       span = span,
       se = show_ci,
       color = sun_data_brand_colors()[["midnight"]],

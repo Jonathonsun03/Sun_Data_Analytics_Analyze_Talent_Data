@@ -69,9 +69,7 @@ if (dir.exists(dashboard_machine_library)) {
 library(here)
 library(shiny)
 
-source(here::here("r_scripts", "lib", "dashboard", "dashboard_dependencies.R"))
-source(here::here("r_scripts", "lib", "dashboard", "dashboard_data.R"))
-source(here::here("r_scripts", "lib", "dashboard", "dashboard_sections.R"))
+source(here::here("r_scripts", "lib", "dashboard", "load.R"))
 
 dashboard_database_path <- dashboard_resolve_database_path()
 dashboard_talents <- dashboard_unified_talent_catalog(dashboard_database_path)

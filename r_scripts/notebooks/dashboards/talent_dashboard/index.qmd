@@ -27,9 +27,7 @@ knitr::opts_knit$set(root.dir = normalizePath(getwd(), winslash = "/", mustWork 
 
 library(here)
 
-source(here::here("r_scripts", "lib", "dashboard", "dashboard_dependencies.R"))
-source(here::here("r_scripts", "lib", "dashboard", "dashboard_data.R"))
-source(here::here("r_scripts", "lib", "dashboard", "dashboard_sections.R"))
+source(here::here("r_scripts", "lib", "dashboard", "load.R"))
 
 dashboard_data <- build_creator_dashboard_data(
   talent = params$talent,

@@ -105,12 +105,14 @@ engagement_distribution_content_type_plot <- function(
     )
 
   if (isTRUE(show_points)) {
-    p <- p + ggplot2::geom_jitter(
-      ggplot2::aes(text = .data$.hover_text),
-      width = 0.18,
-      alpha = 0.25,
-      size = 1.2,
-      color = sun_data_brand_colors()[["midnight"]]
+    p <- p + suppressWarnings(
+      ggplot2::geom_jitter(
+        ggplot2::aes(text = .data$.hover_text),
+        width = 0.18,
+        alpha = 0.25,
+        size = 1.2,
+        color = sun_data_brand_colors()[["midnight"]]
+      )
     )
   }
 

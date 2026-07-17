@@ -108,7 +108,12 @@ audience_age_gender_trends_plot <- function(
     p <- p + ggplot2::geom_point(size = 1.1, alpha = 0.65)
   }
   if (isTRUE(smooth)) {
-    p <- p + ggplot2::geom_smooth(se = FALSE, linewidth = 0.9, alpha = 0.4)
+    p <- p + ggplot2::geom_smooth(
+      formula = y ~ x,
+      se = FALSE,
+      linewidth = 0.9,
+      alpha = 0.4
+    )
   }
 
   p

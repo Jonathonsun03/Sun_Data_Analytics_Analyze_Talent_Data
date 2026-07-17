@@ -7,6 +7,11 @@ bundle_e_ggplotly <- function(
   compact = FALSE,
   tickangle = -45
 ) {
+  attr_height <- attr(plot_obj, "bundle_e_plotly_height", exact = TRUE)
+  if (is.null(height) && !is.null(attr_height) && is.finite(attr_height)) {
+    height <- as.numeric(attr_height)
+  }
+
   if (inherits(plot_obj, "ggplot")) {
     plot_obj <- plot_obj +
       ggplot2::theme(
@@ -14,11 +19,14 @@ bundle_e_ggplotly <- function(
       )
   }
 
-  p <- if (is.null(tooltip)) {
-    plotly::ggplotly(plot_obj)
-  } else {
-    plotly::ggplotly(plot_obj, tooltip = tooltip)
+  ggplotly_args <- list(p = plot_obj)
+  if (!is.null(tooltip)) {
+    ggplotly_args$tooltip <- tooltip
   }
+  if (!is.null(height) && is.finite(height)) {
+    ggplotly_args$height <- as.numeric(height)
+  }
+  p <- do.call(plotly::ggplotly, ggplotly_args)
 
   if (!inherits(plot_obj, "ggplot")) {
     return(p)
@@ -72,11 +80,6 @@ bundle_e_ggplotly <- function(
   } else {
     36
   }
-  attr_height <- attr(plot_obj, "bundle_e_plotly_height", exact = TRUE)
-  if (is.null(height) && !is.null(attr_height) && is.finite(attr_height)) {
-    height <- as.numeric(attr_height)
-  }
-
   combined_title <- if (nzchar(subtitle_txt)) {
     paste0(
       "<b>", title_txt, "</b>",
@@ -171,10 +174,6 @@ bundle_e_ggplotly <- function(
       pad = list(t = 10, b = 12)
     )
   }
-  if (!is.null(height) && is.finite(height)) {
-    layout_args$height <- as.numeric(height)
-  }
-
   p <- do.call(plotly::layout, c(list(p = p), layout_args))
   plotly::config(p, responsive = TRUE, displaylogo = FALSE)
 }
