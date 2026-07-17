@@ -71,116 +71,255 @@ bundle_e_observed_revenue_by_age <- function(df, max_age) {
   suppressWarnings(max(dat$revenue_cumulative, na.rm = TRUE))
 }
 
+
+bundle_e_window_stats_vectors <- function(
+  dates,
+  values,
+  window_days,
+  anchor_date = max(dates, na.rm = TRUE)
+) {
+  if (length(values) == 0 || all(is.na(values))) {
+    return(list(
+      start_date = as.Date(NA),
+      end_date = as.Date(NA),
+      elapsed_days = NA_real_,
+      gain = NA_real_,
+      avg_per_day = NA_real_
+    ))
+  }
+
+  window_start <- anchor_date - as.integer(window_days) + 1L
+  keep <- which(
+    !is.na(dates) &
+      dates >= window_start &
+      dates <= anchor_date
+  )
+  if (length(keep) == 0) {
+    return(list(
+      start_date = as.Date(NA),
+      end_date = as.Date(NA),
+      elapsed_days = NA_real_,
+      gain = NA_real_,
+      avg_per_day = NA_real_
+    ))
+  }
+
+  window_dates <- dates[keep]
+  metric_vals <- suppressWarnings(as.numeric(values[keep]))
+  order_idx <- order(window_dates)
+  window_dates <- window_dates[order_idx]
+  metric_vals <- metric_vals[order_idx]
+
+  start_date <- window_dates[[1]]
+  end_date <- window_dates[[length(window_dates)]]
+  elapsed_days <- as.numeric(end_date - start_date)
+  gain <- if (length(metric_vals) >= 2) {
+    metric_vals[[length(metric_vals)]] - metric_vals[[1]]
+  } else {
+    0
+  }
+
+  list(
+    start_date = start_date,
+    end_date = end_date,
+    elapsed_days = elapsed_days,
+    gain = gain,
+    avg_per_day = if (!is.na(elapsed_days) && elapsed_days > 0) gain / elapsed_days else NA_real_
+  )
+}
+
+bundle_e_observed_metric_by_age <- function(
+  video_age_days,
+  values,
+  max_age,
+  require_non_missing = FALSE
+) {
+  keep <- which(
+    !is.na(video_age_days) &
+      video_age_days >= 0 &
+      video_age_days <= max_age
+  )
+  if (length(keep) == 0) {
+    return(NA_real_)
+  }
+
+  metric_vals <- suppressWarnings(as.numeric(values[keep]))
+  if (isTRUE(require_non_missing) && all(is.na(metric_vals))) {
+    return(NA_real_)
+  }
+  suppressWarnings(max(metric_vals, na.rm = TRUE))
+}
+
 build_bundle_e_video_summary <- function(panel_df) {
   if (nrow(panel_df) == 0) {
     return(tibble::tibble())
   }
 
-  panel_df %>%
+  summary_df <- panel_df %>%
     dplyr::arrange(.data$`Video ID`, .data$snapshot_date) %>%
     dplyr::group_by(.data$`Video ID`) %>%
-    dplyr::group_modify(function(df, key) {
-      df <- dplyr::arrange(df, .data$snapshot_date)
-      latest <- dplyr::slice_tail(df, n = 1)
-      first_window <- dplyr::slice_head(df, n = 1)
-      latest_date <- latest$snapshot_date[[1]]
+    dplyr::summarise(
+      Title = dplyr::last(.data$Title),
+      `Channel Name` = dplyr::last(.data$`Channel Name`),
+      `Channel ID` = dplyr::last(.data$`Channel ID`),
+      publish_date = dplyr::last(.data$publish_date),
+      `Published At` = dplyr::last(.data$`Published At`),
+      `Content Type` = dplyr::last(.data$`Content Type`),
+      content_type = dplyr::last(.data$content_type),
+      topic = dplyr::last(.data$topic),
+      tags = dplyr::last(.data$tags),
+      primary_reference = dplyr::last(.data$primary_reference),
+      collab_group = dplyr::last(.data$collab_group),
+      collaborative_energy = if ("collaborative_energy" %in% names(panel_df)) {
+        dplyr::last(.data$collaborative_energy)
+      } else {
+        NA
+      },
+      latest_snapshot_date = dplyr::last(.data$snapshot_date),
+      latest_views = suppressWarnings(as.numeric(dplyr::last(.data$views_cumulative))),
+      latest_revenue = suppressWarnings(as.numeric(dplyr::last(.data$revenue_cumulative))),
+      latest_age_days = suppressWarnings(as.numeric(dplyr::last(.data$video_age_days))),
+      lifetime_avg_views_per_day = dplyr::if_else(
+        !is.na(.data$latest_age_days) & .data$latest_age_days > 0,
+        .data$latest_views / .data$latest_age_days,
+        NA_real_
+      ),
+      lifetime_avg_revenue_per_day = dplyr::if_else(
+        !is.na(.data$latest_age_days) & .data$latest_age_days > 0,
+        .data$latest_revenue / .data$latest_age_days,
+        NA_real_
+      ),
+      window_first_observed_date = min(.data$snapshot_date, na.rm = TRUE),
+      window_last_observed_date = max(.data$snapshot_date, na.rm = TRUE),
+      window_first_observed_views = suppressWarnings(as.numeric(dplyr::first(.data$views_cumulative))),
+      window_first_observed_revenue = suppressWarnings(as.numeric(dplyr::first(.data$revenue_cumulative))),
+      window_num_observations = dplyr::n(),
+      observed_span_days = as.numeric(
+        max(.data$snapshot_date, na.rm = TRUE) -
+          min(.data$snapshot_date, na.rm = TRUE)
+      ),
+      observed_view_gain = .data$latest_views - .data$window_first_observed_views,
+      observed_revenue_gain = .data$latest_revenue - .data$window_first_observed_revenue,
+      observed_avg_views_per_day = dplyr::if_else(
+        !is.na(.data$observed_span_days) & .data$observed_span_days > 0,
+        .data$observed_view_gain / .data$observed_span_days,
+        NA_real_
+      ),
+      observed_avg_revenue_per_day = dplyr::if_else(
+        !is.na(.data$observed_span_days) & .data$observed_span_days > 0,
+        .data$observed_revenue_gain / .data$observed_span_days,
+        NA_real_
+      ),
+      full_first_observed_date = dplyr::last(.data$full_first_observed_date),
+      full_last_observed_date = dplyr::last(.data$full_last_observed_date),
+      full_num_observations = dplyr::last(.data$full_num_observations),
+      full_observed_span_days = dplyr::last(.data$full_observed_span_days),
+      full_first_observed_views = dplyr::last(.data$full_first_observed_views),
+      full_first_observed_revenue = dplyr::last(.data$full_first_observed_revenue),
+      full_first_observed_age_days = dplyr::last(.data$full_first_observed_age_days),
+      launch_capture_lag_days = dplyr::last(.data$launch_capture_lag_days),
+      captured_on_publish_day = dplyr::last(.data$captured_on_publish_day),
+      captured_within_7_days = dplyr::last(.data$captured_within_7_days),
+      captured_within_30_days = dplyr::last(.data$captured_within_30_days),
+      captured_within_60_days = dplyr::last(.data$captured_within_60_days),
+      captured_within_90_days = dplyr::last(.data$captured_within_90_days),
+      late_entry_into_panel = dplyr::last(.data$late_entry_into_panel),
+      .recent_7 = list(bundle_e_window_stats_vectors(
+        .data$snapshot_date,
+        .data$views_cumulative,
+        window_days = 7,
+        anchor_date = dplyr::last(.data$snapshot_date)
+      )),
+      .recent_30 = list(bundle_e_window_stats_vectors(
+        .data$snapshot_date,
+        .data$views_cumulative,
+        window_days = 30,
+        anchor_date = dplyr::last(.data$snapshot_date)
+      )),
+      .prior_7 = list(bundle_e_window_stats_vectors(
+        .data$snapshot_date,
+        .data$views_cumulative,
+        window_days = 7,
+        anchor_date = dplyr::last(.data$snapshot_date) - 7L
+      )),
+      .revenue_recent_30 = list(bundle_e_window_stats_vectors(
+        .data$snapshot_date,
+        .data$revenue_cumulative,
+        window_days = 30,
+        anchor_date = dplyr::last(.data$snapshot_date)
+      )),
+      .views_day_7 = bundle_e_observed_metric_by_age(
+        .data$video_age_days,
+        .data$views_cumulative,
+        max_age = 7
+      ),
+      .views_day_30 = bundle_e_observed_metric_by_age(
+        .data$video_age_days,
+        .data$views_cumulative,
+        max_age = 30
+      ),
+      .views_day_60 = bundle_e_observed_metric_by_age(
+        .data$video_age_days,
+        .data$views_cumulative,
+        max_age = 60
+      ),
+      .views_day_90 = bundle_e_observed_metric_by_age(
+        .data$video_age_days,
+        .data$views_cumulative,
+        max_age = 90
+      ),
+      .revenue_day_30 = bundle_e_observed_metric_by_age(
+        .data$video_age_days,
+        .data$revenue_cumulative,
+        max_age = 30,
+        require_non_missing = TRUE
+      ),
+      .revenue_day_90 = bundle_e_observed_metric_by_age(
+        .data$video_age_days,
+        .data$revenue_cumulative,
+        max_age = 90,
+        require_non_missing = TRUE
+      ),
+      .groups = "drop"
+    ) %>%
+    dplyr::mutate(
+      recent_7d_views_gain = purrr::map_dbl(.data$.recent_7, "gain"),
+      recent_30d_views_gain = purrr::map_dbl(.data$.recent_30, "gain"),
+      recent_7d_avg_views_per_day = purrr::map_dbl(.data$.recent_7, "avg_per_day"),
+      recent_30d_avg_views_per_day = purrr::map_dbl(.data$.recent_30, "avg_per_day"),
+      prior_7d_avg_views_per_day = purrr::map_dbl(.data$.prior_7, "avg_per_day"),
+      recent_30d_revenue_gain = purrr::map_dbl(.data$.revenue_recent_30, "gain"),
+      recent_30d_avg_revenue_per_day = purrr::map_dbl(.data$.revenue_recent_30, "avg_per_day"),
+      growth_acceleration_ratio = bundle_e_safe_divide(
+        .data$recent_7d_avg_views_per_day,
+        .data$prior_7d_avg_views_per_day
+      ),
+      views_observed_by_day_7 = .data$.views_day_7,
+      views_observed_by_day_30 = .data$.views_day_30,
+      views_observed_by_day_60 = .data$.views_day_60,
+      views_observed_by_day_90 = .data$.views_day_90,
+      revenue_observed_by_day_30 = .data$.revenue_day_30,
+      revenue_observed_by_day_90 = .data$.revenue_day_90,
+      launch_window_7d_fully_observed = !is.na(.data$launch_capture_lag_days) &
+        .data$launch_capture_lag_days <= 7 &
+        !is.na(.data$latest_age_days) &
+        .data$latest_age_days >= 7,
+      launch_window_30d_fully_observed = !is.na(.data$launch_capture_lag_days) &
+        .data$launch_capture_lag_days <= 30 &
+        !is.na(.data$latest_age_days) &
+        .data$latest_age_days >= 30,
+      launch_window_60d_fully_observed = !is.na(.data$launch_capture_lag_days) &
+        .data$launch_capture_lag_days <= 60 &
+        !is.na(.data$latest_age_days) &
+        .data$latest_age_days >= 60,
+      launch_window_90d_fully_observed = !is.na(.data$launch_capture_lag_days) &
+        .data$launch_capture_lag_days <= 90 &
+        !is.na(.data$latest_age_days) &
+        .data$latest_age_days >= 90
+    ) %>%
+    dplyr::select(-dplyr::starts_with("."))
 
-      recent_7 <- bundle_e_window_stats(df, metric_col = "views_cumulative", window_days = 7, anchor_date = latest_date)
-      recent_30 <- bundle_e_window_stats(df, metric_col = "views_cumulative", window_days = 30, anchor_date = latest_date)
-      prior_7 <- bundle_e_window_stats(df, metric_col = "views_cumulative", window_days = 7, anchor_date = latest_date - 7L)
-      revenue_recent_30 <- bundle_e_window_stats(df, metric_col = "revenue_cumulative", window_days = 30, anchor_date = latest_date)
-
-      views_day_7 <- bundle_e_observed_views_by_age(df, 7)
-      views_day_30 <- bundle_e_observed_views_by_age(df, 30)
-      views_day_60 <- bundle_e_observed_views_by_age(df, 60)
-      views_day_90 <- bundle_e_observed_views_by_age(df, 90)
-
-      revenue_day_30 <- bundle_e_observed_revenue_by_age(df, 30)
-      revenue_day_90 <- bundle_e_observed_revenue_by_age(df, 90)
-
-      latest_views <- suppressWarnings(as.numeric(latest$views_cumulative[[1]]))
-      latest_revenue <- suppressWarnings(as.numeric(latest$revenue_cumulative[[1]]))
-      latest_age_days <- suppressWarnings(as.numeric(latest$video_age_days[[1]]))
-      first_window_views <- suppressWarnings(as.numeric(first_window$views_cumulative[[1]]))
-      first_window_revenue <- suppressWarnings(as.numeric(first_window$revenue_cumulative[[1]]))
-      window_span_days <- as.numeric(max(df$snapshot_date, na.rm = TRUE) - min(df$snapshot_date, na.rm = TRUE))
-
-      tibble::tibble(
-        Title = latest$Title[[1]],
-        `Channel Name` = latest$`Channel Name`[[1]],
-        `Channel ID` = latest$`Channel ID`[[1]],
-        publish_date = latest$publish_date[[1]],
-        `Published At` = latest$`Published At`[[1]],
-        `Content Type` = latest$`Content Type`[[1]],
-        content_type = latest$content_type[[1]],
-        topic = latest$topic[[1]],
-        tags = latest$tags[[1]],
-        primary_reference = latest$primary_reference[[1]],
-        collab_group = latest$collab_group[[1]],
-        collaborative_energy = if ("collaborative_energy" %in% names(latest)) latest$collaborative_energy[[1]] else NA,
-        latest_snapshot_date = latest_date,
-        latest_views = latest_views,
-        latest_revenue = latest_revenue,
-        latest_age_days = latest_age_days,
-        lifetime_avg_views_per_day = if (!is.na(latest_age_days) && latest_age_days > 0) latest_views / latest_age_days else NA_real_,
-        lifetime_avg_revenue_per_day = if (!is.na(latest_age_days) && latest_age_days > 0) latest_revenue / latest_age_days else NA_real_,
-        window_first_observed_date = min(df$snapshot_date, na.rm = TRUE),
-        window_last_observed_date = max(df$snapshot_date, na.rm = TRUE),
-        window_first_observed_views = first_window_views,
-        window_first_observed_revenue = first_window_revenue,
-        window_num_observations = nrow(df),
-        observed_span_days = window_span_days,
-        observed_view_gain = latest_views - first_window_views,
-        observed_revenue_gain = latest_revenue - first_window_revenue,
-        observed_avg_views_per_day = if (!is.na(window_span_days) && window_span_days > 0) (latest_views - first_window_views) / window_span_days else NA_real_,
-        observed_avg_revenue_per_day = if (!is.na(window_span_days) && window_span_days > 0) (latest_revenue - first_window_revenue) / window_span_days else NA_real_,
-        full_first_observed_date = latest$full_first_observed_date[[1]],
-        full_last_observed_date = latest$full_last_observed_date[[1]],
-        full_num_observations = latest$full_num_observations[[1]],
-        full_observed_span_days = latest$full_observed_span_days[[1]],
-        full_first_observed_views = latest$full_first_observed_views[[1]],
-        full_first_observed_revenue = latest$full_first_observed_revenue[[1]],
-        full_first_observed_age_days = latest$full_first_observed_age_days[[1]],
-        launch_capture_lag_days = latest$launch_capture_lag_days[[1]],
-        captured_on_publish_day = latest$captured_on_publish_day[[1]],
-        captured_within_7_days = latest$captured_within_7_days[[1]],
-        captured_within_30_days = latest$captured_within_30_days[[1]],
-        captured_within_60_days = latest$captured_within_60_days[[1]],
-        captured_within_90_days = latest$captured_within_90_days[[1]],
-        late_entry_into_panel = latest$late_entry_into_panel[[1]],
-        recent_7d_views_gain = recent_7$gain,
-        recent_30d_views_gain = recent_30$gain,
-        recent_7d_avg_views_per_day = recent_7$avg_per_day,
-        recent_30d_avg_views_per_day = recent_30$avg_per_day,
-        prior_7d_avg_views_per_day = prior_7$avg_per_day,
-        recent_30d_revenue_gain = revenue_recent_30$gain,
-        recent_30d_avg_revenue_per_day = revenue_recent_30$avg_per_day,
-        growth_acceleration_ratio = bundle_e_safe_divide(recent_7$avg_per_day, prior_7$avg_per_day)[[1]],
-        views_observed_by_day_7 = views_day_7,
-        views_observed_by_day_30 = views_day_30,
-        views_observed_by_day_60 = views_day_60,
-        views_observed_by_day_90 = views_day_90,
-        revenue_observed_by_day_30 = revenue_day_30,
-        revenue_observed_by_day_90 = revenue_day_90,
-        launch_window_7d_fully_observed = !is.na(latest$launch_capture_lag_days[[1]]) &&
-          latest$launch_capture_lag_days[[1]] <= 7 &&
-          !is.na(latest_age_days) &&
-          latest_age_days >= 7,
-        launch_window_30d_fully_observed = !is.na(latest$launch_capture_lag_days[[1]]) &&
-          latest$launch_capture_lag_days[[1]] <= 30 &&
-          !is.na(latest_age_days) &&
-          latest_age_days >= 30,
-        launch_window_60d_fully_observed = !is.na(latest$launch_capture_lag_days[[1]]) &&
-          latest$launch_capture_lag_days[[1]] <= 60 &&
-          !is.na(latest_age_days) &&
-          latest_age_days >= 60,
-        launch_window_90d_fully_observed = !is.na(latest$launch_capture_lag_days[[1]]) &&
-          latest$launch_capture_lag_days[[1]] <= 90 &&
-          !is.na(latest_age_days) &&
-          latest_age_days >= 90
-      )
-    }) %>%
-    dplyr::ungroup() %>%
+  summary_df %>%
     dplyr::mutate(
       publish_cohort = lubridate::floor_date(.data$publish_date, unit = "month"),
       front_loaded_flag = dplyr::if_else(
@@ -214,7 +353,8 @@ build_bundle_e_video_summary <- function(panel_df) {
         missing = FALSE
       ),
       reacceleration_flag = dplyr::if_else(
-        !is.na(.data$growth_acceleration_ratio) & is.finite(.data$growth_acceleration_ratio) &
+        !is.na(.data$growth_acceleration_ratio) &
+          is.finite(.data$growth_acceleration_ratio) &
           .data$growth_acceleration_ratio >= 1.5,
         TRUE,
         FALSE,
