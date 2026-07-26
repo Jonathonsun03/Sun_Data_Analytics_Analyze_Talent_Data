@@ -136,30 +136,103 @@ count_code_pairs_by_window <- function(data,
                                        group_cols = c("source_file", "video_id"),
                                        window_size_back = 4L) {
   group_cols <- intersect(group_cols, names(data))
-
-  data_with_codes <- data %>%
-    dplyr::mutate(
-      .row_id = dplyr::row_number(),
-      .codes = purrr::map(.data[[codes_col]], parse_positive_code_ids)
-    )
-
-  if (length(group_cols) > 0) {
-    data_with_codes <- data_with_codes %>%
-      dplyr::group_by(dplyr::across(dplyr::all_of(group_cols)))
+  window_size_back <- as.integer(window_size_back)
+  if (is.na(window_size_back) || window_size_back < 0L) {
+    stop("`window_size_back` must be a non-negative integer.", call. = FALSE)
   }
 
-  data_with_codes %>%
-    dplyr::mutate(
-      .group_row_id = dplyr::row_number(),
-      .window_codes = purrr::map(
-        .data$.group_row_id,
-        ~ .data$.codes[seq.int(max(1L, .x - window_size_back), .x)] %>%
-          unlist(use.names = FALSE) %>%
-          unique()
+  if (codes_col %in% names(data)) {
+    codes_by_row <- purrr::map(
+      data[[codes_col]],
+      parse_positive_code_ids
+    )
+    code_ids <- sort(unique(unlist(codes_by_row, use.names = FALSE)))
+    code_matrix <- matrix(
+      FALSE,
+      nrow = nrow(data),
+      ncol = length(code_ids),
+      dimnames = list(NULL, code_ids)
+    )
+    code_index <- stats::setNames(seq_along(code_ids), code_ids)
+    for (i in seq_along(codes_by_row)) {
+      row_codes <- codes_by_row[[i]]
+      if (length(row_codes) > 0L) {
+        code_matrix[i, unname(code_index[row_codes])] <- TRUE
+      }
+    }
+  } else {
+    wide_code_cols <- grep("^code_", names(data), value = TRUE)
+    if (length(wide_code_cols) == 0L) {
+      stop(
+        "Data must contain `", codes_col,
+        "` or at least one wide `code_*` column.",
+        call. = FALSE
       )
-    ) %>%
-    dplyr::ungroup() %>%
-    dplyr::transmute(.row_id, pair = purrr::map(.data$.window_codes, codes_to_pairs)) %>%
-    tidyr::unnest(cols = "pair") %>%
-    dplyr::count(.data$code_1, .data$code_2, name = "window_pair_count", sort = TRUE)
+    }
+    code_matrix <- as.matrix(data[wide_code_cols])
+    code_matrix[is.na(code_matrix)] <- FALSE
+    storage.mode(code_matrix) <- "logical"
+    code_ids <- sub("^code_", "", wide_code_cols)
+    code_order <- order(code_ids)
+    code_ids <- code_ids[code_order]
+    code_matrix <- code_matrix[, code_order, drop = FALSE]
+  }
+
+  if (length(code_ids) < 2L || nrow(code_matrix) == 0L) {
+    return(tibble::tibble(
+      code_1 = character(),
+      code_2 = character(),
+      window_pair_count = integer()
+    ))
+  }
+
+  groups <- if (length(group_cols) == 0L) {
+    rep.int(1L, nrow(data))
+  } else {
+    group_data <- lapply(data[group_cols], function(x) {
+      x <- as.character(x)
+      x[is.na(x)] <- "<NA>"
+      x
+    })
+    do.call(
+      interaction,
+      c(group_data, list(drop = TRUE, lex.order = TRUE))
+    )
+  }
+
+  window_matrix <- matrix(
+    FALSE,
+    nrow = nrow(code_matrix),
+    ncol = ncol(code_matrix)
+  )
+  group_rows <- split(seq_len(nrow(data)), groups)
+  for (rows in group_rows) {
+    group_size <- length(rows)
+    for (offset in 0:min(window_size_back, group_size - 1L)) {
+      destinations <- rows[seq.int(1L + offset, group_size)]
+      sources <- rows[seq_len(group_size - offset)]
+      window_matrix[destinations, ] <- window_matrix[destinations, , drop = FALSE] |
+        code_matrix[sources, , drop = FALSE]
+    }
+  }
+
+  pair_index <- utils::combn(seq_along(code_ids), 2L)
+  counts <- vapply(seq_len(ncol(pair_index)), function(i) {
+    sum(
+      window_matrix[, pair_index[1L, i]] &
+        window_matrix[, pair_index[2L, i]]
+    )
+  }, integer(1))
+  keep <- counts > 0L
+
+  tibble::tibble(
+    code_1 = code_ids[pair_index[1L, keep]],
+    code_2 = code_ids[pair_index[2L, keep]],
+    window_pair_count = counts[keep]
+  ) %>%
+    dplyr::arrange(
+      dplyr::desc(.data$window_pair_count),
+      .data$code_1,
+      .data$code_2
+    )
 }

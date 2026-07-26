@@ -2,6 +2,21 @@
 
 This folder records the design trail for the qualitative data prep and ENA extract pipeline.
 
+## Current status
+
+As of 2026-07-26, the implemented canonical path is the shared qualitative
+schema in the unified talent lakehouse:
+
+- schema: `r_scripts/lib/duckdb/qualitative_schema.R`
+- transactional publisher: `r_scripts/lib/duckdb/qualitative_publish.R`
+- runnable entrypoint: `r_scripts/run/publish_qualitative_coding.R`
+- analysis loader: `r_scripts/lib/import_data/qualitative_transcripts.R`
+
+The ordered notes below are retained as design history. Where they describe
+CSV/RDS-only workflows, codebook-specific load tables, or advise postponing the
+shared lakehouse, they are superseded by `AGENTS.md` and
+`r_scripts/README.md`. Do not implement a parallel path from an older note.
+
 Read in this order:
 
 1. Order 01: `2026-05-10_incremental_ena_data_infrastructure_inventory.md`
@@ -17,11 +32,11 @@ Read in this order:
 6. Order 06: `2026-05-10_order_06_qualitative_ena_implementation_log.md`
    - Implementation log for today's Module 1/2/3 code, lean `qc/talents/...` task workflow, wrappers, migration/archive work, and smoke-test status.
 
-Current implementation direction:
+Historical implementation direction:
 
-- Start with Order 06 for the current implemented shape.
+- Order 06 describes the earlier implemented shape.
 - Module 2 is now a lean transcript-level Codex task-packet workflow under `qc/talents/<talent_slug>/runs/<run_id>/`: build task, let Codex code `coded.csv`, validate output, merge into a new updated coding sheet.
 - The Avaritia smoke run now lives at `qc/talents/avaritia_hawthorne_variance_project/runs/smoke`; the old `qualitative_coding/coding_runs/coding_sheet_avaritia_smoke` folder was moved to `qc/_archive/legacy_runs/`.
 - Order 03 explains the conceptual pivot toward direct line-level `text_playback` conversion.
-- Do not build a broad abstract warehouse first.
-- Use the normalized architecture note as a later growth path if the direct converter and modular coding-sheet workflow become too hard to manage with run folders, CSV/RDS outputs, and DuckDB load tables alone.
+- These notes may still explain how older coding sheets were produced, but
+  published analysis should use the canonical qualitative lakehouse interfaces.

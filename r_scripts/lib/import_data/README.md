@@ -46,3 +46,44 @@ matches <- find_text_playback_streams(
 
 replay <- read_text_playback_stream(matches, row = 1)
 ```
+
+## Qualitative Transcript Coding
+
+Defined in `qualitative_transcripts.R`.
+
+`load_qualitative_transcripts_wide()` is the supported analysis interface for
+versioned qualitative coding stored in the unified talent lakehouse. It resolves
+the codebook-specific wide view, joins the exact coded transcript text, and
+returns the code columns as R logical vectors.
+
+The loader also retrieves video/talent dimensions from `catalog` and chat
+payment metadata from `text.chat_messages`. These fields are joined at read
+time; they are not duplicated in the qualitative coding tables.
+
+```r
+source(here::here("r_scripts", "lib", "utils", "datalake_root.r"))
+source(here::here("r_scripts", "lib", "duckdb", "db_connect.R"))
+source(here::here(
+  "r_scripts",
+  "lib",
+  "import_data",
+  "qualitative_transcripts.R"
+))
+
+qualitative_data <- load_qualitative_transcripts_wide(
+  codebook_id = "chat_monetary_growth_v1",
+  dataset_id = "chat_monetary_growth_variance_30_video",
+  pipeline_run_id = "latest",
+  response_status = NULL
+)
+```
+
+Use `response_status = "coded"` to exclude missing or invalid coding responses.
+Use an explicit `pipeline_run_id` instead of `"latest"` when an analysis must
+pin one coding run. `load_qualitative_codebook()` returns the matching codebook
+definitions from DuckDB. `load_qualitative_video_performance()` retrieves the
+matching rows from `analytics.video_latest_performance`.
+
+Do not add a separate loader per codebook. New codebooks are resolved through
+the metadata in `qualitative.codebooks`, and their generated wide views are
+consumed by the same `load_qualitative_transcripts_wide()` function.

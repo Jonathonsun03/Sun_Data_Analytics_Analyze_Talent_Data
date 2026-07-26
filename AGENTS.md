@@ -8,6 +8,21 @@
 - Read raw and intermediate data from `/mnt/datalake/`.
 - Write non-code outputs, reports, and rendered artifacts to `/mnt/datalake/`.
 
+## Canonical qualitative lakehouse
+- The unified talent DuckDB is resolved with `talent_lakehouse_db_path()` from `r_scripts/lib/duckdb/db_connect.R`. Do not hard-code a container-specific DuckDB path.
+- Reuse the shared `qualitative` schema before proposing any new qualitative tables:
+  - `qualitative.transcripts` stores the selected semantic units, their exact coded-text snapshot, `video_id`, `talent_code`, and lineage back to existing chat or subtitle records.
+  - `qualitative.codebooks` stores versioned code definitions and the metadata required to generate a codebook-specific wide view.
+  - `qualitative.coding` stores coding-run results once, with code values in a generic map keyed by `code_id`.
+- Raw transcript truth remains in `text.chat_messages` and `text.subtitle_units`. The text in `qualitative.transcripts` is an auditable snapshot of the exact semantic unit that was coded, not a replacement raw transcript store. Preserve `source_record_keys`, alignment status, and the text checksum when publishing.
+- Retrieve titles, talent names, video metadata, analytics, and chat payment fields by joining the existing `catalog`, `analytics`, and `text` relations. Do not copy those dimensions into new qualitative tables.
+- A new codebook is a new `codebook_id` in the shared tables plus a generated wide view. Do not create physical tables such as `qualitative.coding_cb_1` or `qualitative.coding_<project>`.
+- Dataset membership is represented by `dataset_id` on `qualitative.transcripts`. Do not add a dataset registry or dataset-video bridge merely to restate the current rows; require a concrete metadata or many-to-many selection need first.
+- Analysis code should call `load_qualitative_transcripts_wide()` and related helpers in `r_scripts/lib/import_data/qualitative_transcripts.R`. Do not add notebook-specific CSV import blocks for a dataset that has been published.
+- Publish or update qualitative data through `r_scripts/run/publish_qualitative_coding.R`, which uses the transaction-safe helpers in `r_scripts/lib/duckdb/qualitative_publish.R`. Use `QUALITATIVE_PUBLISH_DRY_RUN=true` before a new source/codebook combination.
+- Qualitative publishers must register source files in `ops.source_files` and coding executions in `ops.pipeline_runs`; do not create a second provenance or run-log system.
+- Before adding a qualitative database helper, inspect `qualitative_schema.R`, `qualitative_publish.R`, and `qualitative_transcripts.R` and extend the existing abstraction when possible.
+
 ## Raw data protection
 - Raw data in this repository and in mounted data directories is read-only unless explicitly told otherwise.
 - Do not modify, overwrite, clean, reformat, or delete raw data files unless the user specifically requests it.

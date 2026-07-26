@@ -5,6 +5,14 @@ duckdb_get_db_path <- function(
   file.path(datalake_root, filename)
 }
 
+talent_lakehouse_db_path <- function(datalake_root = get_datalake_root()) {
+  file.path(
+    datalake_root,
+    "Data_lakehouse",
+    "talent_lakehouse.duckdb"
+  )
+}
+
 .duckdb_driver_cache <- new.env(parent = emptyenv())
 
 duckdb_connect <- function(

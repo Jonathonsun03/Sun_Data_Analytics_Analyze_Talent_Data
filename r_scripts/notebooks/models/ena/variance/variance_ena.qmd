@@ -13,7 +13,6 @@ execute:
 ```{r libraries_and_utils}
 library(here)
 knitr::opts_knit$set(root.dir = here::here())
-setwd(here::here())
 
 library(readr)
 library(dplyr)
@@ -22,10 +21,8 @@ library(rENA)
 
 source(here::here("r_scripts", "lib", "utils", "source_dir.r"))
 source(here::here("r_scripts", "lib", "utils", "datalake_root.r"))
-source(here::here("r_scripts", "lib", "utils", "talent_select.R"))
-source(here::here("r_scripts", "lib", "import_data", "talent_files.R"))
-source(here::here("r_scripts", "lib", "clean_data", "CleanData.R"))
-source(here::here("r_scripts", "lib", "clean_data", "qualitative_data_prep", "qualitative_data_prep.r"))
+source(here::here("r_scripts", "lib", "duckdb", "db_connect.R"))
+source(here::here("r_scripts", "lib", "import_data", "qualitative_transcripts.R"))
 source_dir("r_scripts", "lib", "ENA_prep", "analysis_helpers")
 source(here::here("r_scripts", "lib", "clean_data", "title_classification_join.R"))
 source(here::here("r_scripts", "lib", "transcript_analysis", "qualitative_codes.R"))
@@ -45,29 +42,37 @@ safe_median <- function(x) if (all(is.na(x))) NA_real_ else median(x, na.rm = TR
 ```
 
 ```{r import_paths}
+qualitative_dataset_id <- "chat_monetary_growth_variance_30_video"
+qualitative_codebook_id <- "chat_monetary_growth_v1"
+qualitative_db_path <- talent_lakehouse_db_path()
 
-codebook <- resolve_datalake_path(
-  r"(Z:\DataLake\Sun_Data_Analytics\Processed\Talent_Data\Qualitative Codebooks\library\selections\chat_monetary_growth\batch_002\batch_002_codebook.csv)"
-)
-
-coded_data_dir <- resolve_datalake_path(
-  r"(Z:\DataLake\Sun_Data_Analytics\Processed\Talent_Data\saved_outputs\chat_monetary_052526\coded_data)"
+variance_talent_labels <- c(
+  AVA1 = "Ava",
+  KAT2 = "Katya",
+  LEI3 = "Leia"
 )
 ```
 
 ```{r importing_qualitative_data}
-batch_review_paths <- sort(list.files(coded_data_dir, pattern = "\\.csv$", full.names = TRUE))
-
-import_data <- batch_review_paths %>%
-  purrr::set_names(tools::file_path_sans_ext(basename(.))) %>%
-  purrr::map_dfr(
-    ~ readr::read_csv(.x, show_col_types = FALSE),
-    .id = "batch_run"
+import_data <- load_qualitative_transcripts_wide(
+  codebook_id = qualitative_codebook_id,
+  dataset_id = qualitative_dataset_id,
+  pipeline_run_id = "latest",
+  response_status = NULL,
+  db_path = qualitative_db_path
+) %>%
+  dplyr::mutate(
+    batch_run = .data$pipeline_run_id,
+    talent_name = dplyr::recode(
+      .data$talent_code,
+      !!!variance_talent_labels
+    ),
+    row_number = .data$line_number
   ) %>%
-  mutate(talent_name = sub("_data$", "", .data$batch_run)) %>%
-  select(
+  dplyr::select(
     batch_run,
     talent_name,
+    talent_code,
     request_custom_id,
     source_file,
     video_id,
@@ -80,7 +85,6 @@ import_data <- batch_review_paths %>%
     paid_currency,
     message_type,
     text,
-    positive_codes,
     starts_with("code_")
   )
 ```
@@ -298,7 +302,10 @@ plotly::ggplotly(donation_histogram) %>%
 These codes are a combination of chat specific codes focusing on generalized chat behvaior, while focusing on generalized streamer responses. These are intended to be broad behvaiors to identify if there's a simpler solution to understanding the relationship between streamer and chat.
 
 ```{r qualitative codebook}
-codebook_data <- readr::read_csv(codebook, show_col_types = FALSE)
+codebook_data <- load_qualitative_codebook(
+  codebook_id = qualitative_codebook_id,
+  db_path = qualitative_db_path
+)
 
 codebook_display <- codebook_data %>%
   dplyr::mutate(
@@ -725,35 +732,10 @@ stream_revenue_data <- df %>%
     dplyr::across(dplyr::any_of(c("talent_name", "video_id")), as.character)
   )
 
-analytics_talent_paths <- unique(stream_regression_data$talent_name) %>%
-  purrr::map_chr(~ select_talent(.x, root = get_datalake_root()))
-
-analytics_talent_files <- TalentFiles(analytics_talent_paths)
-
-stream_analytics_data <- purrr::map_dfr(
-  seq_along(analytics_talent_files),
-  ~ video_analytics_prep(
-    files = analytics_talent_files,
-    talent = safe_basename(analytics_talent_paths[[.x]]),
-    talent_index = .x
-  ) %>%
-    dplyr::mutate(analytics_talent_name = safe_basename(analytics_talent_paths[[.x]]))
-) %>%
-  dplyr::transmute(
-    video_id = as.character(.data$`Video ID`),
-    analytics_talent_name = as.character(.data$analytics_talent_name),
-    analytics_views = as.numeric(.data$views),
-    analytics_estimated_minutes_watched = as.numeric(.data$estimatedMinutesWatched),
-    analytics_average_view_duration = as.numeric(.data$averageViewDuration),
-    analytics_average_view_percentage = as.numeric(.data$averageViewPercentage),
-    analytics_subscribers_gained = as.numeric(.data$subscribersGained),
-    analytics_subscribers_lost = as.numeric(.data$subscribersLost),
-    analytics_duration_minutes = as.numeric(.data$duration_minutes),
-    analytics_publish_hour_sin = as.numeric(.data$publish_hour_sin),
-    analytics_publish_hour_cos = as.numeric(.data$publish_hour_cos),
-    analytics_is_weekend = as.integer(.data$is_weekend)
-  ) %>%
-  dplyr::distinct(.data$video_id, .keep_all = TRUE)
+stream_analytics_data <- load_qualitative_video_performance(
+  video_ids = unique(stream_regression_data$video_id),
+  db_path = qualitative_db_path
+)
 
 stream_model_data <- stream_regression_data %>%
   dplyr::left_join(
@@ -795,9 +777,22 @@ if (length(missing_modeling_packages) > 0L) {
 ```
 
 ```{r modeling_paths}
-modeling_output_dir <- file.path(dirname(coded_data_dir), "stream_predictive_modeling")
-dir.create(modeling_output_dir, recursive = TRUE, showWarnings = FALSE)
-write_modeling_outputs <- TRUE
+modeling_output_dir <- file.path(
+  dirname(get_datalake_root()),
+  "Processed",
+  "Talent_Data",
+  "qualitative_coding",
+  "analysis_runs",
+  "variance_ena",
+  qualitative_dataset_id
+)
+write_modeling_outputs <- tolower(Sys.getenv(
+  "VARIANCE_ENA_WRITE_OUTPUTS",
+  unset = "true"
+)) %in% c("1", "true", "yes")
+if (isTRUE(write_modeling_outputs)) {
+  dir.create(modeling_output_dir, recursive = TRUE, showWarnings = FALSE)
+}
 ```
 
 ```{r modeling_setup_modules}
