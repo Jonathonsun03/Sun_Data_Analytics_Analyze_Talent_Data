@@ -12,7 +12,7 @@ fi
 
 QUARTO_BIN="${QUARTO_BIN:-quarto}"
 RSCRIPT_BIN="${RSCRIPT_BIN:-Rscript}"
-NOTEBOOK="${REPO_ROOT}/r_scripts/notebooks/variance_numbers/variance_numbers.qmd"
+NOTEBOOK="${REPO_ROOT}/r_scripts/notebooks/reports/variance_numbers/variance_numbers.qmd"
 DATA_ROOT="${TALENT_DATALAKE_ROOT:-${TALENT_DATA_ROOT:-}}"
 DRY_RUN="false"
 

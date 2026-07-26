@@ -7,8 +7,11 @@ This directory contains the repository's maintained R code.
 - `r_scripts/lib/`
   - shared R helpers for data loading, cleaning, DuckDB, prompt assembly, report rendering, and stream summarization
   - reusable plot implementations are organized by analytical domain under `r_scripts/lib/plots/domains/`
+- `r_scripts/notebooks/`
+  - interactive analyses, model development notebooks, reports, and dashboards
+  - model notebooks are grouped by analytical family under `r_scripts/notebooks/models/`
 - `r_scripts/run/`
-  - runnable R entrypoints grouped by workflow
+  - automation-oriented R entrypoints grouped by workflow
 
 ## Key workflows
 
@@ -33,6 +36,8 @@ Python stream-summary analysis runners no longer live here.
 ## Conventions
 
 - Put new reusable R code in `r_scripts/lib/`.
+- Put interactive analyses and model notebooks in `r_scripts/notebooks/`.
 - Put new runnable R entrypoints in `r_scripts/run/`.
+- Do not create a second notebook tree under `r_scripts/run/`.
 - Resolve repository-relative paths from the `.git` root rather than relying on RStudio or the current working directory.
 - Keep Python code in `py_scripts/`, not under `r_scripts/`.

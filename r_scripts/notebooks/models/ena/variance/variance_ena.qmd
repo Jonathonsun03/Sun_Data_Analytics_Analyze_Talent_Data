@@ -10,7 +10,6 @@ execute:
   warning: false
 ---
 
-
 ```{r libraries_and_utils}
 library(here)
 knitr::opts_knit$set(root.dir = here::here())
@@ -43,9 +42,7 @@ safe_min <- function(x) if (all(is.na(x))) NA_real_ else min(x, na.rm = TRUE)
 safe_max <- function(x) if (all(is.na(x))) NA_real_ else max(x, na.rm = TRUE)
 safe_mean <- function(x) if (all(is.na(x))) NA_real_ else mean(x, na.rm = TRUE)
 safe_median <- function(x) if (all(is.na(x))) NA_real_ else median(x, na.rm = TRUE)
-
 ```
-
 
 ```{r import_paths}
 
@@ -88,6 +85,8 @@ import_data <- batch_review_paths %>%
   )
 ```
 
+
+
 ## Introduction
 
 Exploring use qualitative ENA with Variance talents. 
@@ -127,12 +126,14 @@ df <- import_data %>%
       "usd_per_unit"
     ))
   )
-
 ```
+
+
 
 ## Videos included in the analysis
 
 Table below includes definitions for each of the genres
+
 ```{r classification definitions}
 
 classification_definitions <- read_classification_definitions_table()
@@ -185,7 +186,10 @@ video_titles <- df %>%
   select(-category_value)
 ```
 
+
+
 The table shows the distribution of different types of content from the sample. 
+
 ```{r}
 classification_counts <- video_titles %>%
   dplyr::count(talent_name, content_category, name = "n_videos") %>%
@@ -203,6 +207,8 @@ DTSettings(
   options = list(pageLength = 10)
 )
 ```
+
+
 
 ## Lines of text associated with each genre
 
@@ -246,6 +252,8 @@ DTSettings(
 )
 ```
 
+
+
 ## Amount of Money by each stream and streamer
 Note that this is a check to deteremine that there is an average range. The assumption was that I picked streams that at least had money in them, so none of these streams had $0.
 
@@ -281,6 +289,8 @@ plotly::ggplotly(donation_histogram) %>%
   )
 ```
 
+
+
 # Qualitative Analysis: Epistemic Network Analysis
 
 ## Qualitative Codebook
@@ -315,10 +325,12 @@ DTSettings(
   scroll_x = TRUE,
   options = list(pageLength = 10)
 )
-
 ```
 
+
+
 ## Code Selection
+
 ```{r code selection}
 code_column_lookup <- build_code_column_lookup(codebook_data)
 import_data_named <- rename_code_columns(import_data, code_column_lookup)
@@ -335,6 +347,8 @@ code_pair_counts <- count_code_pairs_by_window(
 top_code_pairs <- code_pair_counts %>%
   dplyr::slice_head(n = 6)
 ```
+
+
 
 
 
@@ -393,6 +407,8 @@ DTSettings(
 )
 ```
 
+
+
 Next rather than looking at individual codes, I also examined code pairs to determine which sets of code pairs were the most common. This is because ENA is ultimately looking at code co-occurence, so understanding which codes are commonly co-occuring can be helpful for understanding the data and validating the code selection. The table below shows the most common code pairs, which again validates the code selection as these pairs are made up of the codes that were selected for the model.
 
 ```{r frequency_codepairs}
@@ -432,7 +448,10 @@ DTSettings(
 )
 ```
 
+
+
 ## ENA Prep
+
 ```{r ENA_Set}
 ena_input_data <- df %>%
   dplyr::mutate(
@@ -551,7 +570,6 @@ plot_stream_network <- function(ena_set,
 stream_code_pair_weights <- get_stream_code_pair_weights(ENA_set)
 ```
 
-
 ```{r overall_plot}
 talent_centroids <- ena_group_centroids(
   ENA_set,
@@ -610,23 +628,34 @@ plot_talent_mean_network <- function(ena_set,
 }
 ```
 
+
+
 ## Ava
+
 ```{r ava_network}
 plot <- plot_talent_mean_network(ENA_set, "Ava")
 plot$plot
 ```
 
+
+
 ## Katya
+
 ```{r katya_network}
 plot <- plot_talent_mean_network(ENA_set, "Katya")
 plot$plot
 ```
 
+
+
 ## Leia
+
 ```{r leia_network}
 plot <- plot_talent_mean_network(ENA_set, "Leia")
 plot$plot
 ```
+
+
 
 # Linear Regression Analysis
 
@@ -742,6 +771,8 @@ stream_model_data <- stream_regression_data %>%
   )
 ```
 
+
+
 ## Predictive Modeling Goal
 
 The goal of this section is predictive rather than causal. The question is whether stream activity, content classifications, and ENA lineweight features help predict stream-level donations. Because there are only about 30 streams, the workflow keeps the unregularized linear models small and uses penalized regression for the ENA-heavy models.
@@ -767,7 +798,6 @@ if (length(missing_modeling_packages) > 0L) {
 modeling_output_dir <- file.path(dirname(coded_data_dir), "stream_predictive_modeling")
 dir.create(modeling_output_dir, recursive = TRUE, showWarnings = FALSE)
 write_modeling_outputs <- TRUE
-
 ```
 
 ```{r modeling_setup_modules}
@@ -1040,6 +1070,8 @@ summarise_bootstrap_stability <- function(bootstrap_coefficients) {
 }
 ```
 
+
+
 ## Modeling Data Preparation
 
 The modeling dataset keeps one row per stream. Sparse topics are collapsed into an `Other` category so that the small sample does not create unstable one-observation dummy variables. Logical classification columns are converted to numeric 0/1 predictors. ENA lineweights are already numeric and are standardized internally by `glmnet`.
@@ -1127,6 +1159,8 @@ model_specs <- tibble::tribble(
 )
 ```
 
+
+
 ## Model Comparison
 
 The models are evaluated with leave-one-out cross-validation. This is more defensible for a small sample than in-sample fit statistics, though the results should still be interpreted as exploratory because each fold is trained on a very small dataset.
@@ -1157,6 +1191,8 @@ DTSettings(
   options = list(pageLength = 10)
 )
 ```
+
+
 
 ## Strongest Predictors
 
@@ -1190,6 +1226,8 @@ DTSettings(
 )
 ```
 
+
+
 ## Diagnostic Plots
 
 These plots show predictive behavior for the best-performing model. They are checks on prediction quality, not evidence of causal effects. The interactive versions are helpful for identifying which specific streams are driving errors or unusual coefficient patterns.
@@ -1220,6 +1258,8 @@ best_model_predictions <- model_predictions %>%
     )
   )
 ```
+
+
 
 ### Observed vs Predicted Donations
 
@@ -1252,6 +1292,8 @@ observed_vs_predicted_interactive <- plotly::ggplotly(
 observed_vs_predicted_interactive
 ```
 
+
+
 ### Residuals vs Fitted Values
 
 This plot checks whether prediction errors are randomly scattered across the range of fitted values. A strong curve, funnel shape, or cluster of large residuals would suggest the model is missing structure or struggling with a subset of streams.
@@ -1280,6 +1322,8 @@ residuals_vs_fitted_interactive <- plotly::ggplotly(
 
 residuals_vs_fitted_interactive
 ```
+
+
 
 ### Retained Predictors
 
@@ -1334,6 +1378,8 @@ if (isTRUE(write_modeling_outputs)) {
   )
 }
 ```
+
+
 
 ## Validity Checks
 
@@ -1395,6 +1441,8 @@ DTSettings(
   options = list(pageLength = 5)
 )
 ```
+
+
 
 The selected model is the one with the lowest leave-one-out RMSE on `log1p(total_donations)`. This means it performed best in the current predictive comparison, but it should not be read as a causal explanation of why streams received donations.
 
@@ -1531,6 +1579,8 @@ if (isTRUE(write_modeling_outputs)) {
 }
 ```
 
+
+
 ### Retained Predictor Interpretation
 
 For penalized models, retained predictors are non-zero coefficients from the selected predictive model. They are not conventional statistical-significance tests. For linear models, the coefficient table includes standard errors, p-values, and confidence intervals, but these are still exploratory because the model was selected after comparison.
@@ -1576,6 +1626,8 @@ DTSettings(
 plotly::ggplotly(retained_predictor_plot)
 ```
 
+
+
 ### Stability Checks
 
 This bootstrap-style resampling check asks whether the selected predictors are stable or whether they change substantially depending on which streams are included. With a small sample, instability is expected; stable predictors should appear repeatedly across resamples with reasonably consistent coefficient direction.
@@ -1618,6 +1670,8 @@ DTSettings(
 
 plotly::ggplotly(predictor_stability_plot)
 ```
+
+
 
 ### Exploratory Inferential Follow-Up
 
@@ -1700,6 +1754,8 @@ DTSettings(
 )
 ```
 
+
+
 ### Optional Non-Donation ENA Sensitivity Check
 
 This sensitivity check is only relevant if the selected best model uses ENA predictors that include `gave_money`. Those predictors are donation-linked and can leak information about the outcome. The current main workflow removes those predictors from ENA modeling, but this check documents whether the sensitivity condition applies.
@@ -1751,6 +1807,8 @@ DTSettings(
 )
 ```
 
+
+
 ### Written Interpretation Template
 
 ```{r validity_interpretation_template}
@@ -1799,6 +1857,8 @@ if (isTRUE(write_modeling_outputs)) {
 
 cat(paste(validity_summary_lines, collapse = "\n"))
 ```
+
+
 
 ## Findings Template
 

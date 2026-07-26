@@ -15,6 +15,9 @@ This folder contains Linux wrapper scripts that standardize how Bundle reports a
 
 Path: `bin/linux/render_reports/run_variance_numbers.sh`
 
+Source notebook:
+`r_scripts/notebooks/reports/variance_numbers/variance_numbers.qmd`
+
 With no arguments, this wrapper renders the Variance Numbers notebook for
 Katya Sable, Leia Memoria, and Avaritia Hawthorne. Each self-contained HTML is
 written to the corresponding talent folder:
