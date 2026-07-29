@@ -312,24 +312,139 @@ tma_model <- tma::accumulate(
 )
 
 tma_set <- rENA::ena.make.set(tma_model)
+
+tma_unit_display <- tibble::tibble(
+  talent_name = as.vector(tma_model$meta.data[["talent_name"]]),
+  video_id = as.vector(tma_model$meta.data[["video_id"]])
+) %>%
+  dplyr::left_join(
+    tma_input_data %>%
+      dplyr::group_by(.data$talent_name, .data$video_id) %>%
+      dplyr::summarise(
+        source_file = dplyr::first(.data$source_file),
+        source_file_count = dplyr::n_distinct(.data$source_file),
+        total_paid_amount_usd = sum(.data$paid_amount_usd, na.rm = TRUE),
+        .groups = "drop"
+      ),
+    by = c("talent_name", "video_id")
+  )
+
+if (
+  any(tma_unit_display$source_file_count != 1L) ||
+    any(is.na(tma_unit_display$source_file)) ||
+    any(!is.finite(tma_unit_display$total_paid_amount_usd))
+) {
+  stop(
+    "Each TMA unit must have one source file and one finite USD total.",
+    call. = FALSE
+  )
+}
+
+tma_unit_display <- tma_unit_display %>%
+  dplyr::mutate(
+    source_file_label = tools::file_path_sans_ext(
+      basename(.data$source_file)
+    ),
+    stream_name = dplyr::if_else(
+      endsWith(
+        .data$source_file_label,
+        paste0("_", .data$video_id)
+      ),
+      substr(
+        .data$source_file_label,
+        1L,
+        nchar(.data$source_file_label) - nchar(.data$video_id) - 1L
+      ),
+      .data$source_file_label
+    ),
+    stream_name = trimws(gsub("_+", " ", .data$stream_name))
+  ) %>%
+  dplyr::select(-dplyr::all_of("source_file_count"))
+
+wrap_tooltip_title <- function(title, width = 42L) {
+  vapply(
+    title,
+    function(value) {
+      paste(strwrap(value, width = width), collapse = "<br>")
+    },
+    character(1)
+  )
+}
+
+tma_unit_display <- tma_unit_display %>%
+  dplyr::mutate(
+    tooltip = sprintf(
+      "<b>%s</b><br>Streamer: %s<br>Total payment: USD %.2f",
+      wrap_tooltip_title(.data$stream_name),
+      .data$talent_name,
+      .data$total_paid_amount_usd
+    )
+  )
+
+set_tma_point_tooltips <- function(enaplot, tooltips) {
+  built_plot <- plotly::plotly_build(enaplot$plot)
+  point_trace_indices <- which(
+    vapply(
+      built_plot$x$data,
+      function(trace) {
+        length(trace$hoverinfo) == 1L &&
+          identical(trace$hoverinfo, "x+y+name")
+      },
+      logical(1)
+    )
+  )
+
+  if (length(point_trace_indices) != length(tooltips)) {
+    stop(
+      "The number of TMA point traces does not match the tooltip labels.",
+      call. = FALSE
+    )
+  }
+
+  for (point_index in seq_along(point_trace_indices)) {
+    trace_index <- point_trace_indices[[point_index]]
+    built_plot$x$data[[trace_index]]$hoverinfo <- "text"
+    built_plot$x$data[[trace_index]]$hovertemplate <- paste0(
+      tooltips[[point_index]],
+      "<extra></extra>"
+    )
+    built_plot$x$data[[trace_index]]$hoverlabel <- list(align = "left")
+  }
+
+  enaplot$plot <- built_plot
+  enaplot
+}
 ```
 
 
 
 
 The points represent talent-stream units, while the network summarizes the mean
-code connections across all units. Edge thickness indicates connection strength.
+code connections across all units. Point tooltips show the readable stream name
+derived from `source_file`, the streamer, and the stream's total USD payment.
+Coordinates and `video_id` are hidden from the tooltip, although `video_id`
+remains available in `tma_unit_display` as the internal join key. Edge thickness
+indicates connection strength.
 
 ```{r tma_visualization}
-tma_plot <- plot(
+tma_plot <- rENA::ena.plot(
   tma_set,
-  empty = FALSE,
   title = "TMA: Chat and Subtitle Code Connections"
-) |>
+  ) |>
+  rENA::ena.plot.points(
+    points = tma_set$points,
+    labels = tma_unit_display$stream_name,
+    show.legend = FALSE
+  ) |>
   rENA::add_network(
     colors = "#0072B2",
     edge.multiplier = 1
   )
+
+tma_plot <- set_tma_point_tooltips(
+  enaplot = tma_plot,
+  tooltips = tma_unit_display$tooltip
+)
 
 tma_plot
 ```
@@ -355,23 +470,12 @@ rebuild the TMA connections or convert the ENA coordinate into dollars.
 ### 1. Create the payment target
 
 `paid_amount_usd` is used instead of `paid_amount_value` because the latter
-contains native-currency amounts. The target must have one row for each
-talent-video unit and must follow the model's row order.
+contains native-currency amounts. `tma_unit_display` already follows the
+model's row order and contains the cleaned `source_file` label, the retained
+`video_id` join key, and the stream's USD total.
 
 ```{r payment_target}
-payment_x_var <- tibble::tibble(
-  talent_name = as.vector(tma_model$meta.data[["talent_name"]]),
-  video_id = as.vector(tma_model$meta.data[["video_id"]])
-) %>%
-  dplyr::left_join(
-    tma_input_data %>%
-      dplyr::group_by(.data$talent_name, .data$video_id) %>%
-      dplyr::summarise(
-        total_paid_amount_usd = sum(.data$paid_amount_usd, na.rm = TRUE),
-        .groups = "drop"
-      ),
-    by = c("talent_name", "video_id")
-  ) %>%
+payment_x_var <- tma_unit_display %>%
   dplyr::select(.data$total_paid_amount_usd) %>%
   as.data.frame()
 
@@ -417,19 +521,21 @@ tma_money_plot <- rENA::ena.plot(
     "Payment-aligned network dimension",
     "Residual SVD dimension"
   )
-) |>
+  ) |>
   rENA::ena.plot.points(
     points = tma_money_set$points,
-    labels = sprintf(
-      "Total payment: USD %.2f",
-      payment_x_var$total_paid_amount_usd
-    ),
+    labels = tma_unit_display$stream_name,
     show.legend = FALSE
   ) |>
   rENA::add_network(
     colors = "#0072B2",
     edge.multiplier = 1
   )
+
+tma_money_plot <- set_tma_point_tooltips(
+  enaplot = tma_money_plot,
+  tooltips = tma_unit_display$tooltip
+)
 
 tma_money_plot
 ```
