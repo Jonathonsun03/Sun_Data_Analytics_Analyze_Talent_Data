@@ -27,6 +27,7 @@ source(here::here("r_scripts", "lib", "utils", "dt_utils.R"))
 
 
 
+
 ## Introduction
 Live streamers and content creators have become a more common occurence. 
 
@@ -39,6 +40,12 @@ variance_talent_labels <- c(
   AVA1 = "Ava",
   KAT2 = "Katya",
   LEI3 = "Leia"
+)
+
+variance_streamer_handles <- c(
+  AVA1 = "@AvaritiaHawthorne",
+  KAT2 = "@KatyaSable",
+  LEI3 = "@LeiaMemoria"
 )
 ```
 
@@ -59,6 +66,7 @@ import_data <- load_qualitative_transcripts_wide(
   ) %>%
   dplyr::select(
     source_file,
+    talent_code,
     talent_name,
     video_id,
     row_number,
@@ -73,6 +81,66 @@ import_data <- load_qualitative_transcripts_wide(
     starts_with("code_")
   )
 ```
+
+
+## Clean transcript speaker labels
+
+The `source` value remains `subtitle` because it identifies the TMA modality.
+For subtitle rows, placeholder speaker values such as `STREAM` and `subtitle`
+are replaced with the corresponding streamer's handle. The original value is
+retained in `speaker_raw` for auditing.
+
+```{r clean_transcript_speakers}
+placeholder_streamer_speakers <- c("STREAM", "SUBTITLE")
+
+import_data <- import_data %>%
+  dplyr::mutate(
+    speaker_raw = .data$speaker,
+    speaker_key = toupper(trimws(dplyr::coalesce(.data$speaker, ""))),
+    streamer_handle = unname(
+      variance_streamer_handles[.data$talent_code]
+    ),
+    speaker = dplyr::if_else(
+      .data$source == "subtitle" &
+        .data$speaker_key %in% placeholder_streamer_speakers &
+        !is.na(.data$streamer_handle),
+      .data$streamer_handle,
+      .data$speaker
+    )
+  ) %>%
+  dplyr::select(-speaker_key, -streamer_handle)
+
+unmapped_streamer_speakers <- import_data %>%
+  dplyr::filter(
+    .data$source == "subtitle",
+    toupper(trimws(dplyr::coalesce(.data$speaker, ""))) %in%
+      placeholder_streamer_speakers
+  )
+
+if (nrow(unmapped_streamer_speakers) > 0L) {
+  stop(
+    "Some subtitle rows still have placeholder speaker labels. ",
+    "Add their talent codes and handles to variance_streamer_handles.",
+    call. = FALSE
+  )
+}
+
+subtitle_speaker_cleaning_summary <- import_data %>%
+  dplyr::filter(.data$source == "subtitle") %>%
+  dplyr::count(
+    .data$talent_name,
+    .data$speaker_raw,
+    .data$speaker,
+    name = "transcript_rows"
+  ) %>%
+  dplyr::arrange(.data$talent_name)
+
+DTSettings(
+  subtitle_speaker_cleaning_summary,
+  options = list(pageLength = 10)
+)
+```
+
 
 
 
@@ -126,6 +194,7 @@ DTSettings(
 
 
 
+
 ## Prepare data for TMA
 Note I need to fix the data. Streamer text data because it's disjointed. I also have events that are happening simultaneously and technically in two modalities the stream and the chat. There are times where the stream and the chat engage with one another and there are times they do not. 
 
@@ -138,6 +207,12 @@ selected_code_cols <- select_frequent_code_pairs(
   window_size_back = code_window_size_back,
   prefer = "secondary"
 )$selected_code_cols
+
+removed_low_frequency_code_col <- selected_code_cols[[length(selected_code_cols)]]
+selected_code_cols <- c(
+  selected_code_cols[-length(selected_code_cols)],
+  "gave_money"
+)
 
 tma_input_data <- import_data %>%
   normalize_text_playback_paid_amounts() %>%
@@ -160,10 +235,14 @@ tma_input_data <- import_data %>%
     paid_amount_value,
     paid_currency,
     paid_amount_usd,
-    gave_money,
     dplyr::all_of(selected_code_cols)
   )
 ```
+
+
+The model retains eight nodes. `gave_money` replaces
+`r removed_low_frequency_code_col`, the lowest-ranked member of the previous
+eight qualitative codes based on windowed pair participation.
 
 
 
@@ -199,13 +278,14 @@ context_model <- tma::contexts(
 context_window_tensor <- tma::context_tensor(
   df = tma_input_data,
   mode_column = "source",
-  default_window = 1,
+  default_window = 4,
   default_weight = 1
 )
 
-context_window_tensor["chat", "window"] <- 4
-context_window_tensor["subtitle", "window"] <- 1
+# context_window_tensor["chat", "window"] <- 4
+# context_window_tensor["subtitle", "window"] <- 1
 ```
+
 
 
 The horizon rules determine which events a unit can observe. The tensor
@@ -235,6 +315,7 @@ tma_set <- rENA::ena.make.set(tma_model)
 
 
 
+
 The points represent talent-stream units, while the network summarizes the mean
 code connections across all units. Edge thickness indicates connection strength.
 
@@ -251,3 +332,143 @@ tma_plot <- plot(
 
 tma_plot
 ```
+
+
+## TMA X axis change
+
+### How I reached this decision
+
+Each talent-video unit is represented by its complete vector of normalized code
+connections, rather than by one value for each code. The default SVD rotation
+orients the first dimension toward the largest source of variation among those
+network vectors. That direction is useful for describing general network
+variation, but it is not guaranteed to have any relationship with payment.
+
+The research question requires a more specific orientation:
+
+> As total stream payment increases, how does the relative configuration of
+> connections among chat, subtitle, and payment-related codes change?
+
+The current [`rENA` documentation](https://cran.r-universe.dev/rENA/doc/manual.html)
+identifies `rENA::ena.rotate.by.generalized()` as the generalized means rotation
+(GMR) method. Its `x_var` parameter is a data frame whose first column is the
+target variable. With a numeric target, GMR estimates a direction through
+network space associated with increases in that variable. If `y_var` is
+omitted, rENA obtains the second dimension from an SVD of the network variation
+remaining after the payment-aligned direction is removed.
+
+The rotation changes the viewing direction, not the underlying connection
+weights. The original SVD model will therefore remain available as the
+descriptive baseline, and a second GMR model will answer the
+payment-oriented question.
+
+### X-axis interpretation plan
+
+The new x-axis will represent a gradient from network structures associated
+with lower total payment to network structures associated with higher total
+payment:
+
+```text
+Lower-payment-associated networks  <---->  Higher-payment-associated networks
+```
+
+- A point farther right has more of the overall network pattern associated with
+  higher total payment.
+- A point farther left has more of the network pattern associated with lower
+  total payment.
+- A point near zero is near the average network configuration on this
+  payment-related contrast.
+
+The x-coordinate is still a normalized ENA coordinate. It is not a dollar
+amount, and a change of 0.10 on the x-axis has no fixed USD interpretation.
+The axis will therefore be labeled **Payment-aligned network dimension**.
+Actual `total_paid_amount_usd` values will be represented separately through
+point color, labels, tooltips, or an accompanying diagnostic plot.
+
+After rotation, nodes and connections positioned toward the right help
+characterize higher-payment-associated networks, while those toward the left
+help characterize lower-payment-associated networks. This supports
+associational statements about network configuration. It does not establish
+that a code or connection caused additional payments.
+
+### Why two payment variables are needed
+
+`gave_money` and `total_paid_amount_usd` have different analytical roles:
+
+```text
+gave_money
+    -> transcript-level binary code and node inside each network
+
+total_paid_amount_usd
+    -> talent-stream-level continuous variable used to orient the x-axis
+```
+
+Keeping `gave_money` in the code set allows the network to show how payment
+events connect with chat and streamer behavior. Rotating by
+`total_paid_amount_usd` asks which complete network configurations distinguish
+lower-revenue streams from higher-revenue streams.
+
+### Variables
+
+| Variable | Level | Planned role |
+| --- | --- | --- |
+| `talent_name`, `video_id` | Talent-stream unit | Join keys matching the unit definition used by `tma::contexts()` |
+| `paid_amount_value` | Transcript row | Native-currency amount; excluded as the rotation target because the data contain multiple currencies |
+| `paid_amount_usd` | Transcript row | Currency-normalized payment amount used to construct the unit-level target |
+| `gave_money` | Transcript row | Binary TMA code retained as a network node in the primary specification |
+| `total_paid_amount_usd` | Talent-stream unit | Sum of `paid_amount_usd` within each `talent_name` and `video_id`; primary continuous rotation target |
+| `paid_event_count` | Talent-stream unit | Count of positive-payment rows used to audit the aggregation |
+| `payment_x_var` | Model-unit order | One-column data frame containing `total_paid_amount_usd`, ordered exactly like `tma_model$meta.data` and supplied as `rotation.params$x_var` |
+| `payment_x_coordinate` | Talent-stream unit | Resulting first-dimension ENA coordinate; a network score rather than a USD amount |
+
+The current data contain 30 talent-video units and 499 paid events across 16
+currencies. All positive-payment rows have a USD conversion. Unit totals range
+from USD 21.02 to USD 264.82, so the primary rotation will use untransformed
+`total_paid_amount_usd`.
+
+### Circularity and robustness plan
+
+The same payment events contribute to both the `gave_money` code and
+`total_paid_amount_usd`. The primary model may therefore find a payment gradient
+partly because higher-payment streams contain more payment-related network
+activity. This is substantively appropriate for the primary question:
+
+> How are payment events embedded within the broader interaction structure of
+> higher- and lower-revenue streams?
+
+It is less informative about whether non-payment discourse distinguishes stream
+revenue. The analysis will therefore include a sensitivity model that removes
+`gave_money` from the network while retaining `total_paid_amount_usd` as the
+rotation target. Similar substantive patterns across the two specifications
+would suggest that the gradient reflects broader interaction structure rather
+than only the presence of payment events.
+
+Because there are only 30 units, the analysis will also examine whether a few
+high-payment streams determine the direction. Planned checks include a
+`log1p(total_paid_amount_usd)` rotation and leave-one-unit-out stability checks.
+
+### Updated implementation plan
+
+1. Aggregate `paid_amount_usd` and `gave_money` by `talent_name` and `video_id`
+   to create `total_paid_amount_usd` and `paid_event_count`.
+2. Join the unit-level payment summary to `tma_model$meta.data`, preserve the
+   model's row order, and validate one complete payment value per model unit.
+3. Construct `payment_x_var` with untransformed `total_paid_amount_usd` as its
+   first and only column.
+4. Create a second ENA set using
+   `rotation.by = rENA::ena.rotate.by.generalized` and
+   `rotation.params = list(x_var = payment_x_var)`. Preserve the original
+   SVD-based `tma_set` for comparison.
+5. Confirm that the first coordinate increases with
+   `total_paid_amount_usd`. If necessary, reverse the first rotation vector so
+   lower-payment streams appear on the left and higher-payment streams appear
+   on the right.
+6. Plot the payment-rotated points and mean network. Label the x-axis
+   **Payment-aligned network dimension** and use a continuous point-color scale
+   for the literal `total_paid_amount_usd` values.
+7. Report the correlation between `payment_x_coordinate` and
+   `total_paid_amount_usd` as an in-sample alignment diagnostic, not as
+   independent evidence that the network predicts payment.
+8. Compare the original SVD plot with the payment-oriented GMR plot, then run
+   the no-`gave_money`, `log1p()` target, and leave-one-unit-out sensitivity
+   checks before interpreting the gradient.

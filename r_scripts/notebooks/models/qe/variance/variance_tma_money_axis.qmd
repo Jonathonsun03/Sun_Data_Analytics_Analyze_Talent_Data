@@ -1,0 +1,471 @@
+---
+title: "Variance Project: TMA Monetary Axis"
+format:
+  html:
+    code-tools: false
+    embed-resources: true
+execute:
+  echo: false
+  message: false
+  warning: false
+---
+
+```{r libraries_and_utils}
+library(here)
+knitr::opts_knit$set(root.dir = here::here())
+
+library(dplyr)
+library(tma)
+
+source(here::here("r_scripts", "lib", "utils", "datalake_root.r"))
+source(here::here("r_scripts", "lib", "duckdb", "db_connect.R"))
+source(here::here("r_scripts", "lib", "import_data", "qualitative_transcripts.R"))
+source(here::here("r_scripts", "lib", "transcript_analysis", "qualitative_codes.R"))
+source(here::here("r_scripts", "lib", "transcript_analysis", "money_stream_selection.R"))
+source(here::here("r_scripts", "lib", "utils", "dt_utils.R"))
+```
+
+
+
+
+## Introduction
+Live streamers and content creators have become a more common occurence.
+
+```{r import_paths}
+qualitative_dataset_id <- "chat_monetary_growth_variance_30_video"
+qualitative_codebook_id <- "chat_monetary_growth_v1"
+qualitative_db_path <- talent_lakehouse_db_path()
+
+variance_talent_labels <- c(
+  AVA1 = "Ava",
+  KAT2 = "Katya",
+  LEI3 = "Leia"
+)
+
+variance_streamer_handles <- c(
+  AVA1 = "@AvaritiaHawthorne",
+  KAT2 = "@KatyaSable",
+  LEI3 = "@LeiaMemoria"
+)
+```
+
+```{r importing_qualitative_data}
+import_data <- load_qualitative_transcripts_wide(
+  codebook_id = qualitative_codebook_id,
+  dataset_id = qualitative_dataset_id,
+  pipeline_run_id = "latest",
+  response_status = NULL,
+  db_path = qualitative_db_path
+) %>%
+  dplyr::mutate(
+    talent_name = dplyr::recode(
+      .data$talent_code,
+      !!!variance_talent_labels
+    ),
+    row_number = .data$line_number
+  ) %>%
+  dplyr::select(
+    source_file,
+    talent_code,
+    talent_name,
+    video_id,
+    row_number,
+    timecode,
+    source,
+    speaker,
+    paid_amount_text,
+    paid_amount_value,
+    paid_currency,
+    message_type,
+    text,
+    starts_with("code_")
+  )
+```
+
+
+## Clean transcript speaker labels
+
+The `source` value remains `subtitle` because it identifies the TMA modality.
+For subtitle rows, placeholder speaker values such as `STREAM` and `subtitle`
+are replaced with the corresponding streamer's handle. The original value is
+retained in `speaker_raw` for auditing.
+
+```{r clean_transcript_speakers}
+placeholder_streamer_speakers <- c("STREAM", "SUBTITLE")
+
+import_data <- import_data %>%
+  dplyr::mutate(
+    speaker_raw = .data$speaker,
+    speaker_key = toupper(trimws(dplyr::coalesce(.data$speaker, ""))),
+    streamer_handle = unname(
+      variance_streamer_handles[.data$talent_code]
+    ),
+    speaker = dplyr::if_else(
+      .data$source == "subtitle" &
+        .data$speaker_key %in% placeholder_streamer_speakers &
+        !is.na(.data$streamer_handle),
+      .data$streamer_handle,
+      .data$speaker
+    )
+  ) %>%
+  dplyr::select(-speaker_key, -streamer_handle)
+
+unmapped_streamer_speakers <- import_data %>%
+  dplyr::filter(
+    .data$source == "subtitle",
+    toupper(trimws(dplyr::coalesce(.data$speaker, ""))) %in%
+      placeholder_streamer_speakers
+  )
+
+if (nrow(unmapped_streamer_speakers) > 0L) {
+  stop(
+    "Some subtitle rows still have placeholder speaker labels. ",
+    "Add their talent codes and handles to variance_streamer_handles.",
+    call. = FALSE
+  )
+}
+
+subtitle_speaker_cleaning_summary <- import_data %>%
+  dplyr::filter(.data$source == "subtitle") %>%
+  dplyr::count(
+    .data$talent_name,
+    .data$speaker_raw,
+    .data$speaker,
+    name = "transcript_rows"
+  ) %>%
+  dplyr::arrange(.data$talent_name)
+
+DTSettings(
+  subtitle_speaker_cleaning_summary,
+  options = list(pageLength = 10)
+)
+```
+
+
+
+
+
+
+
+## Introduction
+There are two issues with the original ENA model
+1. I set an ininfite stanza window, which is an issue because I lose a lot of granularity and control across my dataset. WHile it is fair to assume that conversations from the beginning of the stream are related to the end of the stream, the general scope is just too large to be able to support any kind of analysis.
+1. ENA doesn't handle this multimodal data as well, I do have my data split by streamer and chat. But I got some suggestions that ...
+    1. I should just have chat as one massive entity. While chat data is available I'm not particularly interested in the
+    1. While I originally made this model to simply quantify the qualitative qualities from the stream
+1. Also another issue, I need to update my chat data so that the streamers sentences are all put together as full sentences rather than as segmented chunks. It's very unnatural and it will mess up the any network analysis.
+
+## Qualitative Codebook
+
+```{r qualitative_codebook}
+codebook_data <- load_qualitative_codebook(
+  codebook_id = qualitative_codebook_id,
+  db_path = qualitative_db_path
+)
+
+codebook_display <- codebook_data %>%
+  dplyr::mutate(
+    code_id = dplyr::if_else(
+      is.na(.data[["Secondary Code ID"]]) | !nzchar(trimws(.data[["Secondary Code ID"]])),
+      .data[["Primary Code ID"]],
+      .data[["Secondary Code ID"]]
+    ),
+    code_label = dplyr::if_else(
+      is.na(.data[["Secondary Code"]]) | !nzchar(trimws(.data[["Secondary Code"]])),
+      .data[["Primary Code"]],
+      .data[["Secondary Code"]]
+    )
+  ) %>%
+  dplyr::transmute(
+    code_id,
+    code_label,
+    definition = .data[["Definition"]]
+  ) %>%
+  dplyr::arrange(.data$code_id)
+
+DTSettings(
+  codebook_display,
+  scroll_x = TRUE,
+  options = list(pageLength = 10)
+)
+```
+
+
+
+
+
+
+## Prepare data for TMA
+Note I need to fix the data. Streamer text data because it's disjointed. I also have events that are happening simultaneously and technically in two modalities the stream and the chat. There are times where the stream and the chat engage with one another and there are times they do not.
+
+```{r prepare_tma_data}
+code_window_size_back <- 4L
+selected_code_cols <- select_frequent_code_pairs(
+  data = import_data,
+  codebook = codebook_data,
+  n = 8L,
+  window_size_back = code_window_size_back,
+  prefer = "secondary"
+)$selected_code_cols
+
+removed_low_frequency_code_col <- selected_code_cols[[length(selected_code_cols)]]
+selected_code_cols <- c(
+  selected_code_cols[-length(selected_code_cols)],
+  "gave_money"
+)
+
+tma_input_data <- import_data %>%
+  normalize_text_playback_paid_amounts() %>%
+  dplyr::mutate(
+    paid_amount_value = .data$paid_amount_native,
+    paid_currency = .data$paid_currency_norm,
+    gave_money = !is.na(.data$paid_amount_value) & .data$paid_amount_value > 0
+  ) %>%
+  dplyr::select(
+    source_file,
+    talent_name,
+    video_id,
+    row_number,
+    timecode,
+    source,
+    speaker,
+    message_type,
+    text,
+    paid_amount_text,
+    paid_amount_value,
+    paid_currency,
+    paid_amount_usd,
+    dplyr::all_of(selected_code_cols)
+  )
+```
+
+
+The model retains eight nodes. `gave_money` replaces
+`r removed_low_frequency_code_col`, the lowest-ranked member of the previous
+eight qualitative codes based on windowed pair participation.
+
+
+
+
+
+## TMA Setup
+
+Chat and subtitle rows are modeled as separate modalities. Each talent-stream
+combination is a unit of analysis. The flexible horizon below makes the
+observation boundary modality-specific while keeping both modalities within the
+unit's own stream:
+
+- Chat contributes the collective chat activity for the talent-video unit.
+- Subtitles contribute the streamer's speech for the same talent-video unit.
+- Events from other talents or videos remain outside the unit's horizon.
+
+```{r tma_setup}
+flexible_horizon_rules <- tma::rules(
+  source == "chat" &
+    talent_name %in% UNIT$talent_name &
+    video_id %in% UNIT$video_id,
+  source == "subtitle" &
+    talent_name %in% UNIT$talent_name &
+    video_id %in% UNIT$video_id
+)
+
+context_model <- tma::contexts(
+  x = tma_input_data,
+  units_by = c("talent_name", "video_id"),
+  hoo_rules = flexible_horizon_rules
+)
+
+context_window_tensor <- tma::context_tensor(
+  df = tma_input_data,
+  mode_column = "source",
+  default_window = 4,
+  default_weight = 1
+)
+
+# context_window_tensor["chat", "window"] <- 4
+# context_window_tensor["subtitle", "window"] <- 1
+```
+
+
+
+The horizon rules determine which events a unit can observe. The tensor
+determines how far an observed event can influence connections. The current
+model uses a four-row window for both chat and subtitles. The commented
+assignments show where modality-specific windows can be restored if the
+substantive model changes. Because every row is already assigned to a
+talent-video unit, these horizon rules formalize the stream boundary but do not
+expand it.
+
+
+## Visualize the TMA
+
+Accumulate the code connections using the modality-specific windows above, then
+project the resulting unit networks into a two-dimensional ENA space.
+
+```{r tma_accumulation}
+tma_model <- tma::accumulate(
+  context_model = context_model,
+  codes = selected_code_cols,
+  tensor = context_window_tensor,
+  ordered = FALSE,
+  binary = TRUE
+)
+
+tma_set <- rENA::ena.make.set(tma_model)
+```
+
+
+
+
+The points represent talent-stream units, while the network summarizes the mean
+code connections across all units. Edge thickness indicates connection strength.
+
+```{r tma_visualization}
+tma_plot <- plot(
+  tma_set,
+  empty = FALSE,
+  title = "TMA: Chat and Subtitle Code Connections"
+) |>
+  rENA::add_network(
+    colors = "#0072B2",
+    edge.multiplier = 1
+  )
+
+tma_plot
+```
+
+
+## TMA monetary axis
+
+The default `tma_set` uses an SVD rotation, so its first dimension describes
+the largest source of variation in the unit networks. To answer the monetary
+question directly, the same accumulated `tma_model` can instead be rotated
+toward total payment with `rENA::ena.rotate.by.generalized()`.
+
+This requires three steps:
+
+1. Aggregate `paid_amount_usd` to the talent-video level and arrange those
+   values in the same order as `tma_model$meta.data`.
+2. Create the generalized-rotation ENA set with the payment target as `x_var`.
+3. Plot the payment-oriented set.
+
+The rotation changes the orientation of the existing network space. It does not
+rebuild the TMA connections or convert the ENA coordinate into dollars.
+
+### 1. Create the payment target
+
+`paid_amount_usd` is used instead of `paid_amount_value` because the latter
+contains native-currency amounts. The target must have one row for each
+talent-video unit and must follow the model's row order.
+
+```{r payment_target}
+payment_x_var <- tibble::tibble(
+  talent_name = as.vector(tma_model$meta.data[["talent_name"]]),
+  video_id = as.vector(tma_model$meta.data[["video_id"]])
+) %>%
+  dplyr::left_join(
+    tma_input_data %>%
+      dplyr::group_by(.data$talent_name, .data$video_id) %>%
+      dplyr::summarise(
+        total_paid_amount_usd = sum(.data$paid_amount_usd, na.rm = TRUE),
+        .groups = "drop"
+      ),
+    by = c("talent_name", "video_id")
+  ) %>%
+  dplyr::select(.data$total_paid_amount_usd) %>%
+  as.data.frame()
+
+if (
+  nrow(payment_x_var) != nrow(tma_model$meta.data) ||
+    any(!is.finite(payment_x_var$total_paid_amount_usd))
+) {
+  stop(
+    "Each TMA unit must have one finite total_paid_amount_usd value.",
+    call. = FALSE
+  )
+}
+```
+
+### 2. Apply the generalized rotation
+
+This is the complete monetary-axis model. `payment_x_var` is a one-column data
+frame because `ena.rotate.by.generalized()` uses its first column as the
+continuous rotation target.
+
+```{r payment_rotation}
+tma_money_set <- rENA::ena.make.set(
+  enadata = tma_model,
+  rotation.by = rENA::ena.rotate.by.generalized,
+  rotation.params = list(x_var = payment_x_var)
+)
+```
+
+The first coordinate now represents the network direction associated with
+increasing total payment. The second coordinate is the leading residual SVD
+dimension produced by the generalized rotation.
+
+### 3. Plot the payment-oriented TMA
+
+The horizontal coordinate is a normalized network score—not a dollar amount.
+The hover label supplies the corresponding unit-level USD total.
+
+```{r payment_plot}
+tma_money_plot <- rENA::ena.plot(
+  tma_money_set,
+  title = "TMA: Payment-Aligned Network",
+  dimension.labels = c(
+    "Payment-aligned network dimension",
+    "Residual SVD dimension"
+  )
+) |>
+  rENA::ena.plot.points(
+    points = tma_money_set$points,
+    labels = sprintf(
+      "Total payment: USD %.2f",
+      payment_x_var$total_paid_amount_usd
+    ),
+    show.legend = FALSE
+  ) |>
+  rENA::add_network(
+    colors = "#0072B2",
+    edge.multiplier = 1
+  )
+
+tma_money_plot
+```
+
+### Goodness of fit
+
+`rENA::ena.correlations()` reports the co-registration goodness of fit between
+the plotted unit points and their corresponding network centroids. Pearson and
+Spearman correlations are reported separately for each plotted dimension.
+Values closer to one indicate that the visualization more faithfully
+represents the underlying network model.
+
+```{r payment_goodness_of_fit}
+tma_money_goodness_of_fit <- rENA::ena.correlations(
+  tma_money_set,
+  dims = c(1, 2)
+)
+
+rownames(tma_money_goodness_of_fit) <- c(
+  "Payment-aligned network dimension",
+  "Residual SVD dimension"
+)
+
+knitr::kable(
+  tma_money_goodness_of_fit,
+  digits = 3,
+  caption = "TMA co-registration goodness of fit"
+)
+```
+
+These correlations evaluate the fit of the network visualization to the
+underlying model. They do not measure how much variance in USD payment is
+explained by the monetary axis.
+
+Read points farther to the right as units whose connection patterns are more
+strongly associated with higher total payment, and points farther to the left
+as units whose patterns are more strongly associated with lower total payment.
+This is an associational network gradient; it is not a literal USD axis or a
+causal estimate.
