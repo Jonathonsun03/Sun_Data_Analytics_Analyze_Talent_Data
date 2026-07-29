@@ -371,6 +371,17 @@ wrap_tooltip_title <- function(title, width = 42L) {
   )
 }
 
+payment_point_color <- scales::col_numeric(
+  palette = c("#440154", "#21908C", "#FDE725"),
+  domain = range(tma_unit_display$total_paid_amount_usd)
+)
+
+talent_point_shapes <- c(
+  Ava = "circle",
+  Katya = "square",
+  Leia = "diamond"
+)
+
 tma_unit_display <- tma_unit_display %>%
   dplyr::mutate(
     tooltip = sprintf(
@@ -378,8 +389,17 @@ tma_unit_display <- tma_unit_display %>%
       wrap_tooltip_title(.data$stream_name),
       .data$talent_name,
       .data$total_paid_amount_usd
-    )
+    ),
+    point_color = payment_point_color(.data$total_paid_amount_usd),
+    point_shape = unname(talent_point_shapes[.data$talent_name])
   )
+
+if (any(is.na(tma_unit_display$point_shape))) {
+  stop(
+    "Every talent must have a shape in talent_point_shapes.",
+    call. = FALSE
+  )
+}
 
 set_tma_point_tooltips <- function(enaplot, tooltips) {
   built_plot <- plotly::plotly_build(enaplot$plot)
@@ -420,11 +440,13 @@ set_tma_point_tooltips <- function(enaplot, tooltips) {
 
 
 The points represent talent-stream units, while the network summarizes the mean
-code connections across all units. Point tooltips show the readable stream name
-derived from `source_file`, the streamer, and the stream's total USD payment.
-Coordinates and `video_id` are hidden from the tooltip, although `video_id`
-remains available in `tma_unit_display` as the internal join key. Edge thickness
-indicates connection strength.
+code connections across all units. Point color follows a continuous payment
+gradient from purple for lower totals through teal to yellow for higher totals.
+Point shape identifies the talent: Ava is a circle, Katya is a square, and Leia
+is a diamond. Tooltips show the readable stream name, streamer, and total USD
+payment. Coordinates and `video_id` are hidden from the tooltip, although
+`video_id` remains available in `tma_unit_display` as the internal join key.
+Edge thickness indicates connection strength.
 
 ```{r tma_visualization}
 tma_plot <- rENA::ena.plot(
@@ -434,6 +456,9 @@ tma_plot <- rENA::ena.plot(
   rENA::ena.plot.points(
     points = tma_set$points,
     labels = tma_unit_display$stream_name,
+    colors = tma_unit_display$point_color,
+    shape = tma_unit_display$point_shape,
+    point.size = 8,
     show.legend = FALSE
   ) |>
   rENA::add_network(
@@ -525,6 +550,9 @@ tma_money_plot <- rENA::ena.plot(
   rENA::ena.plot.points(
     points = tma_money_set$points,
     labels = tma_unit_display$stream_name,
+    colors = tma_unit_display$point_color,
+    shape = tma_unit_display$point_shape,
+    point.size = 8,
     show.legend = FALSE
   ) |>
   rENA::add_network(
@@ -575,3 +603,6 @@ strongly associated with higher total payment, and points farther to the left
 as units whose patterns are more strongly associated with lower total payment.
 This is an associational network gradient; it is not a literal USD axis or a
 causal estimate.
+
+
+## TMA Talent Averages
