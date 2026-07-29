@@ -606,3 +606,80 @@ causal estimate.
 
 
 ## TMA Talent Averages
+
+The plot below replaces the 30 individual stream points with one mean point for
+each talent in the payment-oriented ENA space. Color represents the talent's
+average stream payment using the same payment gradient, and shape retains the
+talent mapping used above.
+
+Each dashed box contains the separate 95% *t* confidence intervals for the
+talent's mean horizontal and vertical coordinates. These boxes visualize
+uncertainty around each mean. Their overlap is useful descriptively, but it is
+not by itself a formal significance test between talents.
+
+```{r talent_average_plot}
+talent_average_display <- tma_unit_display %>%
+  dplyr::group_by(.data$talent_name) %>%
+  dplyr::summarise(
+    stream_count = dplyr::n(),
+    average_paid_amount_usd = mean(.data$total_paid_amount_usd),
+    point_shape = dplyr::first(.data$point_shape),
+    .groups = "drop"
+  ) %>%
+  dplyr::mutate(
+    point_color = payment_point_color(.data$average_paid_amount_usd),
+    tooltip = sprintf(
+      "<b>%s</b><br>Streams: %d<br>Average payment: USD %.2f",
+      .data$talent_name,
+      .data$stream_count,
+      .data$average_paid_amount_usd
+    )
+  )
+
+talent_plot_order <- names(talent_point_shapes)
+talent_average_coordinates <- as.matrix(tma_money_set$points)[, 1:2, drop = FALSE]
+
+tma_talent_average_plot <- rENA::ena.plot(
+  tma_money_set,
+  title = "TMA: Talent Averages on the Payment-Aligned Network",
+  dimension.labels = c(
+    "Payment-aligned network dimension",
+    "Residual SVD dimension"
+  )
+)
+
+for (talent in talent_plot_order) {
+  talent_rows <- tma_unit_display$talent_name == talent
+  talent_display_row <- match(
+    talent,
+    talent_average_display$talent_name
+  )
+
+  tma_talent_average_plot <- rENA::ena.plot.group(
+    enaplot = tma_talent_average_plot,
+    points = talent_average_coordinates[talent_rows, , drop = FALSE],
+    labels = talent,
+    colors = talent_average_display$point_color[[talent_display_row]],
+    shape = talent_average_display$point_shape[[talent_display_row]],
+    confidence.interval = "box",
+    point.size = 10,
+    show.legend = TRUE,
+    legend.name = "Talent"
+  )
+}
+
+tma_talent_average_plot <- tma_talent_average_plot |>
+  rENA::add_network(
+    colors = "#0072B2",
+    edge.multiplier = 1
+  )
+
+tma_talent_average_plot <- set_tma_point_tooltips(
+  enaplot = tma_talent_average_plot,
+  tooltips = talent_average_display$tooltip[
+    match(talent_plot_order, talent_average_display$talent_name)
+  ]
+)
+
+tma_talent_average_plot
+```
