@@ -13,6 +13,9 @@ Rplots.pdf
 __pycache__/
 *.py[cod]
 
+# Quarto visual-editor virtual documents
+/.quarto/vdoc/
+
 # Script-generated report artifacts
 *_files/
 site_libs/

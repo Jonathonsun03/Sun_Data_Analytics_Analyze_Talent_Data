@@ -1,0 +1,318 @@
+---
+title: "TMA Demo"
+date: 'Last updated: March 2025'
+---
+
+# 1. What's in this document
+
+This document demonstrates how to construct a TMA model in R using the tma package and a demo dataset.
+
+To follow along, simply click the *small green triangle* (hover text: Run Current Chunk) in the upper-right corner of each code block to execute it.
+
+If you ever feel lost, use the document outline (upper-right corner) to navigate through sections.
+
+We recommend completing the tutorial with the demo data first before experimenting with your own dataset or a different demo dataset in the demo_data folder. 
+
+# 2. Sample Data & Package Installation
+
+We used a dataset with two-modality data from a virtual internship, RescuShell, in which undergraduate engineering students work as interns at a fictional engineering company (Shaffer et al., 2025). This virtual internship simulates the engineering design process using an online work portal with research reports and a built-in chat interface. 
+
+The internship consists of two conditions: (1) *Discovery* phase: Students review research reports, summarize findings, evaluate prototypes, and discuss design choices, and a subsequent (2) *Design* phase: Students create a final proposal, balancing customer requirements with engineering constraints.
+
+During the internship, Students engaged in group discussions and accessed instructional materials. These interactions are captured in the "modality" column:
+(1) "chat" – text messages exchanged between students and mentors. 
+(2) "resource" – documents accessed by students.
+
+We load the dataset as follows:
+```{r}
+df <- read.csv("./demo_data/RescuShell.csv")
+```
+
+(Optional) To preview the first six rows of the data:
+```{r}
+head(df)
+```
+
+Since this script runs in Posit Cloud, where all necessary packages are pre-installed, you do not need to install them manually. Just load the required libraries. In the future, if you plan to run this script in RStudio or another local environment, uncomment the installation lines below (remove #) and install the required packages:
+
+```{r include = FALSE}
+# install.packages("rENA", repos = c("https://cran.qe-libs.org", "https://cran.rstudio.org"))
+# install.packages("tma", repos = c("https://cran.qe-libs.org", "https://cran.rstudio.org"))
+library(tma)
+library(rENA)
+```
+
+# 3. Construc a TMA model
+
+After load the data, let's start constructing a TMA model. 
+
+The construction of a TMA model requires two main procedures: Accumulation and Make-set 
+
+Let's go through them step by step.
+
+## 3.1 Accmulation
+
+The TMA accumulate function (tma:::accumulate) requires four parameters: (1) **context_model**, (2)**win_weights**, (3)**time_column**, and (4)**codes**. 
+
+### 3.1.1 context_model 
+
+Briefly, a context model hypothesizes about which events can influence others in a learning environment.
+
+It requires four parameters:
+
+(1) data – The dataset (df).
+
+(2) units – The grouping variables used to build TMA models. Here, we use "userID" (each student has a unique userID), "Condition" (two unique values: discovery or design), and "role" (two unique values: player or mentor) to differentiate students across discovery vs. design phases and Player vs. Mentor roles.
+
+(3) hoo_rules – hoo stands for "horizon of observation," referring to the information a given student can potentially access within the learning environment. In this data, we define hoo based on "chatGroup" and "Condition" since students exclusively interacted with peers within the same chat group and condition. In other words, activities occurring in different chat groups or conditions were beyond a student's horizon of observation.
+
+(4) split_rules - just repeat the same columns you chose for hoo_rules.
+
+```{r}
+context_model <- tma::contexts(
+  x = df,
+  units = c("userID", "Condition", "role"),
+  hoo_rules = tma::rules(
+  chatGroup %in% UNIT$chatGroup & Condition %in% UNIT$Condition
+),
+  split_rules = function(unit, unit_context) {
+    split(unit_context, by = c("chatGroup", "Condition"))
+  }
+)
+```
+
+### 3.1.2 windows_weights 
+
+Briefly, windows_weights allows you to adjust the impact of an event initiated by someone on the common ground side (the sender) on someone on the response side (the receiver).
+
+For example, in this dataset, qualitative analysis determined that a chat message from a sender influences a receiver for 258 seconds. Meanwhile, a resource accessed by a receiver remains influential for 200 minutes (200 × 60 seconds).
+
+```{r}
+win_weights <- tma::windows_weights(df, sender_cols = c("role"), receiver_cols = c("role"), mode_column = "modality", default_window = 7, default_weight = 1) # Default window size and weight are assigned before setting new values below.
+
+win_weights[,,"chat", "window"] <- 258
+win_weights[,,"resource", "window"] <- 200*60
+```
+
+
+### 3.1.3 time_column 
+
+The time column specifies timestamps for events. Here, we use "timeStamp" column. 
+
+```{r}
+time_column = "timeStamp"
+# time_column = NULL # If your dataset does not have timestamps, set time_column = NULL.
+```
+
+### 3.1.4 codes 
+
+Next, specify code columns. 
+
+```{r}
+codes <- c('Performance', 'Design','Device.Components','Data')
+```
+
+### 3.1.5 Apply the TMA Accmulutation function
+
+Finally, we apply the accumulation function to bring the four things we specified above, and store the result in an object called accum_result (or anything else you want to call it):
+
+```{r}
+accum_result <- tma::accumulate(
+  context_model = context_model, 
+  win_weights = win_weights, 
+  time_column = time_column, 
+  codes = codes, 
+  ordered = FALSE
+)
+```
+
+## 3.2 Make set
+
+Once accumulation is complete, we pass the resulting object, accum_result, to the rENA::ena.make.set function to create a TMA model.
+
+```{r}
+tma_set <-
+  rENA::ena.make.set(accum_result
+        )
+```
+
+
+# 4. Generate TMA plots
+
+Once make-set is complete, we can proceed with generating TMA plots.
+
+For demonstration purposes, we will run the two lines below to filter out connections made by mentors, ensuring that only student interactions appear in the visualizations. If you are using a different dataset, you can skip this step and proceed directly to plotting.
+
+```{r}
+tma_set$connection.counts <- tma_set$connection.counts[tma_set$connection.counts$role != "Mentor", ]
+tma_set$line.weights <- tma_set$line.weights[tma_set$line.weights$role != "Mentor", ]
+```
+
+
+First, let's plot the mean network for the FirstHalf condition, representing the discovery phase.
+
+```{r}
+first_half_plot = rENA::ena.plot(tma_set, title = "rTMA ENA plot: Discovery Phase (red)") |> 
+          rENA::ena.plot.points(points = tma_set$points$Condition$FirstHalf, colors = c("red")) |> 
+          rENA::ena.plot.group(point = tma_set$points$Condition$FirstHalf, colors =c("red"), 
+                         confidence.interval = "box") |> 
+          rENA::ena.plot.network(network = colMeans(tma_set$line.weights$Condition$FirstHalf), colors = c("red"))
+first_half_plot
+```
+
+
+As you can see, students in the discovery phase (red) made relatively stronger connections between Device Components, Design, Performance, and Data, but not between Design and Data. This makes sense because, in this initial phase, students are primarily reading and learning about all aspects of the design task. They have not yet engaged deeply with the specific design choices and data parameters.
+
+Next, let's plot the mean network for the SecondHalf condition, representing the design phase.
+
+```{r}
+second_half_plot = rENA::ena.plot(tma_set, title = "rTMA ENA plot: Design Phase (blue)") |> 
+          rENA::ena.plot.points(points = tma_set$points$Condition$SecondHalf, colors = c("blue")) |> 
+          rENA::ena.plot.group(point = tma_set$points$Condition$SecondHalf, colors =c("blue"), 
+                         confidence.interval = "box") |> 
+          rENA::ena.plot.network(network = colMeans(tma_set$line.weights$Condition$SecondHalf), colors = c("blue"))
+second_half_plot
+```
+
+As you can see, different from in the discovery phase (red) above, in the design phase (blue) students made relatively stronger connections between nodes representing the actual design decisions and performance outcomes, such as Design, Performance, and Data. This suggests that as they moved beyond discovery, they began actively integrating design choices with their expected performance outcomes, which reflects a shift from general exploration to application and refinement of their design solutions.
+
+```{r}
+plot = rENA::ena.plot(tma_set, title = "rTMA ENA plot: Discovery Phase (red) vs Design Phase (blue)") |> 
+          rENA::ena.plot.points(points = tma_set$points$Condition$FirstHalf, colors = c("red")) |> 
+          rENA::ena.plot.points(points = tma_set$points$Condition$SecondHalf, colors = c("blue")) |> 
+          rENA::ena.plot.group(point = tma_set$points$Condition$FirstHalf, colors =c("red"), 
+                         confidence.interval = "box") |> 
+          rENA::ena.plot.group(point = tma_set$points$Condition$SecondHalf, colors =c("blue"), 
+                         confidence.interval = "box") |>
+          rENA::ena.plot.network(network = (colMeans(tma_set$line.weights$Condition$FirstHalf) - colMeans(tma_set$line.weights$Condition$SecondHalf))*8, colors = c("red","blue"))
+plot
+
+```
+
+Such differences can also be seen in their difference plot above.
+
+# 5. [Advanced Function] Learner Impact Function (LIF)
+
+We can also adjust the weight of connections based on the characteristics of the ground event (sender) and the response event (receiver).
+
+For example, we can specify that a connection is twice as strong if it occurs between a mentor and a player, compared to a connection between two players.
+
+```{r}
+win_weights[,,"chat", "window"] <- 258
+win_weights[,,"resource", "window"] <- 200*60
+
+win_weights["Mentor","Player",, "weight"] <- 2
+win_weights["Player","Mentor",, "weight"] <- 2
+
+
+time_column = "timeStamp"
+
+accum_result <- tma:::accumulate(
+  context_model = context_model, win_weights = win_weights, time_column = time_column, codes = codes, ordered = FALSE
+)
+
+tma_set <-
+  rENA::ena.make.set(accum_result
+        )
+tma_set$connection.counts <- tma_set$connection.counts[tma_set$connection.counts$role != "Mentor", ]
+tma_set$line.weights <- tma_set$line.weights[tma_set$line.weights$role != "Mentor", ]
+
+first_half_plot = rENA::ena.plot(tma_set, title = "rTMA ENA plot: Discovery Phase (red)") |> 
+          rENA::ena.plot.points(points = tma_set$points$Condition$FirstHalf, colors = c("red")) |> 
+          rENA::ena.plot.group(point = tma_set$points$Condition$FirstHalf, colors =c("red"), 
+                         confidence.interval = "box") |> 
+          rENA::ena.plot.network(network = colMeans(tma_set$line.weights$Condition$FirstHalf), colors = c("red"))
+first_half_plot
+
+second_half_plot = rENA::ena.plot(tma_set, title = "rTMA ENA plot: Design Phase (blue)") |> 
+          rENA::ena.plot.points(points = tma_set$points$Condition$SecondHalf, colors = c("blue")) |> 
+          rENA::ena.plot.group(point = tma_set$points$Condition$SecondHalf, colors =c("blue"), 
+                         confidence.interval = "box") |> 
+          rENA::ena.plot.network(network = colMeans(tma_set$line.weights$Condition$SecondHalf), colors = c("blue"))
+second_half_plot
+
+plot = rENA::ena.plot(tma_set, title = "rTMA ENA plot: Discovery Phase (red) vs Design Phase (blue)") |> 
+          rENA::ena.plot.points(points = tma_set$points$Condition$FirstHalf, colors = c("red")) |> 
+          rENA::ena.plot.points(points = tma_set$points$Condition$SecondHalf, colors = c("blue")) |> 
+          rENA::ena.plot.group(point = tma_set$points$Condition$FirstHalf, colors =c("red"), 
+                         confidence.interval = "box") |> 
+          rENA::ena.plot.group(point = tma_set$points$Condition$SecondHalf, colors =c("blue"), 
+                         confidence.interval = "box") |>
+          rENA::ena.plot.network(network = (colMeans(tma_set$line.weights$Condition$FirstHalf) - colMeans(tma_set$line.weights$Condition$SecondHalf))*8, colors = c("red","blue"))
+plot
+
+```
+
+# 6. [Advanced Function] Make flexible horizon 
+
+We can also specify a flexible horizon function given the modalities of learning events. 
+
+For example, students can observe all chat messages from the same chat group while they cannot observe resource accessing of their group mates.
+
+```{r}
+horizon_function <- tma::rules(
+  modality %in% "chat" & chatGroup %in% UNIT$chatGroup & Condition %in% UNIT$Condition, modality %in% "resource" & userID %in% UNIT$userID & Condition %in% UNIT$Condition
+)
+
+context_model <- tma::contexts(
+  x = df,
+  units = c("userID", "Condition", "role"),
+  hoo_rules = tma::rules(
+  chatGroup %in% UNIT$chatGroup & Condition %in% UNIT$Condition
+),
+  split_rules = function(unit, unit_context) {
+    split(unit_context, by = c("chatGroup", "Condition"))
+  }
+)
+
+sender_cols = c("role")
+receiver_cols = c("role")
+mode_column = "modality"
+  
+win_weights <- tma::windows_weights(df, sender_cols = sender_cols, receiver_cols = receiver_cols, mode_column = mode_column, default_window = 7, default_weight = 1)
+
+win_weights[,,"chat", "window"] <- 258
+win_weights[,,"resource", "window"] <- 24*60*60*7 # 7 days
+
+win_weights["Mentor","Player",, "weight"] <- 2
+win_weights["Player","Mentor",, "weight"] <- 2
+print(win_weights)
+
+time_column = "timeStamp"
+
+accum_result <- tma:::accumulate(
+  context_model = context_model, win_weights = win_weights, time_column = time_column, codes = codes, ordered = FALSE
+)
+
+tma_set <-
+  rENA::ena.make.set(accum_result
+        )
+
+tma_set$connection.counts <- tma_set$connection.counts[tma_set$connection.counts$role != "Mentor", ]
+tma_set$line.weights <- tma_set$line.weights[tma_set$line.weights$role != "Mentor", ]
+
+first_half_plot = rENA::ena.plot(tma_set, title = "rTMA ENA plot: Discovery Phase (red)") |> 
+          rENA::ena.plot.points(points = tma_set$points$Condition$FirstHalf, colors = c("red")) |> 
+          rENA::ena.plot.group(point = tma_set$points$Condition$FirstHalf, colors =c("red"), 
+                         confidence.interval = "box") |> 
+          rENA::ena.plot.network(network = colMeans(tma_set$line.weights$Condition$FirstHalf), colors = c("red"))
+first_half_plot
+
+second_half_plot = rENA::ena.plot(tma_set, title = "rTMA ENA plot: Design Phase (blue)") |> 
+          rENA::ena.plot.points(points = tma_set$points$Condition$SecondHalf, colors = c("blue")) |> 
+          rENA::ena.plot.group(point = tma_set$points$Condition$SecondHalf, colors =c("blue"), 
+                         confidence.interval = "box") |> 
+          rENA::ena.plot.network(network = colMeans(tma_set$line.weights$Condition$SecondHalf), colors = c("blue"))
+second_half_plot
+
+plot = rENA::ena.plot(tma_set, title = "rTMA ENA plot: Discovery Phase (red) vs Design Phase (blue)") |> 
+          rENA::ena.plot.points(points = tma_set$points$Condition$FirstHalf, colors = c("red")) |> 
+          rENA::ena.plot.points(points = tma_set$points$Condition$SecondHalf, colors = c("blue")) |> 
+          rENA::ena.plot.group(point = tma_set$points$Condition$FirstHalf, colors =c("red"), 
+                         confidence.interval = "box") |> 
+          rENA::ena.plot.group(point = tma_set$points$Condition$SecondHalf, colors =c("blue"), 
+                         confidence.interval = "box") |>
+          rENA::ena.plot.network(network = (colMeans(tma_set$line.weights$Condition$FirstHalf) - colMeans(tma_set$line.weights$Condition$SecondHalf))*8, colors = c("red","blue"))
+plot
+
+```

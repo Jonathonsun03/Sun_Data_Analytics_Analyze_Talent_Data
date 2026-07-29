@@ -30,6 +30,13 @@ sql_queries/
       video_monetary.sql
     metadata/
       list_tables.sql
+    qualitative/
+      chat_metadata.sql
+      codebook_view_metadata.sql
+      load_codebook.sql
+      load_transcripts_wide.sql
+      video_performance.sql
+      wide_view_exists.sql
     talents/
       find_talent.sql
       sample_talents.sql
@@ -63,6 +70,11 @@ handling remains under `py_scripts/lib/` and `r_scripts/lib/`.
 - Include a short SQL comment describing the result grain and parameters.
 - Do not put credentials, machine-specific paths, or generated data in SQL
   files.
+
+When a relation name, projection, or optional clause must be dynamic, use an
+explicit `{{template_field}}`. Loaders must quote dynamic identifiers, restrict
+generated clauses to known columns, and continue binding all data values with
+`?` parameters.
 
 Example:
 

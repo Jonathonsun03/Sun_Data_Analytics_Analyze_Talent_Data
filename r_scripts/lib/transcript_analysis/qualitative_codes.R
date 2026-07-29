@@ -236,3 +236,58 @@ count_code_pairs_by_window <- function(data,
       .data$code_2
     )
 }
+
+select_frequent_code_pairs <- function(data,
+                                       codebook,
+                                       n = 8L,
+                                       window_size_back = 4L,
+                                       codes_col = "positive_codes",
+                                       group_cols = c("source_file", "video_id"),
+                                       prefer = c("secondary", "primary")) {
+  prefer <- match.arg(prefer)
+  n <- as.integer(n)
+  if (length(n) != 1L || is.na(n) || n < 1L) {
+    stop("`n` must be a positive integer.", call. = FALSE)
+  }
+
+  code_pair_counts <- count_code_pairs_by_window(
+    data = data,
+    codes_col = codes_col,
+    group_cols = group_cols,
+    window_size_back = window_size_back
+  )
+
+  code_counts <- code_pair_counts %>%
+    dplyr::select(code = code_1, window_pair_count) %>%
+    dplyr::bind_rows(
+      code_pair_counts %>%
+        dplyr::select(code = code_2, window_pair_count)
+    ) %>%
+    dplyr::group_by(.data$code) %>%
+    dplyr::summarise(
+      pair_participation_count = sum(.data$window_pair_count),
+      distinct_pair_count = dplyr::n(),
+      .groups = "drop"
+    ) %>%
+    dplyr::arrange(
+      dplyr::desc(.data$pair_participation_count),
+      dplyr::desc(.data$distinct_pair_count)
+    )
+
+  hierarchy_selection <- select_top_hierarchy_codes(
+    code_counts = code_counts,
+    codebook = codebook,
+    available_code_cols = names(data),
+    n = n,
+    prefer = prefer
+  )
+
+  list(
+    selected = hierarchy_selection$selected,
+    excluded = hierarchy_selection$excluded,
+    hierarchy_edges = hierarchy_selection$hierarchy_edges,
+    selected_code_cols = hierarchy_selection$selected$code_col,
+    code_counts = code_counts,
+    code_pair_counts = code_pair_counts
+  )
+}

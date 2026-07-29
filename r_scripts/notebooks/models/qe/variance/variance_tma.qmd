@@ -1,0 +1,253 @@
+---
+title: "Variance Project: Qualitative Analysis (TMA)"
+format:
+  html:
+    code-tools: false
+    embed-resources: true
+execute:
+  echo: false
+  message: false
+  warning: false
+---
+
+```{r libraries_and_utils}
+library(here)
+knitr::opts_knit$set(root.dir = here::here())
+
+library(dplyr)
+library(tma)
+
+source(here::here("r_scripts", "lib", "utils", "datalake_root.r"))
+source(here::here("r_scripts", "lib", "duckdb", "db_connect.R"))
+source(here::here("r_scripts", "lib", "import_data", "qualitative_transcripts.R"))
+source(here::here("r_scripts", "lib", "transcript_analysis", "qualitative_codes.R"))
+source(here::here("r_scripts", "lib", "transcript_analysis", "money_stream_selection.R"))
+source(here::here("r_scripts", "lib", "utils", "dt_utils.R"))
+```
+
+
+
+## Introduction
+Live streamers and content creators have become a more common occurence. 
+
+```{r import_paths}
+qualitative_dataset_id <- "chat_monetary_growth_variance_30_video"
+qualitative_codebook_id <- "chat_monetary_growth_v1"
+qualitative_db_path <- talent_lakehouse_db_path()
+
+variance_talent_labels <- c(
+  AVA1 = "Ava",
+  KAT2 = "Katya",
+  LEI3 = "Leia"
+)
+```
+
+```{r importing_qualitative_data}
+import_data <- load_qualitative_transcripts_wide(
+  codebook_id = qualitative_codebook_id,
+  dataset_id = qualitative_dataset_id,
+  pipeline_run_id = "latest",
+  response_status = NULL,
+  db_path = qualitative_db_path
+) %>%
+  dplyr::mutate(
+    talent_name = dplyr::recode(
+      .data$talent_code,
+      !!!variance_talent_labels
+    ),
+    row_number = .data$line_number
+  ) %>%
+  dplyr::select(
+    source_file,
+    talent_name,
+    video_id,
+    row_number,
+    timecode,
+    source,
+    speaker,
+    paid_amount_text,
+    paid_amount_value,
+    paid_currency,
+    message_type,
+    text,
+    starts_with("code_")
+  )
+```
+
+
+
+
+
+
+## Introduction
+There are two issues with the original ENA model
+1. I set an ininfite stanza window, which is an issue because I lose a lot of granularity and control across my dataset. WHile it is fair to assume that conversations from the beginning of the stream are related to the end of the stream, the general scope is just too large to be able to support any kind of analysis. 
+1. ENA doesn't handle this multimodal data as well, I do have my data split by streamer and chat. But I got some suggestions that ...
+    1. I should just have chat as one massive entity. While chat data is available I'm not particularly interested in the  
+    1. While I originally made this model to simply quantify the qualitative qualities from the stream
+1. Also another issue, I need to update my chat data so that the streamers sentences are all put together as full sentences rather than as segmented chunks. It's very unnatural and it will mess up the any network analysis.
+
+## Qualitative Codebook
+
+```{r qualitative_codebook}
+codebook_data <- load_qualitative_codebook(
+  codebook_id = qualitative_codebook_id,
+  db_path = qualitative_db_path
+)
+
+codebook_display <- codebook_data %>%
+  dplyr::mutate(
+    code_id = dplyr::if_else(
+      is.na(.data[["Secondary Code ID"]]) | !nzchar(trimws(.data[["Secondary Code ID"]])),
+      .data[["Primary Code ID"]],
+      .data[["Secondary Code ID"]]
+    ),
+    code_label = dplyr::if_else(
+      is.na(.data[["Secondary Code"]]) | !nzchar(trimws(.data[["Secondary Code"]])),
+      .data[["Primary Code"]],
+      .data[["Secondary Code"]]
+    )
+  ) %>%
+  dplyr::transmute(
+    code_id,
+    code_label,
+    definition = .data[["Definition"]]
+  ) %>%
+  dplyr::arrange(.data$code_id)
+
+DTSettings(
+  codebook_display,
+  scroll_x = TRUE,
+  options = list(pageLength = 10)
+)
+```
+
+
+
+
+
+## Prepare data for TMA
+Note I need to fix the data. Streamer text data because it's disjointed. I also have events that are happening simultaneously and technically in two modalities the stream and the chat. There are times where the stream and the chat engage with one another and there are times they do not. 
+
+```{r prepare_tma_data}
+code_window_size_back <- 4L
+selected_code_cols <- select_frequent_code_pairs(
+  data = import_data,
+  codebook = codebook_data,
+  n = 8L,
+  window_size_back = code_window_size_back,
+  prefer = "secondary"
+)$selected_code_cols
+
+tma_input_data <- import_data %>%
+  normalize_text_playback_paid_amounts() %>%
+  dplyr::mutate(
+    paid_amount_value = .data$paid_amount_native,
+    paid_currency = .data$paid_currency_norm,
+    gave_money = !is.na(.data$paid_amount_value) & .data$paid_amount_value > 0
+  ) %>%
+  dplyr::select(
+    source_file,
+    talent_name,
+    video_id,
+    row_number,
+    timecode,
+    source,
+    speaker,
+    message_type,
+    text,
+    paid_amount_text,
+    paid_amount_value,
+    paid_currency,
+    paid_amount_usd,
+    gave_money,
+    dplyr::all_of(selected_code_cols)
+  )
+```
+
+
+
+
+
+## TMA Setup
+
+Chat and subtitle rows are modeled as separate modalities. Each talent-stream
+combination is a unit of analysis. The flexible horizon below makes the
+observation boundary modality-specific while keeping both modalities within the
+unit's own stream:
+
+- Chat contributes the collective chat activity for the talent-video unit.
+- Subtitles contribute the streamer's speech for the same talent-video unit.
+- Events from other talents or videos remain outside the unit's horizon.
+
+```{r tma_setup}
+flexible_horizon_rules <- tma::rules(
+  source == "chat" &
+    talent_name %in% UNIT$talent_name &
+    video_id %in% UNIT$video_id,
+  source == "subtitle" &
+    talent_name %in% UNIT$talent_name &
+    video_id %in% UNIT$video_id
+)
+
+context_model <- tma::contexts(
+  x = tma_input_data,
+  units_by = c("talent_name", "video_id"),
+  hoo_rules = flexible_horizon_rules
+)
+
+context_window_tensor <- tma::context_tensor(
+  df = tma_input_data,
+  mode_column = "source",
+  default_window = 1,
+  default_weight = 1
+)
+
+context_window_tensor["chat", "window"] <- 4
+context_window_tensor["subtitle", "window"] <- 1
+```
+
+
+The horizon rules determine which events a unit can observe. The tensor
+determines how far an observed event can influence connections: four rows for
+chat and one row for subtitles. Because every row is already assigned to a
+talent-video unit, these horizon rules formalize the stream boundary but do not
+expand it. Reproducing the tutorial's group-versus-individual asymmetry would
+require an actor-level unit identifier analogous to its `userID`.
+
+
+## Visualize the TMA
+
+Accumulate the code connections using the modality-specific windows above, then
+project the resulting unit networks into a two-dimensional ENA space.
+
+```{r tma_accumulation}
+tma_model <- tma::accumulate(
+  context_model = context_model,
+  codes = selected_code_cols,
+  tensor = context_window_tensor,
+  ordered = FALSE,
+  binary = TRUE
+)
+
+tma_set <- rENA::ena.make.set(tma_model)
+```
+
+
+
+The points represent talent-stream units, while the network summarizes the mean
+code connections across all units. Edge thickness indicates connection strength.
+
+```{r tma_visualization}
+tma_plot <- plot(
+  tma_set,
+  empty = FALSE,
+  title = "TMA: Chat and Subtitle Code Connections"
+) |>
+  rENA::add_network(
+    colors = "#0072B2",
+    edge.multiplier = 1
+  )
+
+tma_plot
+```

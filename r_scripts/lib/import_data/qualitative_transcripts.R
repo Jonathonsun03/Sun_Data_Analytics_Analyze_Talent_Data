@@ -1,3 +1,47 @@
+qualitative_load_sql_query <- function(filename) {
+  if (!requireNamespace("here", quietly = TRUE)) {
+    stop("Package `here` is required to load SQL queries.", call. = FALSE)
+  }
+  if (!grepl("^[a-z0-9_]+[.]sql$", filename)) {
+    stop("Invalid qualitative SQL query filename: ", filename, call. = FALSE)
+  }
+
+  query_path <- here::here(
+    "sql_queries",
+    "unified_db",
+    "qualitative",
+    filename
+  )
+  if (!file.exists(query_path)) {
+    stop("Qualitative SQL query not found: ", query_path, call. = FALSE)
+  }
+
+  paste(
+    readLines(query_path, warn = FALSE, encoding = "UTF-8"),
+    collapse = "\n"
+  )
+}
+
+qualitative_render_sql_query <- function(filename, replacements) {
+  query <- qualitative_load_sql_query(filename)
+  for (name in names(replacements)) {
+    token <- paste0("{{", name, "}}")
+    if (!grepl(token, query, fixed = TRUE)) {
+      stop("SQL template token not found: ", token, call. = FALSE)
+    }
+    query <- gsub(
+      token,
+      as.character(replacements[[name]]),
+      query,
+      fixed = TRUE
+    )
+  }
+  if (grepl("{{", query, fixed = TRUE)) {
+    stop("SQL template contains unresolved tokens.", call. = FALSE)
+  }
+  query
+}
+
 qualitative_loader_connection <- function(con = NULL, db_path = NULL) {
   if (!is.null(con)) {
     return(list(con = con, owned = FALSE))
@@ -34,14 +78,7 @@ qualitative_close_loader_connection <- function(connection) {
 qualitative_codebook_view_metadata <- function(con, codebook_id) {
   metadata <- DBI::dbGetQuery(
     con,
-    "SELECT
-       code_id,
-       code_column_name,
-       wide_view_name,
-       display_order
-     FROM qualitative.codebooks
-     WHERE codebook_id = ?
-     ORDER BY display_order, code_id",
+    qualitative_load_sql_query("codebook_view_metadata.sql"),
     params = list(codebook_id)
   )
   if (nrow(metadata) == 0L) {
@@ -57,10 +94,7 @@ qualitative_codebook_view_metadata <- function(con, codebook_id) {
 
   view_exists <- DBI::dbGetQuery(
     con,
-    "SELECT count(*) AS n
-     FROM information_schema.views
-     WHERE table_schema = 'qualitative'
-       AND table_name = ?",
+    qualitative_load_sql_query("wide_view_exists.sql"),
     params = list(view_names[[1]])
   )$n[[1]]
   if (view_exists != 1L) {
@@ -174,63 +208,15 @@ load_qualitative_transcripts_wide <- function(
     ""
   }
 
-  query <- paste0(
-    "WITH coding_ranked AS (\n",
-    "  SELECT\n",
-    "    c.*,\n",
-    "    row_number() OVER (\n",
-    "      PARTITION BY c.transcript_line_id\n",
-    "      ORDER BY p.completed_at DESC NULLS LAST, c.pipeline_run_id DESC\n",
-    "    ) AS coding_rank\n",
-    "  FROM ", view_relation, " c\n",
-    "  LEFT JOIN ops.pipeline_runs p\n",
-    "    ON c.pipeline_run_id = p.pipeline_run_id\n",
-    "  ", coding_where_sql, "\n",
-    "),\n",
-    "coding_selected AS (\n",
-    "  SELECT * EXCLUDE (coding_rank)\n",
-    "  FROM coding_ranked\n",
-    "  ", latest_filter, "\n",
-    ")\n",
-    "SELECT\n",
-    "  t.dataset_id,\n",
-    "  t.transcript_line_id,\n",
-    "  t.video_id,\n",
-    "  t.talent_code,\n",
-    "  talent.talent_name,\n",
-    "  video.title AS video_title,\n",
-    "  video.published_at,\n",
-    "  video.content_type,\n",
-    "  t.line_number,\n",
-    "  t.seconds,\n",
-    "  t.timecode,\n",
-    "  t.source,\n",
-    "  t.speaker,\n",
-    "  t.text,\n",
-    "  list_extract(t.source_record_keys, 1) AS source_record_key,\n",
-    "  t.alignment_status,\n",
-    "  t.source_file,\n",
-    "  t.legacy_row_id AS row_id,\n",
-    "  c.pipeline_run_id,\n",
-    "  c.codebook_id,\n",
-    "  c.request_custom_id,\n",
-    "  c.response_status,\n",
-    "  c.confidence,\n",
-    "  c.needs_review,\n",
-    "  c.review_reason,\n",
-    "  c.response_decision_count,\n",
-    "  c.response_duplicate_status,\n",
-    "  c.validation_error,\n  ",
-    paste(code_select, collapse = ",\n  "),
-    "\nFROM qualitative.transcripts t\n",
-    "JOIN coding_selected c\n",
-    "  ON t.transcript_line_id = c.transcript_line_id\n",
-    "JOIN catalog.videos video\n",
-    "  ON t.video_id = video.video_id\n",
-    "JOIN catalog.talents talent\n",
-    "  ON t.talent_code = talent.talent_code\n",
-    outer_where_sql,
-    "\nORDER BY t.talent_code, t.video_id, t.line_number"
+  query <- qualitative_render_sql_query(
+    "load_transcripts_wide.sql",
+    list(
+      view_relation = view_relation,
+      coding_where = coding_where_sql,
+      latest_filter = latest_filter,
+      code_columns = paste(code_select, collapse = ",\n  "),
+      outer_where = outer_where_sql
+    )
   )
 
   out <- DBI::dbGetQuery(con, query, params = params)
@@ -263,15 +249,7 @@ load_qualitative_transcripts_wide <- function(
     )
     chat_metadata <- DBI::dbGetQuery(
       con,
-      "SELECT
-         keys.transcript_line_id,
-         chat.message_type,
-         chat.paid_amount_text,
-         chat.paid_amount_value,
-         chat.paid_currency
-       FROM qualitative_loader_chat_keys keys
-       LEFT JOIN text.chat_messages chat
-         ON keys.source_record_key = chat.message_key"
+      qualitative_load_sql_query("chat_metadata.sql")
     )
     row_match <- match(
       out$transcript_line_id,
@@ -314,18 +292,7 @@ load_qualitative_codebook <- function(
 
   out <- DBI::dbGetQuery(
     connection$con,
-    "SELECT
-       primary_code_id AS \"Primary Code ID\",
-       primary_code_name AS \"Primary Code\",
-       secondary_code_id AS \"Secondary Code ID\",
-       secondary_code_name AS \"Secondary Code\",
-       definition AS \"Definition\",
-       examples AS \"Examples from text\",
-       code_id,
-       code_column_name
-     FROM qualitative.codebooks
-     WHERE codebook_id = ?
-     ORDER BY display_order, code_id",
+    qualitative_load_sql_query("load_codebook.sql"),
     params = list(codebook_id)
   )
   if (nrow(out) == 0L) {
@@ -357,35 +324,7 @@ load_qualitative_video_performance <- function(
   )
   out <- DBI::dbGetQuery(
     connection$con,
-    "SELECT
-       performance.video_id,
-       CAST(performance.views AS DOUBLE) AS analytics_views,
-       performance.estimated_minutes_watched
-         AS analytics_estimated_minutes_watched,
-       performance.average_view_duration
-         AS analytics_average_view_duration,
-       performance.average_view_percentage
-         AS analytics_average_view_percentage,
-       CAST(performance.subscribers_gained AS DOUBLE)
-         AS analytics_subscribers_gained,
-       CAST(performance.subscribers_lost AS DOUBLE)
-         AS analytics_subscribers_lost,
-       performance.duration_seconds / 60.0
-         AS analytics_duration_minutes,
-       sin(
-         2 * pi() * extract(hour FROM performance.published_at) / 24.0
-       ) AS analytics_publish_hour_sin,
-       cos(
-         2 * pi() * extract(hour FROM performance.published_at) / 24.0
-       ) AS analytics_publish_hour_cos,
-       CAST(
-         dayofweek(performance.published_at) IN (0, 6)
-         AS INTEGER
-       ) AS analytics_is_weekend
-     FROM analytics.video_latest_performance performance
-     JOIN qualitative_loader_video_ids selected
-       ON performance.video_id = selected.video_id
-     ORDER BY performance.video_id"
+    qualitative_load_sql_query("video_performance.sql")
   )
   tibble::as_tibble(out)
 }
