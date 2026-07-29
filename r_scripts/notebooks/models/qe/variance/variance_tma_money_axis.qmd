@@ -28,6 +28,7 @@ source(here::here("r_scripts", "lib", "utils", "dt_utils.R"))
 
 
 
+
 ## Introduction
 Live streamers and content creators have become a more common occurence.
 
@@ -81,6 +82,7 @@ import_data <- load_qualitative_transcripts_wide(
     starts_with("code_")
   )
 ```
+
 
 
 ## Clean transcript speaker labels
@@ -147,6 +149,7 @@ DTSettings(
 
 
 
+
 ## Introduction
 There are two issues with the original ENA model
 1. I set an ininfite stanza window, which is an issue because I lose a lot of granularity and control across my dataset. WHile it is fair to assume that conversations from the beginning of the stream are related to the end of the stream, the general scope is just too large to be able to support any kind of analysis.
@@ -189,6 +192,7 @@ DTSettings(
   options = list(pageLength = 10)
 )
 ```
+
 
 
 
@@ -240,6 +244,7 @@ tma_input_data <- import_data %>%
 ```
 
 
+
 The model retains eight nodes. `gave_money` replaces
 `r removed_low_frequency_code_col`, the lowest-ranked member of the previous
 eight qualitative codes based on windowed pair participation.
@@ -285,6 +290,7 @@ context_window_tensor <- tma::context_tensor(
 # context_window_tensor["chat", "window"] <- 4
 # context_window_tensor["subtitle", "window"] <- 1
 ```
+
 
 
 
@@ -371,6 +377,119 @@ wrap_tooltip_title <- function(title, width = 42L) {
   )
 }
 
+node_code_label_lookup <- codebook_display %>%
+  dplyr::transmute(
+    code_column = paste0("code_", .data$code_id),
+    code_label = .data$code_label
+  ) %>%
+  dplyr::bind_rows(
+    tibble::tibble(
+      code_column = "gave_money",
+      code_label = "Gave Money"
+    )
+  )
+
+get_tma_node_labels <- function(ena_set, code_label_lookup, width = 18L) {
+  node_codes <- as.character(ena_set$rotation$nodes$code)
+  node_labels <- code_label_lookup$code_label[
+    match(node_codes, code_label_lookup$code_column)
+  ]
+
+  if (any(is.na(node_labels))) {
+    stop(
+      "Every TMA node must have a human-readable codebook label.",
+      call. = FALSE
+    )
+  }
+
+  wrap_tooltip_title(node_labels, width = width)
+}
+
+get_tma_node_label_offsets <- function(ena_set) {
+  node_positions <- as.matrix(ena_set$rotation$nodes)[, 1:2, drop = FALSE]
+
+  ifelse(
+    abs(node_positions[, 1]) >= abs(node_positions[, 2]),
+    ifelse(
+      node_positions[, 1] >= 0,
+      "middle right",
+      "middle left"
+    ),
+    ifelse(
+      node_positions[, 2] >= 0,
+      "top center",
+      "bottom center"
+    )
+  )
+}
+
+move_tma_node_label_with_leader <- function(enaplot,
+                                            label,
+                                            x_offset = -110,
+                                            y_offset = 45) {
+  built_plot <- plotly::plotly_build(enaplot$plot)
+  matched_trace <- integer()
+  matched_label <- integer()
+
+  for (trace_index in seq_along(built_plot$x$data)) {
+    trace_text <- as.character(built_plot$x$data[[trace_index]]$text)
+    label_index <- which(trace_text == label)
+
+    if (length(label_index) > 0L) {
+      matched_trace <- c(matched_trace, rep(trace_index, length(label_index)))
+      matched_label <- c(matched_label, label_index)
+    }
+  }
+
+  if (length(matched_trace) != 1L) {
+    stop(
+      "The requested TMA node label must match exactly one plotted node.",
+      call. = FALSE
+    )
+  }
+
+  node_trace <- built_plot$x$data[[matched_trace]]
+  node_x <- node_trace$x[[matched_label]]
+  node_y <- node_trace$y[[matched_label]]
+  node_trace$text[[matched_label]] <- ""
+  built_plot$x$data[[matched_trace]] <- node_trace
+
+  leader_annotation <- list(
+    x = node_x,
+    y = node_y,
+    xref = "x",
+    yref = "y",
+    text = label,
+    showarrow = TRUE,
+    arrowhead = 0,
+    arrowsize = 1,
+    arrowwidth = 1,
+    arrowcolor = "#666666",
+    ax = x_offset,
+    ay = y_offset,
+    align = "center",
+    font = list(
+      family = "Arial",
+      size = 9,
+      color = "#000000"
+    ),
+    bgcolor = "rgba(255,255,255,0.9)",
+    borderpad = 2
+  )
+
+  existing_annotations <- built_plot$x$layout$annotations
+  if (is.null(existing_annotations)) {
+    existing_annotations <- list()
+  }
+  built_plot$x$layout$annotations <- c(
+    existing_annotations,
+    list(leader_annotation)
+  )
+
+  enaplot$plot <- built_plot
+  enaplot
+}
+
 payment_point_color <- scales::col_numeric(
   palette = c("#440154", "#21908C", "#FDE725"),
   domain = range(tma_unit_display$total_paid_amount_usd)
@@ -439,6 +558,7 @@ set_tma_point_tooltips <- function(enaplot, tooltips) {
 
 
 
+
 The points represent talent-stream units, while the network summarizes the mean
 code connections across all units. Point color follows a continuous payment
 gradient from purple for lower totals through teal to yellow for higher totals.
@@ -447,6 +567,10 @@ is a diamond. Tooltips show the readable stream name, streamer, and total USD
 payment. Coordinates and `video_id` are hidden from the tooltip, although
 `video_id` remains available in `tma_unit_display` as the internal join key.
 Edge thickness indicates connection strength.
+
+Network nodes display the full codebook names rather than internal `code_*`
+identifiers. Long names wrap across lines, and their label positions are moved
+outward from the node to reduce overlap.
 
 ```{r tma_visualization}
 tma_plot <- rENA::ena.plot(
@@ -463,7 +587,13 @@ tma_plot <- rENA::ena.plot(
   ) |>
   rENA::add_network(
     colors = "#0072B2",
-    edge.multiplier = 1
+    edge.multiplier = 1,
+    labels = get_tma_node_labels(
+      ena_set = tma_set,
+      code_label_lookup = node_code_label_lookup
+    ),
+    label.offset = get_tma_node_label_offsets(tma_set),
+    label.font.size = 9
   )
 
 tma_plot <- set_tma_point_tooltips(
@@ -471,8 +601,14 @@ tma_plot <- set_tma_point_tooltips(
   tooltips = tma_unit_display$tooltip
 )
 
+tma_plot <- move_tma_node_label_with_leader(
+  enaplot = tma_plot,
+  label = "Collective<br>In-Group Framing"
+)
+
 tma_plot
 ```
+
 
 
 ## TMA monetary axis
@@ -515,6 +651,7 @@ if (
 }
 ```
 
+
 ### 2. Apply the generalized rotation
 
 This is the complete monetary-axis model. `payment_x_var` is a one-column data
@@ -528,6 +665,7 @@ tma_money_set <- rENA::ena.make.set(
   rotation.params = list(x_var = payment_x_var)
 )
 ```
+
 
 The first coordinate now represents the network direction associated with
 increasing total payment. The second coordinate is the leading residual SVD
@@ -557,7 +695,13 @@ tma_money_plot <- rENA::ena.plot(
   ) |>
   rENA::add_network(
     colors = "#0072B2",
-    edge.multiplier = 1
+    edge.multiplier = 1,
+    labels = get_tma_node_labels(
+      ena_set = tma_money_set,
+      code_label_lookup = node_code_label_lookup
+    ),
+    label.offset = get_tma_node_label_offsets(tma_money_set),
+    label.font.size = 9
   )
 
 tma_money_plot <- set_tma_point_tooltips(
@@ -565,8 +709,14 @@ tma_money_plot <- set_tma_point_tooltips(
   tooltips = tma_unit_display$tooltip
 )
 
+tma_money_plot <- move_tma_node_label_with_leader(
+  enaplot = tma_money_plot,
+  label = "Collective<br>In-Group Framing"
+)
+
 tma_money_plot
 ```
+
 
 ### Goodness of fit
 
@@ -593,6 +743,7 @@ knitr::kable(
   caption = "TMA co-registration goodness of fit"
 )
 ```
+
 
 These correlations evaluate the fit of the network visualization to the
 underlying model. They do not measure how much variance in USD payment is
@@ -671,7 +822,13 @@ for (talent in talent_plot_order) {
 tma_talent_average_plot <- tma_talent_average_plot |>
   rENA::add_network(
     colors = "#0072B2",
-    edge.multiplier = 1
+    edge.multiplier = 1,
+    labels = get_tma_node_labels(
+      ena_set = tma_money_set,
+      code_label_lookup = node_code_label_lookup
+    ),
+    label.offset = get_tma_node_label_offsets(tma_money_set),
+    label.font.size = 9
   )
 
 tma_talent_average_plot <- set_tma_point_tooltips(
@@ -681,5 +838,131 @@ tma_talent_average_plot <- set_tma_point_tooltips(
   ]
 )
 
+tma_talent_average_plot <- move_tma_node_label_with_leader(
+  enaplot = tma_talent_average_plot,
+  label = "Collective<br>In-Group Framing"
+)
+
 tma_talent_average_plot
 ```
+
+
+### Individual talent average networks
+
+The three plots below retain the same payment-oriented axes and global node
+positions so that their edge structures remain directly comparable. Within
+each plot, the network is the column mean of the normalized line weights from
+that talent's streams. The point and dashed box show the talent's mean position
+and 95% coordinate confidence intervals; individual video points are omitted.
+
+```{r build_individual_talent_networks}
+talent_line_weights <- as.matrix(tma_money_set$line.weights)
+
+if (nrow(talent_line_weights) != nrow(tma_unit_display)) {
+  stop(
+    "Talent labels and TMA line weights must have the same row order.",
+    call. = FALSE
+  )
+}
+
+build_talent_average_network_plot <- function(talent) {
+  talent_rows <- tma_unit_display$talent_name == talent
+  talent_display_row <- match(
+    talent,
+    talent_average_display$talent_name
+  )
+
+  if (sum(talent_rows) < 2L || is.na(talent_display_row)) {
+    stop(
+      "Each talent plot requires at least two streams and display metadata.",
+      call. = FALSE
+    )
+  }
+
+  talent_color <- talent_average_display$point_color[[talent_display_row]]
+  talent_shape <- talent_average_display$point_shape[[talent_display_row]]
+  talent_mean_network <- colMeans(
+    talent_line_weights[talent_rows, , drop = FALSE]
+  )
+
+  talent_plot <- rENA::ena.plot(
+    tma_money_set,
+    title = sprintf(
+      "TMA: %s Average Payment-Aligned Network",
+      talent
+    ),
+    dimension.labels = c(
+      "Payment-aligned network dimension",
+      "Residual SVD dimension"
+    )
+  )
+
+  talent_plot <- rENA::ena.plot.group(
+    enaplot = talent_plot,
+    points = talent_average_coordinates[talent_rows, , drop = FALSE],
+    labels = talent,
+    colors = talent_color,
+    shape = talent_shape,
+    confidence.interval = "box",
+    point.size = 10,
+    show.legend = FALSE
+  )
+
+  talent_plot <- rENA::ena.plot.network(
+    enaplot = talent_plot,
+    network = talent_mean_network,
+    colors = talent_color,
+    edge.multiplier = 1,
+    labels = get_tma_node_labels(
+      ena_set = tma_money_set,
+      code_label_lookup = node_code_label_lookup
+    ),
+    label.offset = get_tma_node_label_offsets(tma_money_set),
+    label.font.size = 9
+  )
+
+  talent_plot <- set_tma_point_tooltips(
+    enaplot = talent_plot,
+    tooltips = talent_average_display$tooltip[[talent_display_row]]
+  )
+
+  move_tma_node_label_with_leader(
+    enaplot = talent_plot,
+    label = "Collective<br>In-Group Framing"
+  )
+}
+
+tma_talent_network_plots <- stats::setNames(
+  lapply(talent_plot_order, build_talent_average_network_plot),
+  talent_plot_order
+)
+```
+
+
+#### Ava average network
+
+```{r ava_average_network}
+tma_talent_network_plots$Ava
+```
+
+
+#### Katya average network
+
+```{r katya_average_network}
+tma_talent_network_plots$Katya
+```
+
+
+#### Leia average network
+
+```{r leia_average_network}
+tma_talent_network_plots$Leia
+```
+
+
+## Talent Chat Networks
+Since I have multimodal analysis, I'd like to also break this down by the different chat networks. How would that work in multimodal analysis? 
+
+
+## Chat and streamer modal interactions
+How would I go about capturing the instances where the streamer and the chat engage with each other?
