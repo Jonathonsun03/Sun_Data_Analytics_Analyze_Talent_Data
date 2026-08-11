@@ -1,0 +1,12 @@
+[Unit]
+Description=Synchronize the DuckDB talent catalog to Cloudflare D1
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/projects/Sun_Data_Analytics_Analyze_Talent_Data
+Environment=TALENT_REPO_ROOT=/srv/projects/Sun_Data_Analytics_Analyze_Talent_Data
+ExecStart=/srv/projects/Sun_Data_Analytics_Analyze_Talent_Data/.venv/bin/python py_scripts/run/sync_d1_talent_catalog.py --apply --skip-migrations
+NoNewPrivileges=true
+PrivateTmp=true

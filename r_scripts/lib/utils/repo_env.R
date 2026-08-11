@@ -51,7 +51,22 @@ load_repo_env <- function(repo_root = NULL, env_file = ".env", override = FALSE)
   if (!override && isTRUE(repo_env_loaded_paths[[env_key]])) {
     return(invisible(env_path))
   }
+
+  load_repo_env_enabled <- tolower(trimws(
+    Sys.getenv("TALENT_LOAD_REPO_ENV", unset = "true")
+  ))
+  if (load_repo_env_enabled %in% c("0", "false", "no", "off")) {
+    repo_env_loaded_paths[[env_key]] <- TRUE
+    repo_env_apply_aliases(override = override)
+    return(invisible(env_path))
+  }
+
   if (!file.exists(env_path)) {
+    repo_env_loaded_paths[[env_key]] <- TRUE
+    repo_env_apply_aliases(override = override)
+    return(invisible(env_path))
+  }
+  if (file.access(env_path, mode = 4) != 0) {
     repo_env_loaded_paths[[env_key]] <- TRUE
     repo_env_apply_aliases(override = override)
     return(invisible(env_path))

@@ -7,6 +7,7 @@ dashboard modules in an explicit order.
 ## Layout
 
 - `data/`: source access, filtering, and final dashboard-data assembly
+- `auth/`: trusted Cloudflare Access headers and per-session talent authorization
 - `metrics/`: domain-specific summary and metric preparation
 - `recommendations/`: recommendation schema, domain rules, and story assembly
 - `ui/`: reusable tables, cards, empty states, and other HTML components
@@ -29,3 +30,28 @@ dashboard namespace, for example `dash_data_*`, `dash_metric_*`, `dash_rec_*`,
 `dash_ui_*`, or `dash_plotly_*`. General plotting helpers should identify their
 return type with suffixes such as `_prep`, `_ggplot`, `_plotly`, `_table`, or
 `_card`.
+
+## Dashboard authorization
+
+The interactive dashboard defaults to fail-closed production authorization.
+Cloudflare's permissions Worker must provide `X-SDA-Verified-Email` and
+`X-SDA-Allowed-Talent-Codes` on every proxied dashboard request. The Shiny
+session intersects those exact codes with `catalog.talents` before rendering the
+selector and validates the selected code again before querying DuckDB.
+
+Each new Shiny session reloads the talent catalog from DuckDB so publication
+date bounds and the displayed latest analytics snapshot do not remain pinned to
+the long-running Quarto process's startup state. The publication date selector
+still filters by video publish date; the separate analytics freshness message
+reports the latest available snapshot date.
+
+For an explicit local-only preview, set both development mode and a narrow list
+of test codes:
+
+```bash
+export DASHBOARD_AUTH_MODE=development
+export DASHBOARD_DEV_ALLOWED_TALENT_CODES=LEI3,AVA1
+export DASHBOARD_DEV_EMAIL=local@example.com
+```
+
+Production never falls back to all talents when the trusted headers are absent.

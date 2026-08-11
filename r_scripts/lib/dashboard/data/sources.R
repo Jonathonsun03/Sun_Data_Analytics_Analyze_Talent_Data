@@ -117,15 +117,30 @@ dashboard_unified_talent_catalog <- function(database_path = NULL) {
   catalog <- DBI::dbGetQuery(
     con,
     paste(
+      "WITH publish_bounds AS (",
+      "  SELECT",
+      "    talent_code,",
+      "    MIN(CAST(published_at AS DATE)) AS earliest_publish_date,",
+      "    MAX(CAST(published_at AS DATE)) AS latest_publish_date",
+      "  FROM catalog.videos",
+      "  GROUP BY talent_code",
+      "), analytics_bounds AS (",
+      "  SELECT",
+      "    talent_code,",
+      "    MAX(snapshot_date) AS latest_analytics_snapshot_date",
+      "  FROM clean.video_analytics_snapshots",
+      "  GROUP BY talent_code",
+      ")",
       "SELECT",
       "  t.talent_code,",
       "  t.talent_name,",
-      "  MIN(CAST(v.published_at AS DATE)) AS earliest_publish_date,",
-      "  MAX(CAST(v.published_at AS DATE)) AS latest_publish_date",
+      "  p.earliest_publish_date,",
+      "  p.latest_publish_date,",
+      "  a.latest_analytics_snapshot_date",
       "FROM catalog.talents AS t",
-      "LEFT JOIN catalog.videos AS v USING (talent_code)",
+      "LEFT JOIN publish_bounds AS p USING (talent_code)",
+      "LEFT JOIN analytics_bounds AS a USING (talent_code)",
       "WHERE t.active",
-      "GROUP BY t.talent_code, t.talent_name",
       "ORDER BY t.talent_name"
     )
   )
@@ -136,7 +151,8 @@ dashboard_unified_talent_catalog <- function(database_path = NULL) {
   catalog %>%
     dplyr::mutate(
       earliest_publish_date = as.Date(.data$earliest_publish_date),
-      latest_publish_date = as.Date(.data$latest_publish_date)
+      latest_publish_date = as.Date(.data$latest_publish_date),
+      latest_analytics_snapshot_date = as.Date(.data$latest_analytics_snapshot_date)
     )
 }
 

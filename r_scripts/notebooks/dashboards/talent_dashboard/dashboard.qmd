@@ -72,38 +72,21 @@ library(shiny)
 source(here::here("r_scripts", "lib", "dashboard", "load.R"))
 
 dashboard_database_path <- dashboard_resolve_database_path()
-dashboard_talents <- dashboard_unified_talent_catalog(dashboard_database_path)
+dashboard_startup_talents <- dashboard_unified_talent_catalog(dashboard_database_path)
 
-dashboard_default_talent_index <- grep(
-  "^Avaritia",
-  dashboard_talents$talent_name,
-  ignore.case = TRUE
-)[1]
-if (is.na(dashboard_default_talent_index)) {
-  dashboard_default_talent_index <- 1
-}
-dashboard_default_talent <- dashboard_talents[dashboard_default_talent_index, , drop = FALSE]
-dashboard_talent_choices <- stats::setNames(
-  dashboard_talents$talent_code,
-  gsub("_", " ", dashboard_talents$talent_name, fixed = TRUE)
+dashboard_global_min_date <- min(
+  dashboard_startup_talents$earliest_publish_date,
+  na.rm = TRUE
 )
-
-dashboard_global_min_date <- min(dashboard_talents$earliest_publish_date, na.rm = TRUE)
-dashboard_global_max_date <- max(dashboard_talents$latest_publish_date, na.rm = TRUE)
+dashboard_global_max_date <- max(
+  dashboard_startup_talents$latest_publish_date,
+  na.rm = TRUE
+)
 if (!is.finite(dashboard_global_min_date)) {
   dashboard_global_min_date <- Sys.Date()
 }
 if (!is.finite(dashboard_global_max_date)) {
   dashboard_global_max_date <- Sys.Date()
-}
-
-dashboard_default_start_date <- dashboard_default_talent$earliest_publish_date[[1]]
-dashboard_default_end_date <- dashboard_default_talent$latest_publish_date[[1]]
-if (is.na(dashboard_default_start_date)) {
-  dashboard_default_start_date <- dashboard_global_min_date
-}
-if (is.na(dashboard_default_end_date)) {
-  dashboard_default_end_date <- dashboard_global_max_date
 }
 
 dashboard_render_ui <- function(value_fn, empty_message = "No data are available for the active filters.") {
@@ -134,18 +117,15 @@ dashboard_optional_input_date <- function(date_range, index) {
 # {.sidebar}
 
 ```{r}
-selectInput(
-  inputId = "talent",
-  label = "Talent",
-  choices = dashboard_talent_choices,
-  selected = dashboard_default_talent$talent_code[[1]]
-)
+uiOutput("dashboard_identity")
+uiOutput("talent_selector")
+uiOutput("dashboard_data_freshness")
 
 dateRangeInput(
   inputId = "publish_dates",
   label = "Published between",
-  start = dashboard_default_start_date,
-  end = dashboard_default_end_date,
+  start = dashboard_global_min_date,
+  end = dashboard_global_max_date,
   min = dashboard_global_min_date,
   max = dashboard_global_max_date,
   format = "yyyy-mm-dd",
@@ -422,8 +402,79 @@ cat(
 #| context: server
 #| include: false
 
+# Refresh catalog metadata for every new Shiny session. The setup context is
+# process-wide and can remain alive across multiple daily DuckDB ingestions.
+dashboard_talents <- dashboard_unified_talent_catalog(dashboard_database_path)
+
+dashboard_session_access <- dashboard_access_context(
+  session$request,
+  dashboard_talents$talent_code
+)
+dashboard_allowed_talents <- dashboard_talents %>%
+  dplyr::filter(
+    .data$talent_code %in% dashboard_session_access$allowed_talent_codes
+  )
+
+output$dashboard_identity <- renderUI({
+  if (!dashboard_session_access$authorized) {
+    return(
+      htmltools::div(
+        class = "alert alert-danger",
+        "No active talent permissions were found for this account."
+      )
+    )
+  }
+
+  htmltools::tags$small(
+    class = "text-muted",
+    paste("Signed in as", dashboard_session_access$verified_email)
+  )
+})
+
+output$talent_selector <- renderUI({
+  if (!dashboard_session_access$authorized || nrow(dashboard_allowed_talents) == 0) {
+    return(NULL)
+  }
+
+  choices <- stats::setNames(
+    dashboard_allowed_talents$talent_code,
+    gsub("_", " ", dashboard_allowed_talents$talent_name, fixed = TRUE)
+  )
+  selectInput(
+    inputId = "talent",
+    label = "Talent",
+    choices = choices,
+    selected = dashboard_allowed_talents$talent_code[[1]]
+  )
+})
+
+output$dashboard_data_freshness <- renderUI({
+  if (!dashboard_session_access$authorized || nrow(dashboard_allowed_talents) == 0) {
+    return(NULL)
+  }
+
+  selected_code <- input$talent
+  if (is.null(selected_code) || !dashboard_talent_is_authorized(selected_code, dashboard_session_access)) {
+    selected_code <- dashboard_allowed_talents$talent_code[[1]]
+  }
+  selected <- dashboard_allowed_talents %>%
+    dplyr::filter(.data$talent_code == selected_code) %>%
+    dplyr::slice_head(n = 1)
+  latest_snapshot <- selected$latest_analytics_snapshot_date[[1]]
+
+  htmltools::tags$small(
+    class = "text-muted",
+    if (is.na(latest_snapshot)) {
+      "Latest analytics snapshot is unavailable."
+    } else {
+      paste("Analytics available through", format(latest_snapshot, "%Y-%m-%d"))
+    }
+  )
+})
+
 observeEvent(input$talent, {
-  selected <- dashboard_talents %>%
+  req(dashboard_talent_is_authorized(input$talent, dashboard_session_access))
+  selected <- dashboard_allowed_talents %>%
     dplyr::filter(.data$talent_code == input$talent) %>%
     dplyr::slice_head(n = 1)
   if (nrow(selected) == 1 &&
@@ -438,12 +489,13 @@ observeEvent(input$talent, {
       max = selected$latest_publish_date[[1]]
     )
   }
-}, ignoreInit = TRUE)
+}, ignoreInit = FALSE)
 
 dashboard_data_reactive <- eventReactive(
   input$apply_filters,
   {
-    req(input$talent)
+    req(dashboard_session_access$authorized)
+    req(dashboard_talent_is_authorized(input$talent, dashboard_session_access))
 
     start_date <- dashboard_optional_input_date(input$publish_dates, 1)
     end_date <- dashboard_optional_input_date(input$publish_dates, 2)

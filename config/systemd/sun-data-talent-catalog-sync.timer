@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the DuckDB to D1 talent catalog sync hourly
+
+[Timer]
+OnBootSec=5m
+OnUnitActiveSec=1h
+Persistent=true
+RandomizedDelaySec=2m
+Unit=sun-data-talent-catalog-sync.service
+
+[Install]
+WantedBy=timers.target

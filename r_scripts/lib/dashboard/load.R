@@ -56,7 +56,8 @@ dashboard_source("r_scripts", "lib", "linear_regression", "day_of_week", "weekda
 dashboard_source("r_scripts", "lib", "linear_regression", "day_of_week", "report_helpers.R")
 dashboard_source("r_scripts", "lib", "linear_regression", "day_of_week", "topic_weekday_recommendations.R")
 
-# Dashboard data, metric, and recommendation layers.
+# Dashboard authorization, data, metric, and recommendation layers.
+dashboard_source("r_scripts", "lib", "dashboard", "auth", "access.R")
 dashboard_source("r_scripts", "lib", "dashboard", "data", "sources.R")
 dashboard_source("r_scripts", "lib", "dashboard", "data", "filters.R")
 dashboard_source("r_scripts", "lib", "dashboard", "metrics", "overview.R")

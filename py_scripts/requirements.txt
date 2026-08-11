@@ -5,3 +5,7 @@ jupyter
 # Unified DuckDB notebook
 duckdb
 pandas
+
+# Private Google Sheet permission synchronization
+google-api-python-client
+google-auth
