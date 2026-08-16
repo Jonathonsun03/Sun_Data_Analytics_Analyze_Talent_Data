@@ -249,6 +249,92 @@ The model retains eight nodes. `gave_money` replaces
 `r removed_low_frequency_code_col`, the lowest-ranked member of the previous
 eight qualitative codes based on windowed pair participation.
 
+### TMA input data structure
+
+The table below presents the main fields that organize the TMA model:
+
+- `talent_name` and `video_id` jointly define the unit of analysis and keep the
+  horizon inside a single talent-stream combination.
+- `source` identifies the chat or subtitle modality.
+- `row_number` and `timecode` locate the event in the stream. The current model
+  applies its four-row window using event order; `timecode` is retained for
+  interpretation.
+- `speaker` and `text` identify the actor and the coded event.
+- `paid_amount_usd` is retained for the later monetary rotation.
+- The final eight logical columns are the codes accumulated into network
+  connections.
+
+To keep the rendered notebook responsive, the display includes up to the first
+10 events from each modality in each talent-video unit. The model continues to
+use every row in `tma_input_data`.
+
+```{r display_tma_input_structure}
+tma_input_code_labels <- codebook_display$code_label[
+  match(
+    sub("^code_", "", selected_code_cols),
+    codebook_display$code_id
+  )
+]
+tma_input_code_labels[selected_code_cols == "gave_money"] <- "Gave Money"
+
+if (any(is.na(tma_input_code_labels))) {
+  stop(
+    "Every displayed TMA code must have a readable label.",
+    call. = FALSE
+  )
+}
+
+tma_input_preview <- tma_input_data %>%
+  dplyr::arrange(
+    .data$talent_name,
+    .data$video_id,
+    .data$row_number
+  ) %>%
+  dplyr::group_by(
+    .data$talent_name,
+    .data$video_id,
+    .data$source
+  ) %>%
+  dplyr::slice_head(n = 10L) %>%
+  dplyr::ungroup() %>%
+  dplyr::arrange(
+    .data$talent_name,
+    .data$video_id,
+    .data$row_number
+  ) %>%
+  dplyr::select(
+    talent_name,
+    video_id,
+    row_number,
+    timecode,
+    source,
+    speaker,
+    text,
+    paid_amount_usd,
+    dplyr::all_of(selected_code_cols)
+  )
+
+tma_input_column_labels <- c(
+  "Unit: Talent",
+  "Unit / Horizon: Video ID",
+  "Event Order",
+  "Timecode",
+  "Modality",
+  "Speaker",
+  "Coded Text",
+  "USD Payment",
+  paste0("Code: ", tma_input_code_labels)
+)
+
+DTSettings(
+  tma_input_preview,
+  scroll_x = TRUE,
+  currency_cols = "paid_amount_usd",
+  options = list(pageLength = 10),
+  colnames = tma_input_column_labels
+)
+```
+
 
 
 
@@ -856,21 +942,27 @@ that talent's streams. The point and dashed box show the talent's mean position
 and 95% coordinate confidence intervals; individual video points are omitted.
 
 ```{r build_individual_talent_networks}
-talent_line_weights <- as.matrix(tma_money_set$line.weights)
-
-if (nrow(talent_line_weights) != nrow(tma_unit_display)) {
-  stop(
-    "Talent labels and TMA line weights must have the same row order.",
-    call. = FALSE
-  )
-}
-
-build_talent_average_network_plot <- function(talent) {
-  talent_rows <- tma_unit_display$talent_name == talent
+build_talent_average_network_plot <- function(talent,
+                                              ena_set,
+                                              unit_display,
+                                              title_suffix) {
+  unit_line_weights <- as.matrix(ena_set$line.weights)
+  unit_coordinates <- as.matrix(ena_set$points)[, 1:2, drop = FALSE]
+  talent_rows <- unit_display$talent_name == talent
   talent_display_row <- match(
     talent,
     talent_average_display$talent_name
   )
+
+  if (
+    nrow(unit_line_weights) != nrow(unit_display) ||
+      nrow(unit_coordinates) != nrow(unit_display)
+  ) {
+    stop(
+      "Talent labels, coordinates, and TMA line weights must share row order.",
+      call. = FALSE
+    )
+  }
 
   if (sum(talent_rows) < 2L || is.na(talent_display_row)) {
     stop(
@@ -882,14 +974,15 @@ build_talent_average_network_plot <- function(talent) {
   talent_color <- talent_average_display$point_color[[talent_display_row]]
   talent_shape <- talent_average_display$point_shape[[talent_display_row]]
   talent_mean_network <- colMeans(
-    talent_line_weights[talent_rows, , drop = FALSE]
+    unit_line_weights[talent_rows, , drop = FALSE]
   )
 
   talent_plot <- rENA::ena.plot(
-    tma_money_set,
+    ena_set,
     title = sprintf(
-      "TMA: %s Average Payment-Aligned Network",
-      talent
+      "TMA: %s<br>%s",
+      talent,
+      title_suffix
     ),
     dimension.labels = c(
       "Payment-aligned network dimension",
@@ -899,7 +992,7 @@ build_talent_average_network_plot <- function(talent) {
 
   talent_plot <- rENA::ena.plot.group(
     enaplot = talent_plot,
-    points = talent_average_coordinates[talent_rows, , drop = FALSE],
+    points = unit_coordinates[talent_rows, , drop = FALSE],
     labels = talent,
     colors = talent_color,
     shape = talent_shape,
@@ -914,10 +1007,10 @@ build_talent_average_network_plot <- function(talent) {
     colors = talent_color,
     edge.multiplier = 1,
     labels = get_tma_node_labels(
-      ena_set = tma_money_set,
+      ena_set = ena_set,
       code_label_lookup = node_code_label_lookup
     ),
-    label.offset = get_tma_node_label_offsets(tma_money_set),
+    label.offset = get_tma_node_label_offsets(ena_set),
     label.font.size = 9
   )
 
@@ -933,7 +1026,13 @@ build_talent_average_network_plot <- function(talent) {
 }
 
 tma_talent_network_plots <- stats::setNames(
-  lapply(talent_plot_order, build_talent_average_network_plot),
+  lapply(
+    talent_plot_order,
+    build_talent_average_network_plot,
+    ena_set = tma_money_set,
+    unit_display = tma_unit_display,
+    title_suffix = "Average Payment-Aligned Network"
+  ),
   talent_plot_order
 )
 ```
@@ -961,8 +1060,378 @@ tma_talent_network_plots$Leia
 
 
 ## Talent Chat Networks
-Since I have multimodal analysis, I'd like to also break this down by the different chat networks. How would that work in multimodal analysis? 
+
+The full TMA model accumulates code connections from chat and subtitle events
+within each talent-stream unit. Its normalized line weights no longer identify
+which modality contributed a connection, so a chat network should not be
+created by subsetting the finished `tma_money_set`.
+
+Instead, the model below filters to chat events *before* defining contexts and
+accumulating connections. It retains `talent_name` and `video_id` as the unit
+and horizon boundary. Therefore, chat messages remain situated within their
+own stream, but streamer subtitle events do not contribute codes or
+connections.
+
+Because subtitle rows are removed first, the four-row window now means the
+current chat event and the preceding chat events in that stream, rather than
+four events drawn from both modalities. This is the appropriate interpretation
+for a chat-only sequential network.
+
+```{r build_chat_only_tma}
+chat_tma_input_data <- tma_input_data %>%
+  dplyr::filter(.data$source == "chat")
+
+chat_horizon_rules <- tma::rules(
+  source == "chat" &
+    talent_name %in% UNIT$talent_name &
+    video_id %in% UNIT$video_id
+)
+
+chat_context_model <- tma::contexts(
+  x = chat_tma_input_data,
+  units_by = c("talent_name", "video_id"),
+  hoo_rules = chat_horizon_rules
+)
+
+chat_context_tensor <- tma::context_tensor(
+  df = chat_tma_input_data,
+  mode_column = "source",
+  default_window = code_window_size_back,
+  default_weight = 1
+)
+
+chat_tma_model <- tma::accumulate(
+  context_model = chat_context_model,
+  codes = selected_code_cols,
+  tensor = chat_context_tensor,
+  ordered = FALSE,
+  binary = TRUE
+)
+
+chat_tma_set <- rENA::ena.make.set(
+  chat_tma_model,
+  rotation.by = NULL,
+  rotation.set = tma_money_set$rotation
+)
+
+chat_unit_display <- tibble::tibble(
+  talent_name = as.vector(chat_tma_model$meta.data[["talent_name"]]),
+  video_id = as.vector(chat_tma_model$meta.data[["video_id"]])
+)
+```
+
+`rotation.set = tma_money_set$rotation` places the chat-only networks in the
+same payment-aligned coordinate system and uses the same node positions as the
+multimodal model. Thus, horizontal location describes how strongly a chat-only
+connection pattern expresses the payment gradient learned from the full model.
+It does not mean the chat-only set was independently optimized against payment.
+
+The following plots average the normalized chat-only connection weights across
+the streams belonging to each talent. Each dashed box is the 95% confidence
+interval for that talent's chat-only stream coordinates.
+
+```{r build_talent_chat_networks}
+chat_talent_network_plots <- stats::setNames(
+  lapply(
+    talent_plot_order,
+    build_talent_average_network_plot,
+    ena_set = chat_tma_set,
+    unit_display = chat_unit_display,
+    title_suffix = "Average Chat-Only Network"
+  ),
+  talent_plot_order
+)
+```
+
+### Ava chat network
+
+```{r ava_chat_network}
+chat_talent_network_plots$Ava
+```
+
+### Katya chat network
+
+```{r katya_chat_network}
+chat_talent_network_plots$Katya
+```
+
+### Leia chat network
+
+```{r leia_chat_network}
+chat_talent_network_plots$Leia
+```
+
+These plots answer what codes chat connects without subtitle contributions.
+They do not represent streamer-to-chat engagement, because that relationship
+requires retaining both modalities and explicitly modeling cross-modal event
+pairs.
 
 
 ## Chat and streamer modal interactions
-How would I go about capturing the instances where the streamer and the chat engage with each other?
+
+The models above do not isolate streamer-chat engagement:
+
+- The full multimodal model includes chat-chat, subtitle-subtitle, and
+  cross-modal connections in the same line weights.
+- The chat-only model removes subtitle events, so it cannot contain a
+  streamer-to-chat or chat-to-streamer connection.
+
+To isolate modal interaction, the model below retains both modalities but
+assigns zero weight to within-modality event pairs. Only a subtitle event in
+the ground followed by a chat response, or a chat event in the ground followed
+by a subtitle response, can contribute to the network.
+
+This is an operational definition of engagement: two coded events from
+different modalities occur within the specified window. It identifies
+cross-modal temporal and epistemic connections, but it does not by itself
+prove that one speaker intentionally replied to the other.
+
+```{r build_cross_modal_interaction_tma}
+interaction_tma_input_data <- tma_input_data %>%
+  dplyr::mutate(interaction_mode = "event")
+
+interaction_context_model <- tma::contexts(
+  x = interaction_tma_input_data,
+  units_by = c("talent_name", "video_id"),
+  hoo_rules = flexible_horizon_rules
+)
+
+interaction_context_tensor <- tma::context_tensor(
+  df = interaction_tma_input_data,
+  sender_cols = "source",
+  receiver_cols = "source",
+  mode_column = "interaction_mode",
+  default_window = code_window_size_back,
+  default_weight = 0
+)
+
+interaction_context_tensor[
+  "subtitle",
+  "chat",
+  "event",
+  "weight"
+] <- 1
+interaction_context_tensor[
+  "chat",
+  "subtitle",
+  "event",
+  "weight"
+] <- 1
+
+interaction_tma_model <- tma::accumulate(
+  context_model = interaction_context_model,
+  codes = selected_code_cols,
+  tensor = interaction_context_tensor,
+  ordered = FALSE,
+  binary = TRUE
+)
+
+interaction_tma_set <- rENA::ena.make.set(
+  interaction_tma_model,
+  rotation.by = NULL,
+  rotation.set = tma_money_set$rotation
+)
+```
+
+The tensor dimensions have a substantive interpretation:
+
+- `sender_cols = "source"` describes the modality of the preceding ground
+  event.
+- `receiver_cols = "source"` describes the modality of the current response
+  event.
+- A zero default weight removes chat-chat and subtitle-subtitle contributions.
+- The two assignments above retain both cross-modal directions.
+
+The model remains unordered at the code level, so an edge describes which
+codes connect across modalities rather than placing an arrow between codes.
+Direction is retained in the row-level response events below: a chat response
+has subtitle ground (`Streamer -> chat`), while a subtitle response has chat
+ground (`Chat -> streamer`).
+
+```{r prepare_cross_modal_interaction_events}
+interaction_row_connections <-
+  interaction_tma_model$model$row.connection.counts
+interaction_connection_cols <- names(interaction_row_connections)[
+  vapply(
+    interaction_row_connections,
+    inherits,
+    logical(1),
+    what = "ena.co.occurrence"
+  )
+]
+
+interaction_connection_matrix <- as.matrix(
+  interaction_row_connections[
+    ,
+    interaction_connection_cols,
+    with = FALSE
+  ]
+)
+
+interaction_response_events <- tibble::tibble(
+  QEID = as.vector(interaction_row_connections[["QEID"]]),
+  talent_name = as.vector(
+    interaction_row_connections[["talent_name"]]
+  ),
+  video_id = as.vector(interaction_row_connections[["video_id"]]),
+  cross_modal_connection_weight = rowSums(
+    interaction_connection_matrix,
+    na.rm = TRUE
+  )
+) %>%
+  dplyr::filter(.data$cross_modal_connection_weight > 0) %>%
+  dplyr::left_join(
+    tibble::as_tibble(interaction_tma_model$model$raw.input) %>%
+      dplyr::transmute(
+        QEID = as.vector(.data$QEID),
+        timecode = .data$timecode,
+        response_source = .data$source,
+        response_speaker = .data$speaker,
+        response_text = .data$text
+      ),
+    by = "QEID"
+  ) %>%
+  dplyr::left_join(
+    tma_unit_display %>%
+      dplyr::select(
+        .data$talent_name,
+        .data$video_id,
+        .data$stream_name
+      ),
+    by = c("talent_name", "video_id")
+  ) %>%
+  dplyr::mutate(
+    interaction_direction = dplyr::case_when(
+      .data$response_source == "chat" ~ "Streamer -> chat",
+      .data$response_source == "subtitle" ~ "Chat -> streamer",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  dplyr::arrange(
+    dplyr::desc(.data$cross_modal_connection_weight)
+  )
+
+interaction_direction_summary <- interaction_response_events %>%
+  dplyr::group_by(
+    .data$talent_name,
+    .data$interaction_direction
+  ) %>%
+  dplyr::summarise(
+    response_event_count = dplyr::n(),
+    total_connection_weight = sum(
+      .data$cross_modal_connection_weight
+    ),
+    .groups = "drop"
+  )
+
+DTSettings(
+  interaction_direction_summary,
+  scroll_x = TRUE,
+  options = list(pageLength = 10)
+)
+```
+
+Each `response_event_count` is a coded response row with at least one
+opposite-modality event in its four-event ground window. The
+`total_connection_weight` also reflects how many cross-modal code connections
+were present, so it should not be interpreted as a count of conversational
+turns.
+
+The table below previews the 500 strongest response events. The complete set
+remains available in `interaction_response_events` for qualitative inspection.
+
+```{r display_cross_modal_interaction_events}
+DTSettings(
+  interaction_response_events %>%
+    dplyr::select(
+      .data$talent_name,
+      .data$stream_name,
+      .data$timecode,
+      .data$interaction_direction,
+      .data$response_speaker,
+      .data$response_text,
+      .data$cross_modal_connection_weight
+    ) %>%
+    dplyr::slice_head(n = 500L),
+  scroll_x = TRUE,
+  options = list(pageLength = 10)
+)
+```
+
+### Cross-modal interaction network
+
+The final plot shows the mean network made only from cross-modal connections.
+It uses the full model's payment-oriented rotation, so its node positions and
+axes remain comparable with the multimodal and chat-only plots above.
+
+```{r visualize_cross_modal_interaction_tma}
+interaction_coordinates <- as.matrix(
+  interaction_tma_set$points
+)[, 1:2, drop = FALSE]
+interaction_mean_network <- colMeans(
+  as.matrix(interaction_tma_set$line.weights)
+)
+
+interaction_plot <- rENA::ena.plot(
+  interaction_tma_set,
+  title = "TMA: Chat and Streamer<br>Cross-Modal Interaction Network",
+  dimension.labels = c(
+    "Payment-aligned network dimension",
+    "Residual SVD dimension"
+  )
+)
+
+interaction_plot <- rENA::ena.plot.group(
+  enaplot = interaction_plot,
+  points = interaction_coordinates,
+  labels = "All talents",
+  colors = "#7B2CBF",
+  shape = "circle",
+  confidence.interval = "box",
+  point.size = 10,
+  show.legend = FALSE
+)
+
+interaction_plot <- rENA::ena.plot.network(
+  enaplot = interaction_plot,
+  network = interaction_mean_network,
+  colors = "#7B2CBF",
+  edge.multiplier = 1,
+  labels = get_tma_node_labels(
+    ena_set = interaction_tma_set,
+    code_label_lookup = node_code_label_lookup
+  ),
+  label.offset = get_tma_node_label_offsets(interaction_tma_set),
+  label.font.size = 9
+)
+
+interaction_plot <- set_tma_point_tooltips(
+  enaplot = interaction_plot,
+  tooltips = sprintf(
+    paste0(
+      "Group: All talents",
+      "<br>Streams: %s",
+      "<br>Cross-modal response events: %s",
+      "<br>Average payment: %s"
+    ),
+    nrow(interaction_tma_model$meta.data),
+    scales::comma(nrow(interaction_response_events)),
+    scales::dollar(
+      mean(tma_unit_display$total_paid_amount_usd),
+      accuracy = 0.01
+    )
+  )
+)
+
+interaction_plot <- move_tma_node_label_with_leader(
+  enaplot = interaction_plot,
+  label = "Collective<br>In-Group Framing"
+)
+
+interaction_plot
+```
+
+The strongest edges in this plot answer: **Which coded ideas tend to bridge
+streamer speech and chat activity within the selected window?** The direction
+summary and response-event table answer: **When, and in which direction, do
+those cross-modal windows occur?**
