@@ -1,0 +1,62 @@
+CONTENT TYPE MODERATION RULES
+
+You must interpret themes differently depending on content_type.
+
+--------------------------------------
+IF content_type == "short":
+
+1. Narrative Serialization:
+   - Do NOT mark narrative_serialization TRUE based solely on:
+       - "Day X"
+       - Countdown-style titles
+       - Advent calendar formatting
+   - Only mark TRUE if:
+       - Explicit Part/Finale/Arc language
+       - Clear continuation markers
+   - Default: narrative_serialization = FALSE for shorts.
+
+2. Performance & Artistry:
+   - Only mark TRUE if explicit terms appear:
+       - "karaoke"
+       - "cover"
+       - "acapella"
+       - "remix"
+       - "concert"
+   - Exception for short/video: canonical song-title pattern may qualify even without explicit keywords:
+       - "<Song Title> - <Artist>"
+       - "<Song Title> — <Artist>"
+       - "<Song Title>" by <Artist>
+       - "<Song Title> | <Artist>"
+     Use this only when title is mostly song + artist with little/no non-music context.
+
+3. Interactive Entertainment:
+   - Shorts CAN be interactive.
+   - Mark TRUE if:
+       - Explicit game title appears
+       - Bracketed game title appears
+       - Clear gameplay markers ("boss", "let's play", "grinding", etc.)
+   - Do not suppress interactive just because content_type == short.
+
+4. Theme Density:
+   - Shorts should rarely exceed 2 primary themes.
+   - Prefer minimal supported coding.
+
+5. Confidence:
+   - If no strong anchor tokens exist, cap confidence at 0.65.
+   - If strong explicit anchor exists, confidence may exceed 0.75.
+
+--------------------------------------
+IF content_type == "live":
+
+1. Multi-theme coding is expected.
+2. Bracketed game titles (especially Terberri) strongly indicate interactive_entertainment.
+3. Karaoke/celebration events may co-occur with milestones.
+4. Narrative markers ("Finale", "Part X") are meaningful.
+
+--------------------------------------
+IF content_type == "video":
+
+1. Expect tighter thematic focus.
+2. Avoid overcoding meme_viral unless explicitly comedic framing.
+3. Narrative markers are meaningful.
+4. Canonical song-title pattern can justify performance_artistry when music context is dominant.

@@ -1,6 +1,6 @@
 # Prompts
 
-This folder stores maintained prompt specifications for non-classification analysis workflows.
+This folder stores maintained prompt specifications for analysis and classification workflows.
 
 The top-level categories intentionally mirror `bin/linux/codex_prompts/`:
 
@@ -16,6 +16,8 @@ The top-level categories intentionally mirror `bin/linux/codex_prompts/`:
   - Cross-talent shared-baseline prompts.
 - `summaries/`
   - Per-stream summary prompts.
+- `title_classification/`
+  - Maintained base prompt components used to publish a versioned title-classification record to DuckDB.
 
 Organization rules:
 
@@ -30,13 +32,7 @@ What belongs here:
 - Prompt documents used by Codex-driven qualitative analysis workflows.
 - Prompt files that should be maintained independently from the title-classification system.
 
-What does not belong here:
-
-- Title-classification prompt assets under `classification/prompts/`.
-  - That separate folder is active code/config input for the title-classification pipeline.
-  - It contains the base system prompt, schema, definitions, talent overlays, and live-chat summarization prompts currently referenced by code.
-
 Rule of thumb:
 
-- If a prompt is part of the title-classification compiler or classification config, keep it in `classification/prompts/`.
+- If a prompt is part of the title-classification compiler, keep the maintained source in `prompts/title_classification/` and publish a versioned snapshot to DuckDB.
 - If a prompt is a standalone analysis spec for downstream qualitative work, keep it in `prompts/` under the matching workflow category.

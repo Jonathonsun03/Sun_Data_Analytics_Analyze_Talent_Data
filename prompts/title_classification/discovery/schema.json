@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "structural_pattern_summary",
+    "bracket_interpretation",
+    "parentheses_interpretation",
+    "topic_extractability",
+    "shorts_ambiguity_patterns",
+    "event_signals",
+    "monetization_signals",
+    "rule_candidates",
+    "confidence_recommendations"
+  ],
+  "properties": {
+    "structural_pattern_summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "bracket_interpretation": {
+      "type": "string",
+      "enum": [
+        "topic",
+        "show_format",
+        "mixed",
+        "rare"
+      ]
+    },
+    "parentheses_interpretation": {
+      "type": "string",
+      "minLength": 1
+    },
+    "topic_extractability": {
+      "type": "string",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ]
+    },
+    "shorts_ambiguity_patterns": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "maxItems": 10
+    },
+    "event_signals": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "maxItems": 20
+    },
+    "monetization_signals": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "maxItems": 20
+    },
+    "rule_candidates": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "maxItems": 20
+    },
+    "confidence_recommendations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "maxItems": 10
+    }
+  }
+}

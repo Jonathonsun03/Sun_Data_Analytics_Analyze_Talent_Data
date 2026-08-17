@@ -71,11 +71,17 @@ ena_precoding_load_talent_id_lookup <- function(talent_data_root = NULL) {
   )
   if (is.null(con)) return(empty)
   on.exit(tryCatch(DBI::dbDisconnect(con, shutdown = TRUE), error = function(e) NULL), add = TRUE)
-  if (!DBI::dbExistsTable(con, "talents")) return(empty)
   out <- tryCatch(
-    DBI::dbGetQuery(con, "SELECT talent_name, talent_slug, talent_id FROM talents"),
+    DBI::dbGetQuery(
+      con,
+      "SELECT talent_name, legacy_talent_id AS talent_id FROM catalog.talents"
+    ),
     error = function(e) empty
   )
+  if (nrow(out) > 0L) {
+    out$talent_slug <- vapply(out$talent_name, talent_slugify, character(1))
+    out <- out[, c("talent_name", "talent_slug", "talent_id"), drop = FALSE]
+  }
   as.data.frame(out, stringsAsFactors = FALSE)
 }
 
@@ -172,4 +178,3 @@ ena_precoding_source_validation <- function(source_inventory) {
     )
   }))
 }
-

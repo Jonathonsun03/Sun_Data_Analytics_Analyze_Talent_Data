@@ -1,0 +1,14 @@
+PRIMARY CODE: COLLABORATIVE_ENERGY
+
+Definition:
+Content emphasizing collaboration between multiple creators or guests.
+
+Inclusion Criteria:
+- "collab", "feat.", "with", guest naming, group event framing, team-up language.
+
+Exclusion Criteria:
+- Solo streams that mention others only in passing.
+
+Mapping Guidance:
+- Keep topic aligned to the actual activity (gaming/music/etc.).
+- Add tags such as `collab`, `guest`, `group_event`, `duo`.

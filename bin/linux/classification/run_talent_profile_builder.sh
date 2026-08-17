@@ -1,83 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Load repo .env defaults without overriding already-exported values.
-_ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-while [[ "${_ENV_ROOT}" != "/" ]]; do
-  if [[ -e "${_ENV_ROOT}/.git" ]]; then
-    break
-  fi
-  _ENV_ROOT="$(dirname "${_ENV_ROOT}")"
-done
-if [[ -f "${_ENV_ROOT}/bin/linux/load_repo_env.sh" ]]; then
-  # shellcheck source=/dev/null
-  source "${_ENV_ROOT}/bin/linux/load_repo_env.sh"
-  load_repo_env "${_ENV_ROOT}"
-fi
-unset _ENV_ROOT
-
-# Runs r_scripts/run/title_classification/talent_profile/build_talent_profile.R from repo root.
-# Passes all CLI arguments through to the R script.
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 R_SCRIPT="r_scripts/run/title_classification/talent_profile/build_talent_profile.R"
 
-usage() {
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   cat <<'EOF'
 Usage:
-  bin/linux/classification/run_talent_profile_builder.sh [builder args...]
+  bin/linux/classification/run_talent_profile_builder.sh [builder options...]
 
-Description:
-  Wrapper for the talent profile builder R script:
-  r_scripts/run/title_classification/talent_profile/build_talent_profile.R
+Builds reusable profiles from canonical catalog.videos. The default is a dry
+run. Pass --execute to publish into catalog.talent_profiles.
 
 Examples:
-  Single talent:
-    bin/linux/classification/run_talent_profile_builder.sh \
-      --csv notes/titles.csv \
-      --talent "Terberri_Solaris_Ch" \
-      --talent-col talent \
-      --title-col "Title" \
-      --content-type-col "Content Type" \
-      --write-overlay \
-      --update-master-config
-
-  All talents:
-    bin/linux/classification/run_talent_profile_builder.sh \
-      --csv notes/titles.csv \
-      --all-talents \
-      --talent-col talent \
-      --title-col "Title" \
-      --content-type-col "Content Type" \
-      --write-overlay \
-      --update-master-config
-
-  GPT-assisted:
-    OPENAI_MODEL=gpt-5-mini \
-    bin/linux/classification/run_talent_profile_builder.sh \
-      --csv notes/titles.csv \
-      --all-talents \
-      --talent-col talent \
-      --title-col "Title" \
-      --content-type-col "Content Type" \
-      --write-overlay \
-      --update-master-config \
-      --use-gpt \
-      --sample-size 250
+  bin/linux/classification/run_talent_profile_builder.sh --talent TER4
+  bin/linux/classification/run_talent_profile_builder.sh --talent TER4 --profile-version v7 --execute
+  bin/linux/classification/run_talent_profile_builder.sh --all-talents --use-gpt --sample-size 250 --execute
 EOF
-}
-
-if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-  usage
   exit 0
 fi
 
 cd "${REPO_ROOT}"
-
-if [[ ! -f "${R_SCRIPT}" ]]; then
-  echo "Error: missing R script at ${R_SCRIPT}" >&2
-  exit 1
-fi
-
 Rscript "${R_SCRIPT}" "$@"

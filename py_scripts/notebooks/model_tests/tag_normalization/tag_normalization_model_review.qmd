@@ -1,0 +1,787 @@
+---
+title: "Title Tag Normalization Review"
+subtitle: "Deterministic normalization with guarded RapidFuzz consolidation"
+format:
+  html:
+    toc: true
+    code-fold: false
+    embed-resources: true
+jupyter: python3
+execute:
+  echo: true
+  warning: false
+params:
+  fuzzy_score_cutoff: 86
+  fuzzy_high_confidence_cutoff: 96
+---
+
+## Purpose
+
+This notebook applies the selected starting workflow for turning free-form
+title tags into stable normalized labels. It does not update classification
+results or publish a normalization dictionary.
+
+The two stages are intentionally conservative:
+
+1. deterministic surface normalization;
+2. guarded RapidFuzz alias consolidation.
+
+Deterministic equivalences and guarded high-confidence RapidFuzz aliases are
+applied to a final canonical mapping. Numeric differences, compound tags, and
+broader families are left unchanged. Embeddings and BERTopic-style clustering
+are deferred until tags have descriptor types that prevent unrelated facets
+from being compared.
+
+The original tag remains the auditable source value. A future production layer
+should map it to a canonical tag and broader family rather than rewriting the
+stored model response.
+
+Render the offline deterministic and RapidFuzz baseline from the repository
+root:
+
+```bash
+QUARTO_PYTHON=.venv/bin/python quarto render \
+  py_scripts/notebooks/model_tests/tag_normalization/tag_normalization_model_review.qmd
+```
+
+```{python}
+#| label: setup
+
+from __future__ import annotations
+
+import itertools
+import json
+import os
+import re
+import unicodedata
+from collections import defaultdict
+from pathlib import Path
+
+import duckdb
+import pandas as pd
+from rapidfuzz import fuzz, process
+
+
+def find_repo_root(start: Path | None = None) -> Path:
+    current = (start or Path.cwd()).resolve()
+    for candidate in (current, *current.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    raise RuntimeError(f"Could not find the repository root from {current}.")
+
+
+REPO_ROOT = find_repo_root()
+os.chdir(REPO_ROOT)
+
+from py_scripts.lib.utils.env import load_repo_env
+from py_scripts.lib.utils.paths import unified_database_path
+
+
+load_repo_env(REPO_ROOT)
+PARAMS = globals().get("params", {})
+FUZZY_SCORE_CUTOFF = float(PARAMS.get("fuzzy_score_cutoff", 86))
+FUZZY_HIGH_CONFIDENCE_CUTOFF = max(
+    float(PARAMS.get("fuzzy_high_confidence_cutoff", 96)),
+    FUZZY_SCORE_CUTOFF,
+)
+
+pd.set_option("display.max_colwidth", 120)
+```
+
+## Load the current active-version tags
+
+Only results matching the current title hash and active title version are used.
+This prevents old title versions from making the vocabulary appear more
+fragmented than the current production state.
+
+```{python}
+#| label: load-current-tags
+
+database_path = unified_database_path()
+connection = duckdb.connect(str(database_path), read_only=True)
+try:
+    result_rows = connection.execute(
+        """
+        SELECT
+          result.video_id,
+          result.talent_code,
+          talent.talent_name,
+          video.title,
+          status.title_version_id,
+          result.classification_json,
+          result.created_at
+        FROM classification.title_classification_status AS status
+        JOIN classification.title_classification_results AS result
+          ON result.video_id = status.video_id
+         AND result.title_hash = status.title_hash
+         AND result.title_version_id = status.title_version_id
+        JOIN catalog.videos AS video
+          ON video.video_id = result.video_id
+        LEFT JOIN catalog.talents AS talent
+          ON talent.talent_code = result.talent_code
+        WHERE status.is_classified
+        QUALIFY ROW_NUMBER() OVER (
+          PARTITION BY result.video_id
+          ORDER BY result.created_at DESC NULLS LAST,
+                   result.confidence DESC NULLS LAST
+        ) = 1
+        ORDER BY result.video_id
+        """
+    ).fetchdf()
+finally:
+    connection.close()
+
+
+def parse_classification(value: object) -> dict[str, object]:
+    if value is None or pd.isna(value):
+        return {}
+    try:
+        parsed = json.loads(str(value))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+tag_records: list[dict[str, object]] = []
+for row in result_rows.itertuples(index=False):
+    classification = parse_classification(row.classification_json)
+    tags = classification.get("tags", [])
+    if not isinstance(tags, list):
+        continue
+    for tag in tags:
+        tag_text = str(tag).strip()
+        if not tag_text:
+            continue
+        tag_records.append(
+            {
+                "video_id": row.video_id,
+                "talent_code": row.talent_code,
+                "talent_name": row.talent_name,
+                "title": row.title,
+                "title_version_id": row.title_version_id,
+                "topic": str(classification.get("topic", "") or ""),
+                "primary_reference": str(
+                    classification.get("primary_reference", "") or ""
+                ),
+                "raw_tag": tag_text,
+            }
+        )
+
+tag_rows = pd.DataFrame(tag_records)
+raw_inventory = (
+    tag_rows.groupby("raw_tag", as_index=False)
+    .agg(
+        uses=("video_id", "size"),
+        unique_titles=("video_id", "nunique"),
+        talents=("talent_code", "nunique"),
+    )
+    .sort_values(["uses", "raw_tag"], ascending=[False, True])
+    .reset_index(drop=True)
+)
+
+pd.DataFrame(
+    {
+        "metric": [
+            "Current classified titles",
+            "Tag assignments",
+            "Distinct raw tags",
+        ],
+        "value": [len(result_rows), len(tag_rows), len(raw_inventory)],
+    }
+)
+```
+
+## Stage 1: deterministic surface normalization
+
+This stage should resolve differences that do not require semantic judgment:
+case, Unicode width, underscores, hyphens, surrounding punctuation, compact
+spellings, and a small number of transparent token aliases.
+
+Numbers are preserved. `15k_sub_goal` and `20k_sub_goal` may share a broader
+family, but they are not interchangeable aliases.
+
+```{python}
+#| label: deterministic-normalization
+
+COMPACT_TOKEN_ALIASES = {
+    "masterduel": "master duel",
+    "subgoal": "sub goal",
+    "yugioh": "yu gi oh",
+}
+
+
+def normalize_tag(value: object) -> str:
+    text = unicodedata.normalize("NFKC", str(value)).casefold().strip()
+    text = text.replace("&", " and ")
+    text = re.sub(r"[_/\\-]+", " ", text)
+    text = re.sub(r"(?<=\d)(?=[a-z])|(?<=[a-z])(?=\d)", " ", text)
+    text = re.sub(r"[^\w\s]", " ", text, flags=re.UNICODE)
+    text = re.sub(r"\s+", " ", text).strip()
+
+    tokens = text.split()
+    expanded: list[str] = []
+    for token in tokens:
+        expanded.extend(COMPACT_TOKEN_ALIASES.get(token, token).split())
+    tokens = ["hour" if token == "hours" else token for token in expanded]
+    return " ".join(tokens)
+
+
+def numeric_signature(value: object) -> tuple[str, ...]:
+    normalized = normalize_tag(value)
+    return tuple(re.findall(r"\b\d+(?:\.\d+)?\s*k?\b", normalized))
+
+
+normalized_inventory = raw_inventory.copy()
+normalized_inventory["normalized_tag"] = normalized_inventory["raw_tag"].map(
+    normalize_tag
+)
+tag_rows["normalized_tag"] = tag_rows["raw_tag"].map(normalize_tag)
+normalized_groups = (
+    tag_rows.groupby("normalized_tag", as_index=False)
+    .agg(
+        raw_variants=("raw_tag", lambda values: " | ".join(sorted(set(values)))),
+        variant_count=("raw_tag", "nunique"),
+        uses=("video_id", "size"),
+        unique_titles=("video_id", "nunique"),
+    )
+    .sort_values(["variant_count", "uses"], ascending=[False, False])
+    .reset_index(drop=True)
+)
+
+normalization_summary = pd.DataFrame(
+    {
+        "metric": [
+            "Distinct raw tags",
+            "Distinct normalized tags",
+            "Labels removed by deterministic normalization",
+            "Normalized groups with multiple raw spellings",
+        ],
+        "value": [
+            len(raw_inventory),
+            len(normalized_groups),
+            len(raw_inventory) - len(normalized_groups),
+            int((normalized_groups["variant_count"] > 1).sum()),
+        ],
+    }
+)
+normalization_summary
+```
+
+```{python}
+#| label: deterministic-review
+
+normalized_groups.loc[
+    normalized_groups["variant_count"] > 1,
+    ["normalized_tag", "raw_variants", "variant_count", "uses"],
+].head(100)
+```
+
+## Stage 2: RapidFuzz candidate generation
+
+RapidFuzz is used only after deterministic normalization. Strong lexical
+matches are automatically consolidated when both direct and token scores meet
+the high-confidence cutoff and neither numbers nor token containment differ.
+Other matches remain unchanged because high lexical similarity can describe a
+broader family or compound tag instead of an alias.
+
+```{python}
+#| label: rapidfuzz-candidates
+
+normalized_labels = normalized_groups["normalized_tag"].tolist()
+normalized_metadata = normalized_groups.set_index("normalized_tag").to_dict(
+    "index"
+)
+fuzzy_rows: list[dict[str, object]] = []
+
+for left_index, left_tag in enumerate(normalized_labels):
+    matches = process.extract(
+        left_tag,
+        normalized_labels,
+        scorer=fuzz.WRatio,
+        score_cutoff=FUZZY_SCORE_CUTOFF,
+        limit=20,
+    )
+    for right_tag, weighted_score, right_index in matches:
+        if right_index <= left_index:
+            continue
+        ratio_score = float(fuzz.ratio(left_tag, right_tag))
+        token_score = float(fuzz.token_ratio(left_tag, right_tag))
+        left_numbers = numeric_signature(left_tag)
+        right_numbers = numeric_signature(right_tag)
+        numeric_difference = left_numbers != right_numbers
+        left_tokens = set(left_tag.split())
+        right_tokens = set(right_tag.split())
+        token_containment = (
+            left_tokens != right_tokens
+            and (
+                left_tokens.issubset(right_tokens)
+                or right_tokens.issubset(left_tokens)
+            )
+        )
+
+        if numeric_difference:
+            relationship_hint = "numeric_or_scope_review"
+        elif token_containment:
+            relationship_hint = "compound_or_family_review"
+        elif (
+            ratio_score >= FUZZY_HIGH_CONFIDENCE_CUTOFF
+            and token_score >= FUZZY_HIGH_CONFIDENCE_CUTOFF
+        ):
+            relationship_hint = "strong_alias_candidate"
+        else:
+            relationship_hint = "lexical_review"
+
+        left_metadata = normalized_metadata[left_tag]
+        right_metadata = normalized_metadata[right_tag]
+        fuzzy_rows.append(
+            {
+                "left_tag": left_tag,
+                "right_tag": right_tag,
+                "left_uses": int(left_metadata["uses"]),
+                "right_uses": int(right_metadata["uses"]),
+                "left_variants": left_metadata["raw_variants"],
+                "right_variants": right_metadata["raw_variants"],
+                "ratio": ratio_score,
+                "token_ratio": token_score,
+                "weighted_ratio": float(weighted_score),
+                "numeric_difference": numeric_difference,
+                "token_containment": token_containment,
+                "relationship_hint": relationship_hint,
+            }
+        )
+
+fuzzy_candidates = pd.DataFrame(fuzzy_rows)
+if not fuzzy_candidates.empty:
+    fuzzy_candidates = fuzzy_candidates.sort_values(
+        ["relationship_hint", "weighted_ratio", "token_ratio"],
+        ascending=[True, False, False],
+    ).reset_index(drop=True)
+
+candidate_summary = (
+    fuzzy_candidates.groupby("relationship_hint", as_index=False)
+    .size()
+    .sort_values("size", ascending=False)
+)
+candidate_summary
+```
+
+## Small review benchmark
+
+This benchmark is intentionally narrow. It tests the examples that motivated
+the analysis and includes nearby hard negatives. Expand it through human review
+before treating any reported score as a production-quality estimate.
+
+```{python}
+#| label: benchmark-definition
+
+BENCHMARK_ALIAS_GROUPS = {
+    "twelve_hour_surface": ["12_hours", "12-hours"],
+    "subscriber_goal_base": ["sub_goal"],
+    "subscriber_goal_15k": ["15k_sub_goal", "15k-sub-goal"],
+    "subscriber_goal_20k": ["20k_sub_goal", "20k-sub-goal"],
+    "subscriber_count_15k": ["15k_subs", "15k-subs"],
+    "yugioh_surface": [
+        "yugioh",
+        "yu-gi-oh",
+        "Yu-Gi-Oh",
+        "Yu-Gi-Oh!",
+    ],
+    "master_duel_surface": [
+        "master_duel",
+        "masterduel",
+        "Master Duel",
+    ],
+    "yugioh_master_duel_surface": [
+        "Yu-Gi-Oh Master Duel",
+        "Yu-Gi-Oh! Master Duel",
+    ],
+    "duelist_cup_surface": [
+        "duelist_cup",
+        "Duelist Cup",
+    ],
+    "cardfight_vanguard_spacing": [
+        "cardfight vanguard",
+        "cardfightvanguard",
+    ],
+    "yugioh_player_number": [
+        "yugioh_player",
+        "yugioh_players",
+    ],
+    "challenge_run_number": [
+        "challenge_run",
+        "challenge_runs",
+    ],
+    "just_chatting_typo": [
+        "just_chatting",
+        "just_chattin",
+    ],
+}
+
+benchmark_rows = []
+available_raw_tags = set(raw_inventory["raw_tag"])
+for expected_alias_group, variants in BENCHMARK_ALIAS_GROUPS.items():
+    for raw_tag in variants:
+        if raw_tag in available_raw_tags:
+            benchmark_rows.append(
+                {
+                    "raw_tag": raw_tag,
+                    "normalized_tag": normalize_tag(raw_tag),
+                    "expected_alias_group": expected_alias_group,
+                }
+            )
+
+benchmark = pd.DataFrame(benchmark_rows).drop_duplicates("raw_tag")
+benchmark
+```
+
+```{python}
+#| label: cluster-evaluation-helpers
+
+
+class DisjointSet:
+    def __init__(self, values: list[str]) -> None:
+        self.parent = {value: value for value in values}
+
+    def find(self, value: str) -> str:
+        parent = self.parent[value]
+        if parent != value:
+            self.parent[value] = self.find(parent)
+        return self.parent[value]
+
+    def union(self, left: str, right: str) -> None:
+        left_root = self.find(left)
+        right_root = self.find(right)
+        if left_root != right_root:
+            self.parent[right_root] = left_root
+
+
+def rapidfuzz_cluster_lookup(
+    tags: list[str],
+    candidates: pd.DataFrame,
+    threshold: float,
+) -> dict[str, str]:
+    clusters = DisjointSet(tags)
+    if not candidates.empty:
+        accepted = candidates.loc[
+            (candidates["weighted_ratio"] >= threshold)
+            & (candidates["relationship_hint"] == "strong_alias_candidate")
+        ]
+        for row in accepted.itertuples(index=False):
+            clusters.union(row.left_tag, row.right_tag)
+    return {tag: clusters.find(tag) for tag in tags}
+
+
+def evaluate_cluster_lookup(
+    benchmark_frame: pd.DataFrame,
+    lookup: dict[str, object],
+) -> dict[str, float]:
+    pairs = list(itertools.combinations(benchmark_frame.itertuples(index=False), 2))
+    true_positive = false_positive = false_negative = true_negative = 0
+    for left, right in pairs:
+        expected_same = (
+            left.expected_alias_group == right.expected_alias_group
+        )
+        left_cluster = lookup.get(left.normalized_tag)
+        right_cluster = lookup.get(right.normalized_tag)
+        predicted_same = (
+            left_cluster is not None
+            and left_cluster != -1
+            and left_cluster == right_cluster
+        )
+        if expected_same and predicted_same:
+            true_positive += 1
+        elif not expected_same and predicted_same:
+            false_positive += 1
+        elif expected_same and not predicted_same:
+            false_negative += 1
+        else:
+            true_negative += 1
+    precision = (
+        true_positive / (true_positive + false_positive)
+        if true_positive + false_positive
+        else 0
+    )
+    recall = (
+        true_positive / (true_positive + false_negative)
+        if true_positive + false_negative
+        else 0
+    )
+    f1 = (
+        2 * precision * recall / (precision + recall)
+        if precision + recall
+        else 0
+    )
+    return {
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "false_positive_pairs": false_positive,
+        "false_negative_pairs": false_negative,
+    }
+
+
+exact_lookup = {
+    normalized_tag: normalized_tag
+    for normalized_tag in normalized_labels
+}
+rapidfuzz_lookup = rapidfuzz_cluster_lookup(
+    normalized_labels,
+    fuzzy_candidates,
+    threshold=FUZZY_HIGH_CONFIDENCE_CUTOFF,
+)
+
+benchmark_scores = [
+    {
+        "method": "deterministic_exact",
+        **evaluate_cluster_lookup(benchmark, exact_lookup),
+    },
+    {
+        "method": "rapidfuzz_strong_alias_candidates",
+        **evaluate_cluster_lookup(benchmark, rapidfuzz_lookup),
+    },
+]
+pd.DataFrame(benchmark_scores)
+```
+
+## Build the final canonical mapping
+
+Each guarded RapidFuzz component receives one canonical label. The most-used
+normalized label wins; ties prefer the shorter label and then alphabetical
+order. This makes the choice deterministic and favors the spelling already
+most common in the current data.
+
+```{python}
+#| label: canonical-normalization-mapping
+
+component_members: dict[str, list[str]] = defaultdict(list)
+for normalized_tag, component_id in rapidfuzz_lookup.items():
+    component_members[component_id].append(normalized_tag)
+
+canonical_rows: list[dict[str, object]] = []
+for component_id, members in component_members.items():
+    canonical_tag = sorted(
+        members,
+        key=lambda tag: (
+            -int(normalized_metadata[tag]["uses"]),
+            len(tag),
+            tag,
+        ),
+    )[0]
+    for normalized_tag in members:
+        canonical_rows.append(
+            {
+                "normalized_tag": normalized_tag,
+                "canonical_tag": canonical_tag,
+                "rapidfuzz_component": component_id,
+                "component_size": len(members),
+            }
+        )
+
+canonical_mapping = pd.DataFrame(canonical_rows)
+final_tag_mapping = normalized_inventory.merge(
+    canonical_mapping,
+    on="normalized_tag",
+    how="left",
+    validate="many_to_one",
+)
+
+
+def normalization_method(row: pd.Series) -> str:
+    deterministic_changed = row["raw_tag"] != row["normalized_tag"]
+    rapidfuzz_changed = row["normalized_tag"] != row["canonical_tag"]
+    if deterministic_changed and rapidfuzz_changed:
+        return "deterministic_and_rapidfuzz"
+    if rapidfuzz_changed:
+        return "rapidfuzz"
+    if deterministic_changed:
+        return "deterministic"
+    return "unchanged"
+
+
+final_tag_mapping["normalization_method"] = final_tag_mapping.apply(
+    normalization_method,
+    axis=1,
+)
+
+canonical_inventory = (
+    final_tag_mapping.groupby("canonical_tag", as_index=False)
+    .agg(
+        uses=("uses", "sum"),
+        raw_tag_count=("raw_tag", "nunique"),
+        deterministic_tag_count=("normalized_tag", "nunique"),
+        raw_variants=(
+            "raw_tag",
+            lambda values: " | ".join(sorted(set(values))),
+        ),
+    )
+    .sort_values(["uses", "canonical_tag"], ascending=[False, True])
+    .reset_index(drop=True)
+)
+
+normalization_result_summary = pd.DataFrame(
+    {
+        "metric": [
+            "Distinct raw tags",
+            "Tags after deterministic normalization",
+            "Final canonical tags",
+            "Deterministic consolidations",
+            "Additional guarded RapidFuzz consolidations",
+        ],
+        "value": [
+            len(raw_inventory),
+            len(normalized_groups),
+            len(canonical_inventory),
+            len(raw_inventory) - len(normalized_groups),
+            len(normalized_groups) - len(canonical_inventory),
+        ],
+    }
+)
+normalization_result_summary
+```
+
+```{python}
+#| label: applied-normalization-mapping
+
+applied_tag_mapping = final_tag_mapping.loc[
+    final_tag_mapping["normalization_method"] != "unchanged",
+    [
+        "raw_tag",
+        "normalized_tag",
+        "canonical_tag",
+        "uses",
+        "normalization_method",
+    ],
+].sort_values(
+    ["uses", "canonical_tag", "raw_tag"],
+    ascending=[False, True, True],
+)
+
+applied_tag_mapping.head(200)
+```
+
+```{python}
+#| label: normalized-tag-assignments
+
+normalized_tag_assignments = tag_rows.merge(
+    canonical_mapping[["normalized_tag", "canonical_tag"]],
+    on="normalized_tag",
+    how="left",
+    validate="many_to_one",
+)
+
+normalized_tag_assignments.loc[
+    normalized_tag_assignments["normalized_tag"]
+    != normalized_tag_assignments["canonical_tag"],
+    [
+        "video_id",
+        "talent_code",
+        "raw_tag",
+        "normalized_tag",
+        "canonical_tag",
+        "title",
+    ],
+].head(100)
+```
+
+## Applied aliases and guarded non-aliases
+
+The first table shows the RapidFuzz aliases applied to the canonical mapping.
+The second table confirms that numeric and containment relationships were not
+applied as aliases.
+
+```{python}
+#| label: selected-candidate-review
+
+applied_rapidfuzz_aliases = fuzzy_candidates.loc[
+    fuzzy_candidates["relationship_hint"] == "strong_alias_candidate",
+    [
+        "left_tag",
+        "right_tag",
+        "left_uses",
+        "right_uses",
+        "weighted_ratio",
+        "ratio",
+        "token_ratio",
+    ],
+].sort_values(
+    ["weighted_ratio", "left_uses", "right_uses"],
+    ascending=[False, False, False],
+)
+
+applied_rapidfuzz_aliases.head(100)
+```
+
+```{python}
+#| label: guarded-candidate-review
+
+guarded_candidates = fuzzy_candidates.loc[
+    fuzzy_candidates["relationship_hint"].isin(
+        ["numeric_or_scope_review", "compound_or_family_review"]
+    ),
+    [
+        "left_tag",
+        "right_tag",
+        "left_uses",
+        "right_uses",
+        "weighted_ratio",
+        "numeric_difference",
+        "token_containment",
+        "relationship_hint",
+    ],
+].sort_values(
+    ["weighted_ratio", "left_uses", "right_uses"],
+    ascending=[False, False, False],
+)
+
+guarded_candidates.head(25)
+```
+
+## Method readiness
+
+```{python}
+#| label: method-readiness
+
+pd.DataFrame(
+    [
+        {
+            "method": "Deterministic normalization",
+            "action": "Accept transparent surface equivalences",
+            "status": "Selected",
+            "guardrail": "Preserve numbers and the original raw tag",
+        },
+        {
+            "method": "RapidFuzz",
+            "action": "Apply guarded high-confidence lexical aliases",
+            "status": "Selected",
+            "guardrail": "Leave numbers and compound tags unchanged",
+        },
+        {
+            "method": "Embeddings and topic clustering",
+            "action": "Defer until descriptor types are available",
+            "status": "Deferred",
+            "guardrail": "Compare only compatible tag facets",
+        },
+    ]
+)
+```
+
+## Decision rule
+
+Use deterministic normalization for automatic spelling consolidation. Use
+RapidFuzz to consolidate only high-confidence aliases that pass the numeric and
+containment guardrails. The resulting `final_tag_mapping` and
+`normalized_tag_assignments` are the normalized outputs of this notebook.
+
+This starting workflow deliberately does not infer descriptor types or broader
+semantic families. Relationships such as `challenge`, `first time`, and
+`Yu-Gi-Oh` require a later typed-descriptor stage before broader grouping.
+
+Publishing this result to production should use a versioned mapping with, at
+minimum:
+
+```text
+raw_tag -> normalized_tag -> canonical_tag -> broader_group
+```
+
+That mapping should be joined through a derived DuckDB view. The original
+`classification_json` must remain unchanged.

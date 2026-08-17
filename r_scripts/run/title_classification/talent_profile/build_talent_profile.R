@@ -1,141 +1,131 @@
-tp_get_script_dir <- function() {
+get_script_dir <- function() {
   args <- commandArgs(trailingOnly = FALSE)
   file_arg <- grep("^--file=", args, value = TRUE)
-  if (length(file_arg) > 0) {
-    return(dirname(normalizePath(sub("^--file=", "", file_arg[[1]]), winslash = "/", mustWork = FALSE)))
+  if (length(file_arg) > 0L) {
+    return(dirname(normalizePath(sub("^--file=", "", file_arg[[1]]), winslash = "/")))
   }
-  normalizePath(getwd(), winslash = "/", mustWork = FALSE)
+  normalizePath(getwd(), winslash = "/")
 }
 
-tp_repo_root <- rprojroot::find_root(rprojroot::is_git_root, path = tp_get_script_dir())
-tp_repo_path <- function(...) normalizePath(file.path(tp_repo_root, ...), winslash = "/", mustWork = FALSE)
+repo_root <- rprojroot::find_root(rprojroot::is_git_root, path = get_script_dir())
+repo_path <- function(...) file.path(repo_root, ...)
 
-source(tp_repo_path("r_scripts", "lib", "stream_classification", "talent_profile", "load_all.R"))
-tp_load_all(tp_repo_path("r_scripts", "lib", "stream_classification", "talent_profile"))
+source(repo_path("r_scripts", "lib", "title_classification", "talent_profile", "load_all.R"))
+tp_load_all(repo_path("r_scripts", "lib", "title_classification", "talent_profile"))
+source(repo_path("r_scripts", "lib", "utils", "datalake_root.r"))
+source(repo_path("r_scripts", "lib", "duckdb", "db_connect.R"))
+source(repo_path("r_scripts", "lib", "title_classification", "schema.R"))
+source(repo_path("r_scripts", "lib", "title_classification", "store.R"))
 
 args <- tp_parse_args(commandArgs(trailingOnly = TRUE))
-
-csv_path <- tp_or(args$csv, stop("Missing --csv"))
-talent <- args$talent
+talent_filter <- tp_or(args$talent, "")
 all_talents <- isTRUE(args$all_talents)
-talent_col <- tp_or(args$talent_col, "talent")
-title_col <- tp_or(args$title_col, "title")
-content_type_col <- tp_or(args$content_type_col, "content_type")
-out_dir <- tp_or(args$out_dir, tp_repo_path("classification", "config", "talents"))
-overlay_dir <- tp_or(args$overlay_dir, tp_repo_path("classification", "prompts", "talents"))
-master_config <- tp_or(args$master_config, tp_repo_path("classification", "config", "talent_profiles.json"))
-write_overlay <- isTRUE(args$write_overlay)
-update_master <- isTRUE(args$update_master_config)
+execute <- isTRUE(args$execute)
 use_gpt <- isTRUE(args$use_gpt)
+profile_version <- tp_or(args$profile_version, "v7")
+db_path <- tp_or(args$db_path, talent_lakehouse_db_path())
 sample_size <- suppressWarnings(as.integer(tp_or(args$sample_size, "250")))
-if (is.na(sample_size) || sample_size < 1) {
-  sample_size <- 250L
-}
-discovery_prompt_dir <- tp_or(args$discovery_prompt_dir, tp_repo_path("classification", "prompts", "discovery"))
-discovery_system_path <- tp_or(args$discovery_system, file.path(discovery_prompt_dir, "system.txt"))
-discovery_user_path <- tp_or(args$discovery_user, file.path(discovery_prompt_dir, "user_template.txt"))
-discovery_schema_path <- tp_or(args$discovery_schema, file.path(discovery_prompt_dir, "schema.json"))
-gpt_model <- tp_or(args$model, Sys.getenv("OPENAI_MODEL", unset = "gpt-5-mini"))
-talent_map_path <- args$talent_map
-
-if (!all_talents && (is.null(talent) || !nzchar(trimws(as.character(talent))))) {
-  stop("Missing --talent (or pass --all-talents).")
+if (is.na(sample_size) || sample_size < 1L) sample_size <- 250L
+if (!all_talents && !nzchar(talent_filter)) {
+  stop("Pass --talent NAME_OR_CODE or --all-talents.")
 }
 
-df <- tp_read_titles_csv(
-  csv_path = csv_path,
-  talent_col = talent_col,
-  title_col = title_col,
-  content_type_col = content_type_col
+con <- title_classification_connect(db_path = db_path, read_only = !execute)
+on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+if (execute) ensure_title_classification_schema(con)
+
+where_sql <- "WHERE video.is_available"
+params <- list()
+if (!all_talents) {
+  where_sql <- paste0(
+    where_sql,
+    " AND (LOWER(talent.talent_code) = LOWER(?)",
+    " OR LOWER(talent.talent_name) = LOWER(?))"
+  )
+  params <- list(talent_filter, talent_filter)
+}
+rows <- DBI::dbGetQuery(
+  con,
+  paste(
+    "SELECT talent.talent_code, talent.talent_name, video.title, video.content_type",
+    "FROM catalog.talents AS talent",
+    "JOIN catalog.videos AS video USING (talent_code)",
+    where_sql,
+    "ORDER BY talent.talent_code, video.published_at"
+  ),
+  params = params
 )
-
-source_talents <- if (all_talents) tp_distinct_talents(df, talent_col) else trimws(as.character(talent))
-source_talents <- source_talents[nzchar(source_talents)]
-
-canon_map <- data.frame(
-  source_talent = source_talents,
-  canonical_talent = source_talents,
-  stringsAsFactors = FALSE
-)
-
-if (!is.null(talent_map_path) && nzchar(talent_map_path)) {
-  if (!file.exists(talent_map_path)) {
-    stop("Talent map file not found: ", talent_map_path)
-  }
-  m <- read.csv(talent_map_path, stringsAsFactors = FALSE, check.names = FALSE, fileEncoding = "UTF-8")
-  need_map_cols <- c("source_talent", "canonical_talent")
-  miss_map <- setdiff(need_map_cols, names(m))
-  if (length(miss_map) > 0) {
-    stop("Talent map must include columns: source_talent, canonical_talent")
-  }
-
-  m$source_talent <- trimws(enc2utf8(as.character(m$source_talent)))
-  m$canonical_talent <- trimws(enc2utf8(as.character(m$canonical_talent)))
-  m <- m[nzchar(m$source_talent) & nzchar(m$canonical_talent), , drop = FALSE]
-  if (nrow(m) > 0) {
-    idx <- match(tolower(canon_map$source_talent), tolower(m$source_talent))
-    has <- !is.na(idx)
-    canon_map$canonical_talent[has] <- m$canonical_talent[idx[has]]
-  }
-}
-
-groups <- split(canon_map$source_talent, canon_map$canonical_talent)
+if (nrow(rows) == 0L) stop("No canonical title rows matched the talent selection.")
 
 if (use_gpt) {
-  source(tp_repo_path("r_scripts", "lib", "ChatGPT", "chatgpt_load_all.R"))
+  source(repo_path("r_scripts", "lib", "ChatGPT", "chatgpt_load_all.R"))
   chatgpt_load_all(exclude_dirs = c("examples"))
 }
-
-for (canonical_talent in names(groups)) {
-  rows <- tp_rows_for_talents(df, talent_col, groups[[canonical_talent]])
-  if (nrow(rows) == 0) {
-    next
-  }
-
-  baseline <- tp_build_baseline_payload(
-    talent = canonical_talent,
-    rows = rows,
-    title_col = title_col,
-    content_type_col = content_type_col
+discovery_root <- repo_path("prompts", "title_classification", "discovery")
+pipeline_run_id <- title_classification_pipeline_run_id("talent_profile_builder")
+if (execute) {
+  register_title_classification_run(
+    con,
+    pipeline_run_id,
+    pipeline_name = "talent_profile_builder"
   )
-  payload <- baseline$payload
-  top_brackets <- baseline$top_brackets
+}
 
-  gpt_discovery <- NULL
+for (talent_code in unique(rows$talent_code)) {
+  talent_rows <- rows[rows$talent_code == talent_code, , drop = FALSE]
+  talent_name <- talent_rows$talent_name[[1]]
+  baseline <- tp_build_baseline_payload(
+    talent = talent_name,
+    rows = talent_rows,
+    title_col = "title",
+    content_type_col = "content_type"
+  )
+  derived_profile <- baseline$payload
+  discovery <- NULL
   if (use_gpt) {
-    gpt_discovery <- tp_run_gpt_discovery(
-      talent = canonical_talent,
-      rows = rows,
-      title_col = title_col,
-      content_type_col = content_type_col,
-      payload = payload,
+    discovery <- tp_run_gpt_discovery(
+      talent = talent_name,
+      rows = talent_rows,
+      title_col = "title",
+      content_type_col = "content_type",
+      payload = derived_profile,
       sample_size = sample_size,
-      discovery_system_path = discovery_system_path,
-      discovery_user_path = discovery_user_path,
-      discovery_schema_path = discovery_schema_path,
-      gpt_model = gpt_model
+      discovery_system_path = file.path(discovery_root, "system.txt"),
+      discovery_user_path = file.path(discovery_root, "user_template.txt"),
+      discovery_schema_path = file.path(discovery_root, "schema.json"),
+      gpt_model = tp_or(args$model, Sys.getenv("OPENAI_MODEL", unset = "gpt-5-mini"))
     )
-    payload <- tp_merge_gpt_discovery(payload, gpt_discovery)
+    derived_profile <- tp_merge_gpt_discovery(derived_profile, discovery)
   }
-
-  slug <- tp_slugify(canonical_talent)
-  dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
-  out_json <- file.path(out_dir, paste0(slug, ".json"))
-  writeLines(jsonlite::toJSON(payload, pretty = TRUE, auto_unbox = TRUE), con = out_json, useBytes = TRUE)
-  cat("Generated talent JSON: ", out_json, "\n", sep = "")
-
-  if (write_overlay) {
-    overlay_subdir <- file.path(overlay_dir, slug)
-    dir.create(overlay_subdir, recursive = TRUE, showWarnings = FALSE)
-    overlay_path <- file.path(overlay_subdir, "overlay.txt")
-    overlay_fallback <- tp_build_overlay_text(canonical_talent, payload$structure$bracket_semantics, top_brackets)
-    overlay_text <- tp_build_overlay_from_gpt(canonical_talent, gpt_discovery, overlay_fallback)
-    writeLines(overlay_text, con = overlay_path, useBytes = TRUE)
-    cat("Generated overlay: ", overlay_path, "\n", sep = "")
-  }
-
-  if (update_master) {
-    tp_update_master_config(master_config, slug)
-    cat("Updated master config: ", master_config, "\n", sep = "")
+  fallback_overlay <- tp_build_overlay_text(
+    talent_name,
+    derived_profile$structure$bracket_semantics,
+    baseline$top_brackets
+  )
+  overlay_text <- tp_build_overlay_from_gpt(talent_name, discovery, fallback_overlay)
+  profile_id <- paste("talent", talent_code, profile_version, sep = "-")
+  profile <- list(
+    identity = list(talent_code = talent_code, talent_name = talent_name),
+    contexts = list(
+      title_classification = list(
+        overlay_text = overlay_text,
+        derived_profile = derived_profile
+      )
+    )
+  )
+  message(if (execute) "Publishing " else "Would publish ", profile_id)
+  if (execute) {
+    publish_talent_profile(
+      con = con,
+      profile_id = profile_id,
+      talent_code = talent_code,
+      profile_version = profile_version,
+      display_name = tp_slugify(talent_name),
+      profile = profile,
+      active = TRUE,
+      source_pipeline_run_id = pipeline_run_id
+    )
   }
 }
+if (execute) complete_title_classification_run(con, pipeline_run_id)
+message("Mode: ", if (execute) "execute" else "dry-run")

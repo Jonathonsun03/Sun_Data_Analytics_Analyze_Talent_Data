@@ -1,0 +1,21 @@
+Classify each YouTube title record into the JSON schema.
+
+Talent context:
+- talent_name: {{talent_name}}
+- talent_profile: {{talent_profile}}
+
+Talent-specific guidance:
+{{talent_rules_text}}
+
+Global rules:
+1. Return JSON only. No markdown, comments, or extra keys.
+2. Return one item for every input record and preserve the same `video_id`.
+3. Confidence must be between 0 and 1.
+4. Use only enum values listed in the schema.
+5. Keep `tags` concise and relevant.
+
+Output schema:
+{{schema_json}}
+
+Input records:
+{{records_json}}

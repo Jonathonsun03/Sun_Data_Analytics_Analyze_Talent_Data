@@ -1,0 +1,12 @@
+[Unit]
+Description=Check active title-classification batches hourly
+
+[Timer]
+OnBootSec=10m
+OnUnitActiveSec=1h
+Persistent=true
+RandomizedDelaySec=5m
+Unit=sun-data-title-classification-check.service
+
+[Install]
+WantedBy=timers.target

@@ -84,5 +84,9 @@ ena_precoding_run_dir <- function(run_id, output_root = NULL, talent_data_root =
 }
 
 ena_precoding_classifications_db_path <- function(talent_data_root = NULL) {
-  file.path(ena_precoding_talent_data_root(talent_data_root), "classifications.duckdb")
+  file.path(
+    ena_precoding_talent_data_root(talent_data_root),
+    "Data_lakehouse",
+    "talent_lakehouse.duckdb"
+  )
 }

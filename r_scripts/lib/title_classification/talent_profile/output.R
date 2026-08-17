@@ -1,24 +1,5 @@
 library(jsonlite)
 
-tp_update_master_config <- function(master_config_path, slug) {
-  cfg <- fromJSON(master_config_path, simplifyVector = FALSE)
-  if (is.null(cfg$profiles[[slug]])) {
-    cfg$profiles[[slug]] <- list(
-      overlay = file.path("prompts", "talents", slug, "overlay.txt")
-    )
-  }
-
-  if (is.null(cfg$matchers)) {
-    cfg$matchers <- list()
-  }
-  has_matcher <- any(vapply(cfg$matchers, function(m) identical(m$profile, slug), logical(1)))
-  if (!has_matcher) {
-    cfg$matchers[[length(cfg$matchers) + 1L]] <- list(pattern = slug, profile = slug)
-  }
-
-  writeLines(toJSON(cfg, pretty = TRUE, auto_unbox = TRUE), con = master_config_path, useBytes = TRUE)
-}
-
 tp_build_overlay_text <- function(talent_name, bracket_semantics, top_brackets) {
   lines <- c(
     paste0("Talent profile: ", talent_name, "."),

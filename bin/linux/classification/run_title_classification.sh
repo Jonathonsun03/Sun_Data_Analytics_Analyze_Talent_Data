@@ -1,77 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Load repo .env defaults without overriding already-exported values.
-_ENV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-while [[ "${_ENV_ROOT}" != "/" ]]; do
-  if [[ -e "${_ENV_ROOT}/.git" ]]; then
-    break
-  fi
-  _ENV_ROOT="$(dirname "${_ENV_ROOT}")"
-done
-if [[ -f "${_ENV_ROOT}/bin/linux/load_repo_env.sh" ]]; then
-  # shellcheck source=/dev/null
-  source "${_ENV_ROOT}/bin/linux/load_repo_env.sh"
-  load_repo_env "${_ENV_ROOT}"
-fi
-unset _ENV_ROOT
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-R_SCRIPT="r_scripts/run/title_classification/07_run_weekly_classification.R"
-
-usage() {
-  cat <<'EOF'
-Usage:
-  bin/linux/classification/run_title_classification.sh [options]
-
-Description:
-  Weekly title-classification runner.
-  - Ingests titles from CSV into DuckDB videos table
-  - Classifies only pending rows by default (idempotent)
-  - Supports force reclassify for prompt testing
-
-Options:
-  --csv PATH                     Input CSV (default: notes/titles.csv)
-  --talent-col NAME              Talent column (default: talent)
-  --video-id-col NAME            Video ID column (default: Video ID)
-  --title-col NAME               Title column (default: Title)
-  --content-type-col NAME        Content type column (default: Content Type)
-  --published-at-col NAME        Optional published datetime column
-  --talent NAME                  Optional: run a single talent only
-  --limit-per-talent N           Optional smoke test limit per talent (default: 0 = all rows)
-  --model NAME                   Model override (default: gpt-5-mini)
-  --batch-size N                 Batch size (default: 25)
-  --max-retries N                Retries per batch (default: 2)
-  --timeout-seconds N            OpenAI request timeout per attempt (default: 120)
-  --force-reclassify             Reclassify even if rows already classified
-  -h, --help                     Show this help
-
-Examples:
-  Weekly run (all pending):
-    bin/linux/classification/run_title_classification.sh
-
-  Weekly run with explicit model:
-    bin/linux/classification/run_title_classification.sh --model gpt-5-mini
-
-  Smoke test (5 per talent):
-    bin/linux/classification/run_title_classification.sh --limit-per-talent 5
-
-  Prompt test rerun (force):
-    bin/linux/classification/run_title_classification.sh --limit-per-talent 5 --force-reclassify
-EOF
-}
+BATCH_RUNNER="bin/linux/classification/run_title_classification_batch.sh"
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-  usage
+  cat <<'EOF'
+Usage:
+  bin/linux/classification/run_title_classification.sh [build options...]
+
+Compatibility entrypoint for the Batch API title-classification runner. It
+queries canonical catalog.videos and skips unchanged titles already classified
+for the active title version.
+
+Common options:
+  --talent NAME_OR_CODE
+  --limit-per-talent N
+  --model NAME
+  --batch-size N
+  --force-reclassify
+EOF
   exit 0
 fi
 
 cd "${REPO_ROOT}"
-
-if [[ ! -f "${R_SCRIPT}" ]]; then
-  echo "Error: missing R script at ${R_SCRIPT}" >&2
-  exit 1
-fi
-
-Rscript "${R_SCRIPT}" "$@"
+"${BATCH_RUNNER}" -- "$@"

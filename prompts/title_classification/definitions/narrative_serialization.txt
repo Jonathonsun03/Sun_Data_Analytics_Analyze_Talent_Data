@@ -1,0 +1,16 @@
+PRIMARY CODE: NARRATIVE_SERIALIZATION
+
+Definition:
+Content explicitly positioned as part of an ongoing sequence, arc, season, or numbered series.
+
+Inclusion Criteria:
+- Episode numbers, part markers, season language, chapter structure, "finale", "arc".
+
+Exclusion Criteria:
+- One-off uploads with no sequential framing.
+- "Day X" alone does NOT constitute narrative serialization.
+- Advent calendar-style counting alone is insufficient.
+
+Mapping Guidance:
+- Keep topic tied to the core activity.
+- Add tags such as `episode`, `part`, `season`, `series_arc`, `finale`.

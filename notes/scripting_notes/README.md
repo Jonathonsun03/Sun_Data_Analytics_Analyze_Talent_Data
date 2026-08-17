@@ -45,13 +45,11 @@ Practical interpretation:
   - `tags`
   - `confidence`
 - Confirmed these are enforced by the active schema in:
-  - `classification/prompts/base/schema_v2.json`
+  - `prompts/title_classification/base/schema_v2.json`
 - Confirmed the classifier run script is:
   - `r_scripts/run/Title_classification/title_classification/02_classify_pending_titles.R`
-- Updated profile selection logic so classification now takes talent profiles into account more reliably:
-  - exact match on normalized talent name
-  - matcher-based fallback
-  - inferred overlay fallback at `classification/prompts/talents/<talent>/overlay.txt`
+- Talent profiles are now resolved by canonical `talent_code`, with a reusable
+  default profile fallback in `catalog.talent_profiles`.
 
 ## Current Decision
 

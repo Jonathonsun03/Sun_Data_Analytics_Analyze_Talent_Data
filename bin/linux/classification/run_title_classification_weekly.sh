@@ -20,6 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 BATCH_RUNNER="bin/linux/classification/run_title_classification_batch.sh"
+SCHEDULED_RUNNER="bin/linux/classification/run_title_classification_scheduled.sh"
 
 usage() {
   cat <<'EOF'
@@ -27,20 +28,20 @@ Usage:
   bin/linux/classification/run_title_classification_weekly.sh [classification options...]
 
 Description:
-  Weekly wrapper for title classification. This now builds an OpenAI Batch API
-  run using the current compiled prompt definitions. Submit with --execute
-  after reviewing the run folder, or use run_title_classification_batch.sh for
-  submit/check/apply modes.
+  General backfill wrapper for title classification. Without --execute, it
+  builds a reviewable OpenAI Batch API run and does not submit it. With
+  --execute, it starts or advances the durable scheduled lifecycle, including
+  retrieval, validation, apply, export, and retry handling.
 
 Examples:
   Build weekly pending batch:
     bin/linux/classification/run_title_classification_weekly.sh --batch-size 25
 
-  Build full reclassification batch with current definitions:
-    bin/linux/classification/run_title_classification_weekly.sh --batch-size 25 --force-reclassify
+  Start the incremental weekly lifecycle:
+    bin/linux/classification/run_title_classification_weekly.sh --model gpt-5.6-terra --batch-size 25 --execute
 
-  Build and submit:
-    bin/linux/classification/run_title_classification_weekly.sh --batch-size 25 --force-reclassify --execute
+  Advance an existing lifecycle without starting new work:
+    bin/linux/classification/run_title_classification_scheduled.sh --check-only
 
 EOF
 }
@@ -57,4 +58,22 @@ if [[ ! -x "${BATCH_RUNNER}" ]]; then
   exit 1
 fi
 
-"${BATCH_RUNNER}" "$@"
+if [[ ! -x "${SCHEDULED_RUNNER}" ]]; then
+  echo "Error: missing/executable runner: ${SCHEDULED_RUNNER}" >&2
+  exit 1
+fi
+
+EXECUTE="false"
+declare -a CLASSIFICATION_ARGS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --execute) EXECUTE="true"; shift ;;
+    *) CLASSIFICATION_ARGS+=("$1"); shift ;;
+  esac
+done
+
+if [[ "${EXECUTE}" == "true" ]]; then
+  "${SCHEDULED_RUNNER}" "${CLASSIFICATION_ARGS[@]}"
+else
+  "${BATCH_RUNNER}" -- "${CLASSIFICATION_ARGS[@]}"
+fi

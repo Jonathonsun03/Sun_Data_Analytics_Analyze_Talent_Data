@@ -12,7 +12,7 @@ repo_path <- function(...) normalizePath(file.path(repo_root, ...), winslash = "
 
 source(repo_path("r_scripts", "lib", "utils", "datalake_root.r"))
 source(repo_path("r_scripts", "lib", "duckdb", "db_connect.R"))
-source(repo_path("r_scripts", "lib", "duckdb", "db_schema.R"))
+source(repo_path("r_scripts", "lib", "title_classification", "schema.R"))
 
 args <- commandArgs(trailingOnly = TRUE)
 command <- if (length(args) > 0) args[[1]] else ""
@@ -69,12 +69,12 @@ state_db_path <- function() {
   if (nzchar(db_path)) {
     return(normalizePath(db_path, winslash = "/", mustWork = FALSE))
   }
-  duckdb_get_db_path()
+  talent_lakehouse_db_path()
 }
 
 connect_state_db <- function() {
   con <- duckdb_connect(db_path = state_db_path())
-  init_duckdb_schema(con)
+  ensure_title_classification_schema(con)
   con
 }
 
@@ -135,7 +135,7 @@ integer_or_na <- function(x) {
 read_state <- function(con, state_key = "pending") {
   rows <- DBI::dbGetQuery(
     con,
-    "SELECT state_json FROM title_classification_scheduled_state WHERE state_key = ?",
+    "SELECT state_json FROM classification.title_classification_scheduled_state WHERE state_key = ?",
     params = list(state_key)
   )
   if (nrow(rows) == 0) {
@@ -150,13 +150,13 @@ write_state <- function(con, state, state_key = "pending") {
 
   DBI::dbExecute(
     con,
-    "DELETE FROM title_classification_scheduled_state WHERE state_key = ?",
+    "DELETE FROM classification.title_classification_scheduled_state WHERE state_key = ?",
     params = list(state_key)
   )
   DBI::dbExecute(
     con,
     paste(
-      "INSERT INTO title_classification_scheduled_state (",
+      "INSERT INTO classification.title_classification_scheduled_state (",
       "state_key, run_dir, manifest_path, batch_id, input_file_id, output_file_id,",
       "error_file_id, status, created_at, submitted_at, last_checked_at, applied_at,",
       "request_count, pending_rows, artifacts_json, state_json, updated_at",
@@ -292,7 +292,7 @@ if (command == "clear") {
   }
   DBI::dbExecute(
     con,
-    "DELETE FROM title_classification_scheduled_state WHERE state_key = ?",
+    "DELETE FROM classification.title_classification_scheduled_state WHERE state_key = ?",
     params = list("pending")
   )
   quit(status = 0, save = "no")

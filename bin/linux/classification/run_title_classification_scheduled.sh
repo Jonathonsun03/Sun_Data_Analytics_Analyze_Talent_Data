@@ -29,28 +29,31 @@ ANALYTICS_ROOT="${TALENT_DATA_ROOT%/Talent_data}"
 EXPORT_ROOT="${TITLE_CLASSIFICATIONS_DIR:-${ANALYTICS_ROOT}/Processed/Title_classification}"
 CLASSIFICATION_LOG_ROOT="${TITLE_CLASSIFICATION_LOG_ROOT:-${ANALYTICS_ROOT}/Processed/Logs/classification}"
 BATCH_RUN_ROOT="${TITLE_CLASSIFICATION_BATCH_RUN_ROOT:-${CLASSIFICATION_LOG_ROOT}/title_classification/batch_runs}"
-STATE_DB_PATH="${TITLE_CLASSIFICATION_STATE_DB_PATH:-${TALENT_DATA_ROOT}/classifications.duckdb}"
+STATE_DB_PATH="${TITLE_CLASSIFICATION_STATE_DB_PATH:-${TALENT_DATA_ROOT}/Data_lakehouse/talent_lakehouse.duckdb}"
 LOG_ROOT="${CLASSIFICATION_LOG_ROOT}/title_classification_scheduled"
 
 usage() {
   cat <<'USAGE'
 Usage:
-  bin/linux/classification/run_title_classification_scheduled.sh [build options...]
+  bin/linux/classification/run_title_classification_scheduled.sh [--check-only] [build options...]
 
 Description:
   Idempotent scheduled OpenAI Batch API lifecycle for title classification.
 
-  If classifications.duckdb has an active scheduled title-classification state, this
+  If the unified talent lakehouse has an active scheduled title-classification state, this
   checks status, retrieves completed output, applies completed results, creates
   a retry run for failed/missing custom_ids, and clears state when done.
 
-  If there is no pending state, this refreshes notes/titles.csv, builds a new
-  one-video-per-request Batch API JSONL input for pending videos, submits it,
-  and records the pending run state.
+  If there is no pending state, this queries catalog.videos, builds a Batch API
+  JSONL input for pending videos, submits it, and records the pending run state.
+
+  With --check-only, an existing run is advanced through check, retrieve,
+  apply, export, and retry handling, but a new batch is never started.
 
 Common build options:
   --model NAME
   --talent NAME
+  --batch-size N
   --force-reclassify
 
 Environment overrides:
@@ -63,10 +66,15 @@ Environment overrides:
 USAGE
 }
 
-if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-  usage
-  exit 0
-fi
+CHECK_ONLY="false"
+declare -a BUILD_ARGS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --check-only) CHECK_ONLY="true"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) BUILD_ARGS+=("$1"); shift ;;
+  esac
+done
 
 cd "${REPO_ROOT}"
 
@@ -212,11 +220,22 @@ if state_exists; then
   exit 0
 fi
 
+if [[ "${CHECK_ONLY}" == "true" ]]; then
+  log "No pending state found. Check-only mode will not start a new batch."
+  log "Finished at $(date -Is)"
+  exit 0
+fi
+
 RUN_ID="title_classification_scheduled_$(date -u +%Y%m%d_%H%M%S)"
 RUN_DIR="${BATCH_RUN_ROOT%/}/${RUN_ID}"
 
-log "No pending state found. Building new one-video-per-request Batch run: ${RUN_ID}"
-run_build_logged "${RUN_DIR}" "${BATCH_RUNNER}" --run-id "${RUN_ID}" -- --batch-size 1 "$@"
+log "No pending state found. Building pending Batch run: ${RUN_ID}"
+run_build_logged \
+  "${RUN_DIR}" \
+  "${BATCH_RUNNER}" \
+  --run-id "${RUN_ID}" \
+  -- \
+  "${BUILD_ARGS[@]}"
 
 REQUEST_COUNT="$(manifest_field "${RUN_DIR}" request_count || echo 0)"
 PENDING_ROWS="$(manifest_field "${RUN_DIR}" pending_rows || echo 0)"

@@ -62,13 +62,6 @@ bin/linux/render_reports/run_bundle_E_report.sh \
   --dry-run
 ```
 
-When `report_id` is `bundle_e`, `bin/linux/render_reports/run_scheduled_reports.sh`
-dispatches to:
-
-```bash
-bin/linux/render_reports/bundle_E/run_bundle_E_full_pipeline.sh
-```
-
 ## Current Pipeline
 
 Bundle E currently runs:
@@ -78,4 +71,4 @@ Bundle E currently runs:
 
 It does not yet have separate interpretation or editorial rewrite stages in the
 Linux wrapper tree. The full-pipeline wrapper accepts no-interpretation and skip
-flags for compatibility with the scheduler and ignores them.
+flags for compatibility and ignores them.

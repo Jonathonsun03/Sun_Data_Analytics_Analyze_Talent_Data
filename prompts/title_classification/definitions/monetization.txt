@@ -1,0 +1,14 @@
+PRIMARY CODE: MONETIZATION
+
+Definition:
+Content explicitly tied to sponsorship, paid events, merch, membership, or commercial calls-to-action.
+
+Inclusion Criteria:
+- Sponsored stream/video labels, merch drops, paid event tickets, membership promotions.
+
+Exclusion Criteria:
+- Generic gratitude or support mentions without commercial intent.
+
+Mapping Guidance:
+- Do not override the underlying topic unless monetization is the main content subject.
+- Add tags such as `sponsored`, `merch`, `membership`, `ticketed_event`.

@@ -16,6 +16,13 @@ Select `.venv/bin/python` as the Python interpreter and notebook kernel in VS Co
 Most runnable Python scripts use only the standard library. The packages in
 `requirements.txt` also support notebooks, DuckDB, and private Google Sheet reads.
 
+The title-tag normalization review under
+`py_scripts/notebooks/model_tests/tag_normalization/` uses deterministic rules
+for transparent surface equivalences and RapidFuzz for conservative lexical
+alias consolidation with numeric and compound-tag guardrails. Semantic
+embeddings and topic clustering are deferred until tags have compatible
+descriptor types.
+
 ## Structure
 
 - `run/`
@@ -23,6 +30,10 @@ Most runnable Python scripts use only the standard library. The packages in
   - these are task and pipeline scripts that can be executed directly
 - `lib/`
   - reusable Python helpers shared by the runnable entrypoints
+- `notebooks/`
+  - inspectable Python analyses and model tests
+  - the tag-normalization review lives under
+    `notebooks/model_tests/tag_normalization/`
 
 ## Current stream-summary runners
 

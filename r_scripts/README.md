@@ -17,7 +17,8 @@ This directory contains the repository's maintained R code.
 
 - Title classification
   - entrypoints live under `r_scripts/run/title_classification/`
-  - shared DuckDB and prompt helpers live under `r_scripts/lib/duckdb/` and `r_scripts/lib/stream_classification/`
+  - shared schema, storage, and prompt helpers live under `r_scripts/lib/title_classification/`
+  - production reads and writes the unified DuckDB returned by `talent_lakehouse_db_path()`
 - Subtitle cleaning and text replay
   - entrypoints live under `r_scripts/run/Subtitle_clean/` and `r_scripts/run/text_replay/`
 - R-based stream summarization

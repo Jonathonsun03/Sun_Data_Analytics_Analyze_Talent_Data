@@ -8,7 +8,6 @@ This folder contains Linux wrapper scripts that standardize how Bundle reports a
 - `run_bundle_F_report.sh`
 - `run_bundle_G_report.sh`
 - `run_monthly_bundle_reports.sh`
-- `run_scheduled_reports.sh`
 - `run_variance_numbers.sh`
 
 ## Variance Numbers
@@ -75,35 +74,6 @@ Bundle G-specific scripts now live in:
 The only top-level Bundle A wrapper intentionally kept is:
 
 - `run_bundle_A_report.sh`
-
-## Scheduled Reports
-
-Path: `bin/linux/render_reports/run_scheduled_reports.sh`
-
-Detailed usage notes live in:
-
-- `bin/linux/render_reports/scheduled_reports/README.md`
-
-This wrapper reads the `talent_report_schedule` and `talents` tabs in the
-client permissions spreadsheet, finds active due rows, and dispatches each
-supported `report_id` to the matching bundle runner. Currently supported:
-
-- `bundle_a` -> `bin/linux/render_reports/bundle_A/run_bundle_A_full_pipeline.sh`
-- `bundle_e` -> `bin/linux/render_reports/bundle_E/run_bundle_E_full_pipeline.sh`
-- `bundle_f` -> `bin/linux/render_reports/bundle_F/run_bundle_F_full_pipeline.sh`
-- `bundle_g` -> `bin/linux/render_reports/bundle_G/run_bundle_G_full_pipeline.sh`
-
-The schedule row's mapped datalake talent folder is passed as `--talent`, and
-`window_days` is passed as `--window-days`. Optional JSON in `report_params`
-is passed through for supported bundle-specific parameters; Bundles F and G
-support keys such as `content_type`, `content_types`, and `reference_day`. After at
-least one successful real run, the wrapper refreshes the schedule's computed
-columns such as `last_run`, `next_run`, and `schedule_status`. Dry runs do not
-write back.
-
-```bash
-bin/linux/render_reports/run_scheduled_reports.sh --dry-run
-```
 
 If you want the final client-facing Bundle A HTML with freshly generated interpretations and the editorial rewrite applied, use:
 

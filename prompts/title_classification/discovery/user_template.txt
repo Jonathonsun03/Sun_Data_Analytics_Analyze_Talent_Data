@@ -1,0 +1,12 @@
+Analyze this talent's title naming structure and propose operational coding rules.
+
+Talent: {{talent_name}}
+
+Heuristic baseline summary:
+{{summary_json}}
+
+Sample title records:
+{{records_json}}
+
+Output schema:
+{{schema_json}}

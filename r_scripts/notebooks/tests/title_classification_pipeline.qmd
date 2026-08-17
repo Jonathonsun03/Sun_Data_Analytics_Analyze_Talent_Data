@@ -1,0 +1,692 @@
+---
+title: "Title Classification Pipeline and Audit"
+subtitle: "Read-only documentation and health checks for the unified talent lakehouse"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    embed-resources: true
+params:
+  talent_code: null
+  recent_limit: 20
+  pending_preview_limit: 50
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## What language runs the pipeline?
+
+The title-classification pipeline is primarily **R**. R owns the database
+schema, prompt publication, pending-title selection, response validation,
+result application, status view, and CSV export.
+
+Python is used only at the OpenAI Batch API boundary:
+
+- upload and submit a reviewed JSONL batch;
+- check the remote batch and retrieve its output; and
+- build a retry batch for failed requests.
+
+The shell scripts under `bin/linux/classification/` connect those R and Python
+steps into one operating workflow.
+
+This notebook is deliberately read-only. It checks the pipeline's work but
+does not publish a version, build or submit a batch, apply results, update
+scheduled state, or write an export.
+
+## Pipeline map
+
+```{mermaid}
+flowchart TD
+  A[Maintained prompt source<br/>prompts/title_classification] -->|R: publish_title_version.R| B[classification.title_versions]
+  C[Reusable talent profile source] -->|R: build_talent_profile.R| D[catalog.talent_profiles]
+  E[catalog.videos<br/>current titles and hashes] --> F[R: 08_build_batch_classification.R]
+  B --> F
+  D --> F
+  F --> G[Reviewable Batch JSONL and manifest]
+  G -->|Python: submit| H[OpenAI Batch API]
+  H -->|Python: check and retrieve| I[Response JSONL]
+  I -->|R: 09_apply_batch_classification.R| J[classification.title_classification_results]
+  J --> K[classification.title_classification_status]
+  E --> K
+  K --> L[R: 05_export_results_csv.R]
+  L --> M[Current and archived CSV exports]
+  I --> N[ops.pipeline_runs]
+```
+
+## Parameters
+
+Render the complete audit:
+
+```bash
+quarto render r_scripts/notebooks/tests/title_classification_pipeline.qmd
+```
+
+If Quarto stalls before it begins processing chunks, bypass the project renv
+autoloader for this read-only audit while keeping the installed R library:
+
+```bash
+RENV_CONFIG_AUTOLOADER_ENABLED=FALSE \
+  quarto render r_scripts/notebooks/tests/title_classification_pipeline.qmd
+```
+
+Limit status and row previews to one exact talent code:
+
+```bash
+quarto render r_scripts/notebooks/tests/title_classification_pipeline.qmd \
+  -P talent_code:TER4
+```
+
+The optional parameters are:
+
+- `talent_code`: exact `catalog.talents.talent_code`; null checks all talents.
+- `recent_limit`: maximum recent result and pipeline-run rows to display.
+- `pending_preview_limit`: maximum pending-title rows to display.
+
+## Connect to the canonical database
+
+```{r}
+required_packages <- c("DBI", "duckdb", "here", "knitr")
+missing_packages <- required_packages[
+  !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
+]
+if (length(missing_packages) > 0L) {
+  stop(
+    "Install the required R packages before rendering: ",
+    paste(missing_packages, collapse = ", "),
+    call. = FALSE
+  )
+}
+
+repo_root <- here::here()
+source(here::here("r_scripts", "lib", "utils", "repo_env.R"))
+source(here::here("r_scripts", "lib", "utils", "datalake_root.r"))
+source(here::here("r_scripts", "lib", "duckdb", "db_connect.R"))
+
+load_repo_env(repo_root = repo_root)
+db_path <- talent_lakehouse_db_path()
+if (!file.exists(db_path)) {
+  stop("Unified talent lakehouse not found: ", db_path, call. = FALSE)
+}
+
+con <- duckdb_connect(db_path = db_path, read_only = TRUE)
+
+talent_code <- params$talent_code
+if (is.null(talent_code) || is.na(talent_code) || !nzchar(trimws(talent_code))) {
+  talent_code <- NULL
+} else {
+  talent_code <- trimws(talent_code)
+}
+
+recent_limit <- as.integer(params$recent_limit)
+pending_preview_limit <- as.integer(params$pending_preview_limit)
+if (is.na(recent_limit) || recent_limit < 1L) recent_limit <- 20L
+if (is.na(pending_preview_limit) || pending_preview_limit < 1L) {
+  pending_preview_limit <- 50L
+}
+
+relation_exists <- function(schema_name, relation_name) {
+  count <- DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT COUNT(*) AS relation_count",
+      "FROM information_schema.tables",
+      "WHERE table_schema = ? AND table_name = ?"
+    ),
+    params = list(schema_name, relation_name)
+  )$relation_count[[1]]
+  count == 1L
+}
+
+query_with_talent <- function(select_sql, order_sql = "", limit = NULL) {
+  where_sql <- ""
+  query_params <- list()
+  if (!is.null(talent_code)) {
+    where_sql <- " WHERE talent_code = ?"
+    query_params <- list(talent_code)
+  }
+  limit_sql <- if (is.null(limit)) "" else sprintf(" LIMIT %d", as.integer(limit))
+  DBI::dbGetQuery(
+    con,
+    paste0(select_sql, where_sql, order_sql, limit_sql),
+    params = query_params
+  )
+}
+
+display_table <- function(rows, digits = 2L) {
+  if (nrow(rows) == 0L) {
+    return(knitr::kable(data.frame(message = "No rows matched.")))
+  }
+  knitr::kable(rows, digits = digits)
+}
+
+database_info <- data.frame(
+  item = c("Database", "Scope", "Rendered at"),
+  value = c(
+    db_path,
+    if (is.null(talent_code)) "All talent codes" else talent_code,
+    format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+  )
+)
+display_table(database_info)
+```
+
+## Schema preflight
+
+Every relation below is required for the maintained title-classification
+workflow. A missing relation means the lakehouse migration or schema setup is
+incomplete.
+
+```{r}
+required_relations <- data.frame(
+  schema_name = c(
+    "catalog", "catalog", "catalog", "classification", "classification",
+    "classification", "classification", "ops"
+  ),
+  relation_name = c(
+    "videos", "talents", "talent_profiles", "title_versions",
+    "title_classification_results", "title_classification_status",
+    "title_classification_scheduled_state", "pipeline_runs"
+  )
+)
+required_relations$available <- mapply(
+  relation_exists,
+  required_relations$schema_name,
+  required_relations$relation_name
+)
+required_relations$status <- ifelse(required_relations$available, "PASS", "FAIL")
+display_table(required_relations[, c("status", "schema_name", "relation_name")])
+
+classification_ready <- all(required_relations$available)
+if (!classification_ready) {
+  stop(
+    "Required classification relations are missing. Run the maintained schema migration before continuing.",
+    call. = FALSE
+  )
+}
+```
+
+## Published title versions
+
+There should be exactly one active version. A complete version contains the
+prompt, instructions, definitions, and output schema needed to reproduce its
+requests. Historical metadata-only versions remain useful for lineage but
+cannot be used to build new requests.
+
+```{r}
+title_versions <- DBI::dbGetQuery(
+  con,
+  paste(
+    "SELECT title_version_id, taxonomy_version, prompt_version, active,",
+    "version_status, LEFT(checksum_sha256, 16) AS checksum_prefix,",
+    "LENGTH(system_prompt) AS system_prompt_chars,",
+    "LENGTH(instructions) AS instruction_chars,",
+    "LENGTH(definitions_json) AS definitions_chars,",
+    "LENGTH(output_schema_json) AS schema_chars,",
+    "source_revision, created_at, updated_at",
+    "FROM classification.title_versions",
+    "ORDER BY active DESC, updated_at DESC"
+  )
+)
+display_table(title_versions)
+```
+
+## Automated health checks
+
+These checks test the structural invariants needed by incremental
+classification. `Observed` provides the count behind each result so a failure
+can be investigated directly.
+
+```{r}
+active_version_count <- DBI::dbGetQuery(
+  con,
+  "SELECT COUNT(*) AS n FROM classification.title_versions WHERE active"
+)$n[[1]]
+active_complete_count <- DBI::dbGetQuery(
+  con,
+  paste(
+    "SELECT COUNT(*) AS n FROM classification.title_versions",
+    "WHERE active AND version_status = 'complete'",
+    "AND LENGTH(system_prompt) > 0 AND LENGTH(instructions) > 0",
+    "AND LENGTH(definitions_json) > 2 AND LENGTH(output_schema_json) > 2",
+    "AND LENGTH(checksum_sha256) > 0"
+  )
+)$n[[1]]
+available_video_count <- DBI::dbGetQuery(
+  con,
+  "SELECT COUNT(*) AS n FROM catalog.videos WHERE is_available"
+)$n[[1]]
+status_video_count <- DBI::dbGetQuery(
+  con,
+  "SELECT COUNT(*) AS n FROM classification.title_classification_status"
+)$n[[1]]
+duplicate_status_count <- DBI::dbGetQuery(
+  con,
+  paste(
+    "SELECT COUNT(*) AS n FROM (",
+    "SELECT video_id, COUNT(*) AS copies",
+    "FROM classification.title_classification_status",
+    "GROUP BY video_id HAVING COUNT(*) > 1",
+    ")"
+  )
+)$n[[1]]
+invalid_status_count <- DBI::dbGetQuery(
+  con,
+  paste(
+    "SELECT COUNT(*) AS n",
+    "FROM classification.title_classification_status",
+    "WHERE classification_status NOT IN",
+    "('classified', 'changed_title', 'new_or_unclassified')",
+    "OR (is_classified AND classification_status <> 'classified')",
+    "OR (NOT is_classified AND classification_status = 'classified')"
+  )
+)$n[[1]]
+missing_version_lineage <- DBI::dbGetQuery(
+  con,
+  paste(
+    "SELECT COUNT(*) AS n",
+    "FROM classification.title_classification_results",
+    "WHERE title_version_id IS NULL"
+  )
+)$n[[1]]
+active_missing_profile <- DBI::dbGetQuery(
+  con,
+  paste(
+    "SELECT COUNT(*) AS n",
+    "FROM classification.title_classification_results AS result",
+    "JOIN classification.title_versions AS version",
+    "ON version.title_version_id = result.title_version_id",
+    "WHERE version.active AND result.profile_id IS NULL"
+  )
+)$n[[1]]
+orphaned_active_profiles <- DBI::dbGetQuery(
+  con,
+  paste(
+    "SELECT COUNT(*) AS n",
+    "FROM classification.title_classification_results AS result",
+    "JOIN classification.title_versions AS version",
+    "ON version.title_version_id = result.title_version_id",
+    "LEFT JOIN catalog.talent_profiles AS profile",
+    "ON profile.profile_id = result.profile_id",
+    "WHERE version.active AND result.profile_id IS NOT NULL",
+    "AND profile.profile_id IS NULL"
+  )
+)$n[[1]]
+
+health_checks <- data.frame(
+  check = c(
+    "Exactly one active title version",
+    "Active version has a complete prompt bundle",
+    "Status view covers every available video",
+    "Status view has one row per video",
+    "Status labels agree with is_classified",
+    "Every result has title-version lineage",
+    "Active-version results have profile lineage",
+    "Active-version profile IDs resolve"
+  ),
+  observed = c(
+    active_version_count,
+    active_complete_count,
+    paste(status_video_count, "of", available_video_count),
+    duplicate_status_count,
+    invalid_status_count,
+    missing_version_lineage,
+    active_missing_profile,
+    orphaned_active_profiles
+  ),
+  pass = c(
+    active_version_count == 1L,
+    active_complete_count == 1L,
+    status_video_count == available_video_count,
+    duplicate_status_count == 0L,
+    invalid_status_count == 0L,
+    missing_version_lineage == 0L,
+    active_missing_profile == 0L,
+    orphaned_active_profiles == 0L
+  )
+)
+health_checks$status <- ifelse(health_checks$pass, "PASS", "FAIL")
+display_table(health_checks[, c("status", "check", "observed")])
+```
+
+## Current classification status
+
+The next normal batch selects `changed_title` and `new_or_unclassified` rows.
+It skips `classified` rows because an exact result already exists for the
+current `(video_id, title_hash, title_version_id)`.
+
+```{r}
+status_summary <- query_with_talent(
+  paste(
+    "SELECT talent_code, classification_status, COUNT(*) AS videos",
+    "FROM classification.title_classification_status"
+  ),
+  order_sql = paste(
+    " GROUP BY talent_code, classification_status",
+    "ORDER BY talent_code, classification_status"
+  )
+)
+display_table(status_summary)
+```
+
+```{r}
+status_totals <- query_with_talent(
+  paste(
+    "SELECT classification_status, COUNT(*) AS videos",
+    "FROM classification.title_classification_status"
+  ),
+  order_sql = paste(
+    " GROUP BY classification_status",
+    "ORDER BY CASE classification_status",
+    "WHEN 'classified' THEN 1",
+    "WHEN 'changed_title' THEN 2 ELSE 3 END"
+  )
+)
+status_totals$selected_by_normal_batch <- status_totals$classification_status != "classified"
+display_table(status_totals)
+```
+
+### Pending-title preview
+
+This is a read-only preview of the rows that a normal build would select. It
+does not use `--force-reclassify`.
+
+```{r}
+pending_where <- paste(
+  "WHERE status.classification_status IN",
+  "('changed_title', 'new_or_unclassified')"
+)
+pending_params <- list()
+if (!is.null(talent_code)) {
+  pending_where <- paste(pending_where, "AND status.talent_code = ?")
+  pending_params <- list(talent_code)
+}
+pending_preview <- DBI::dbGetQuery(
+  con,
+  paste0(
+    "SELECT status.video_id, status.talent_code, status.title,",
+    "video.content_type, status.published_at, status.classification_status,",
+    "LEFT(status.title_hash, 16) AS current_hash_prefix ",
+    "FROM classification.title_classification_status AS status ",
+    "JOIN catalog.videos AS video USING (video_id) ",
+    pending_where,
+    " ORDER BY published_at DESC, video_id LIMIT ",
+    pending_preview_limit
+  ),
+  params = pending_params
+)
+display_table(pending_preview)
+```
+
+## Talent-profile coverage
+
+Profiles are generic reusable records in `catalog.talent_profiles`. Title
+classification uses the `contexts.title_classification` portion of the JSON
+profile. Each current talent should resolve either to an exact active profile
+or to an active default profile whose `talent_code` is null.
+
+```{r}
+profiles <- DBI::dbGetQuery(
+  con,
+  paste(
+    "SELECT profile_id, talent_code, display_name, profile_version, active,",
+    "LEFT(checksum_sha256, 16) AS checksum_prefix,",
+    "source_pipeline_run_id, created_at, updated_at",
+    "FROM catalog.talent_profiles",
+    "ORDER BY active DESC, talent_code NULLS LAST, updated_at DESC"
+  )
+)
+display_table(profiles)
+```
+
+```{r}
+profile_coverage <- DBI::dbGetQuery(
+  con,
+  paste(
+    "WITH current_talents AS (",
+    "SELECT video.talent_code, talent.talent_name, COUNT(*) AS available_videos",
+    "FROM catalog.videos AS video",
+    "LEFT JOIN catalog.talents AS talent USING (talent_code)",
+    "WHERE video.is_available",
+    "GROUP BY video.talent_code, talent.talent_name",
+    "), default_profile AS (",
+    "SELECT COUNT(*) > 0 AS available",
+    "FROM catalog.talent_profiles WHERE active AND talent_code IS NULL",
+    ")",
+    "SELECT current_talents.*,",
+    "exact_profile.profile_id AS exact_active_profile_id,",
+    "exact_profile.profile_version,",
+    "CASE WHEN exact_profile.profile_id IS NOT NULL THEN 'exact'",
+    "WHEN default_profile.available THEN 'default' ELSE 'missing' END",
+    "AS resolution",
+    "FROM current_talents",
+    "LEFT JOIN catalog.talent_profiles AS exact_profile",
+    "ON exact_profile.talent_code = current_talents.talent_code",
+    "AND exact_profile.active",
+    "CROSS JOIN default_profile",
+    "ORDER BY current_talents.talent_code"
+  )
+)
+if (!is.null(talent_code)) {
+  profile_coverage <- profile_coverage[profile_coverage$talent_code == talent_code, , drop = FALSE]
+}
+display_table(profile_coverage)
+```
+
+## Recent applied results
+
+Only results matching the video's current title hash are shown here. Changed
+titles remain visible in the status and CSV audit fields, but their previous
+classification is not represented as current work.
+
+```{r}
+recent_where <- "WHERE result_rank = 1"
+recent_params <- list()
+if (!is.null(talent_code)) {
+  recent_where <- paste(recent_where, "AND talent_code = ?")
+  recent_params <- list(talent_code)
+}
+recent_results <- DBI::dbGetQuery(
+  con,
+  paste0(
+    "WITH ranked AS (",
+    "SELECT result.created_at, result.video_id, result.talent_code,",
+    "video.title, result.model, result.confidence, result.title_version_id,",
+    "result.profile_id, result.pipeline_run_id,",
+    "ROW_NUMBER() OVER (",
+    "PARTITION BY result.video_id, result.title_version_id, result.title_hash ",
+    "ORDER BY result.created_at DESC",
+    ") AS result_rank ",
+    "FROM classification.title_classification_results AS result ",
+    "JOIN catalog.videos AS video ON video.video_id = result.video_id ",
+    "JOIN classification.title_classification_status AS status ",
+    "ON status.video_id = result.video_id ",
+    "AND status.title_version_id = result.title_version_id ",
+    "AND status.title_hash = result.title_hash ",
+    "JOIN classification.title_versions AS version ",
+    "ON version.title_version_id = result.title_version_id AND version.active",
+    ") SELECT created_at, video_id, talent_code, title, model, confidence,",
+    "title_version_id, profile_id, pipeline_run_id FROM ranked ",
+    recent_where,
+    " ORDER BY created_at DESC LIMIT ",
+    recent_limit
+  ),
+  params = recent_params
+)
+display_table(recent_results)
+```
+
+## Recent pipeline runs
+
+Applying a classification batch and publishing a talent profile register
+executions in the shared `ops.pipeline_runs` relation.
+
+```{r}
+recent_runs <- DBI::dbGetQuery(
+  con,
+  paste0(
+    "SELECT pipeline_run_id, pipeline_name, started_at, completed_at, status,",
+    "error_summary FROM ops.pipeline_runs ",
+    "WHERE pipeline_name IN ('title_classification', 'talent_profile_builder') ",
+    "ORDER BY started_at DESC LIMIT ",
+    recent_limit
+  )
+)
+display_table(recent_runs)
+```
+
+## Scheduled batch state
+
+The scheduled workflow stores its active state in DuckDB instead of a local
+state JSON file or standalone classification database. No row means there is no
+currently recorded pending scheduled batch.
+
+```{r}
+scheduled_state <- DBI::dbGetQuery(
+  con,
+  paste(
+    "SELECT state_key, status, batch_id, request_count, pending_rows,",
+    "created_at, submitted_at, last_checked_at, applied_at, updated_at, run_dir",
+    "FROM classification.title_classification_scheduled_state",
+    "ORDER BY updated_at DESC"
+  )
+)
+display_table(scheduled_state)
+```
+
+## Current CSV export
+
+The CSV is a delivery artifact generated from the unified DuckDB. It is not the
+source used to determine pending work.
+
+```{r}
+export_path <- file.path(
+  dirname(normalizePath(get_datalake_root(), winslash = "/", mustWork = FALSE)),
+  "Processed",
+  "Title_classification",
+  "current",
+  "classification_export_current.csv"
+)
+if (file.exists(export_path)) {
+  export_info <- file.info(export_path)
+  header <- names(utils::read.csv(
+    export_path,
+    nrows = 1L,
+    check.names = FALSE,
+    fileEncoding = "UTF-8"
+  ))
+  required_audit_columns <- c(
+    "classification_status",
+    "is_classified",
+    "classified_title_hash",
+    "current_title_hash"
+  )
+  export_check <- data.frame(
+    item = c(
+      "Path",
+      "Exists",
+      "Modified UTC",
+      "Size bytes",
+      "Has status/hash audit columns"
+    ),
+    value = c(
+      export_path,
+      "yes",
+      format(export_info$mtime[[1]], "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+      as.character(export_info$size[[1]]),
+      if (all(required_audit_columns %in% header)) "yes" else "no"
+    )
+  )
+} else {
+  export_check <- data.frame(
+    item = c("Path", "Exists"),
+    value = c(export_path, "no")
+  )
+}
+display_table(export_check)
+```
+
+Refresh the current CSV manually when needed:
+
+```bash
+Rscript r_scripts/run/title_classification/05_export_results_csv.R
+```
+
+## Operating checklist
+
+1. Render this notebook and investigate any failed health checks.
+2. Review `changed_title` and `new_or_unclassified` counts.
+3. Build a pending batch. Building is local and does not submit it.
+4. Inspect the generated manifest and JSONL in the run directory.
+5. Submit explicitly, then check and retrieve the completed response.
+6. Run preview mode and review the flattened classifications.
+7. Apply the response transactionally; the wrapper also refreshes CSV exports.
+8. Render this notebook again and confirm the pending counts decreased as
+   expected, the recent run completed, and the export modification time moved
+   forward.
+
+Build pending titles:
+
+```bash
+bin/linux/classification/run_title_classification_batch.sh \
+  --run-id "title_$(date +%Y-%m-%d_%H-%M-%S)" \
+  -- --batch-size 25
+```
+
+Submit only after review:
+
+```bash
+bin/linux/classification/run_title_classification_batch.sh \
+  --mode submit \
+  --run-dir PATH \
+  --execute
+```
+
+Retrieve a completed batch:
+
+```bash
+bin/linux/classification/run_title_classification_batch.sh \
+  --mode check \
+  --run-dir PATH \
+  --retrieve-output
+```
+
+Validate and preview the response without writing to DuckDB:
+
+```bash
+bin/linux/classification/run_title_classification_batch.sh \
+  --mode preview \
+  --run-dir PATH
+```
+
+Apply and refresh exports:
+
+```bash
+bin/linux/classification/run_title_classification_batch.sh \
+  --mode apply \
+  --run-dir PATH
+```
+
+Use `--force-reclassify` only when intentionally rebuilding every title in
+scope. Under normal operation, unchanged current title/version pairs are
+skipped automatically.
+
+For a full incremental backfill, build review artifacts without submitting:
+
+```bash
+bin/linux/classification/run_title_classification_weekly.sh \
+  --model gpt-5.6-terra \
+  --batch-size 25
+```
+
+Add `--execute` to start or advance the durable batch lifecycle. The weekly
+user-systemd timer starts this command Monday at 03:00 UTC; the hourly checker
+uses `run_title_classification_scheduled.sh --check-only` to retrieve, validate,
+apply, export, and retry active work without starting an extra batch.
+
+```{r}
+#| include: false
+DBI::dbDisconnect(con, shutdown = TRUE)
+```

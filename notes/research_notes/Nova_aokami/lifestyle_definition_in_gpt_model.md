@@ -10,14 +10,14 @@ In other words, for Nova the model treats `lifestyle` as a broad conversation/li
 
 ## Source prompt evidence
 
-- `classification/prompts/talents/nova_aokami_ch/full_prompt/20260417_230812_Nova_Aokami_Ch_v6_0f08c66624cc.txt`
+- Historical v6 full-prompt snapshot (removed after migration to versioned DuckDB prompt records).
   - The schema allows `topic` values: `music`, `gaming`, `lifestyle`, `education`, `news_commentary`, `comedy`, `sports`, `technology`, `other`.
   - `lifestyle` appears only as an enum option, not with its own dedicated inclusion/exclusion criteria.
-- `classification/prompts/definitions/personality_conversation.txt`
+- `prompts/title_classification/definitions/personality_conversation.txt`
   - Defines the related boolean code as content centered on direct speaking, Q&A, life updates, reactions, or open conversation.
   - Inclusion examples: `chat`, `talk`, `Q&A`, `questions`, `storytime`, `life update`, `reacts to`.
   - Mapping guidance says this code is usually mapped to `topic = lifestyle`, `education`, `comedy`, or `news_commentary` depending on subject.
-- `classification/prompts/talents/nova_aokami_ch/overlay.txt`
+- Nova's migrated `catalog.talent_profiles` row, under `contexts.title_classification.overlay_text`.
   - Nova-specific guidance says square brackets are weak or rare signals.
   - Parentheses are usually modifiers such as versions, events, live cuts, or edits.
   - Short, meme-like, or context-poor titles should get conservative confidence.
@@ -51,4 +51,3 @@ That means the preliminary 90-day analysis should treat Nova's `lifestyle` count
 - Should meme-like Nova shorts default to `comedy`, `other`, or low-confidence `lifestyle` when no clear activity is named?
 - Should member streams, milestones, or announcements remain `lifestyle` unless another domain is explicit?
 - Do we want a dedicated `lifestyle` definition file with positive and negative examples, parallel to the existing boolean definition files?
-

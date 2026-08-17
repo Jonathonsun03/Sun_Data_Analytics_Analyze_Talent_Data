@@ -12,6 +12,10 @@ is a separate entrypoint:
 
 - `r_scripts/notebooks/dashboards/talent_dashboard/dashboard.qmd`
 
+The read-only title-classification operations dashboard is:
+
+- `r_scripts/notebooks/dashboards/data_admin/dashboard.qmd`
+
 ## Container Environment Setup
 
 In a restricted container, disable renv's optional system-library sandbox while
@@ -46,6 +50,16 @@ quarto serve r_scripts/notebooks/dashboards/talent_dashboard/dashboard.qmd \
 Use that command as the container's foreground command and publish container
 port `3838`. Configure the container runtime's restart policy separately if the
 process should restart after a failure or host reboot.
+
+Run the classification operations dashboard on a separate internal port:
+
+```bash
+quarto serve r_scripts/notebooks/dashboards/data_admin/dashboard.qmd \
+  --host 0.0.0.0 \
+  --port 3839
+```
+
+Place this administrative endpoint behind an authenticated reverse proxy.
 
 ## Basic Usage
 

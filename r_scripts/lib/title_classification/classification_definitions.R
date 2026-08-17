@@ -70,7 +70,7 @@ classification_definition_label <- function(primary_code) {
 }
 
 read_classification_definitions_table <- function(
-  definitions_dir = file.path("classification", "prompts", "definitions")
+  definitions_dir = file.path("prompts", "title_classification", "definitions")
 ) {
   if (!dir.exists(definitions_dir)) {
     stop("Missing classification definitions directory: ", definitions_dir, call. = FALSE)

@@ -173,6 +173,7 @@ def main() -> int:
     retry_manifest.update(
         {
             "run_id": retry_run_id,
+            "pipeline_run_id": f"title_classification_{retry_run_id}",
             "created_at": datetime.now(ZoneInfo("America/New_York")).isoformat(),
             "retry_of": str(source_run_dir),
             "request_count": len(retry_input_rows),

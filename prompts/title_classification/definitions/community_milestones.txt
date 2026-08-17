@@ -1,0 +1,16 @@
+PRIMARY CODE: COMMUNITY_MILESTONES
+
+Definition:
+Content tied to audience/community milestones, anniversaries, debuts, or special events.
+
+Inclusion Criteria:
+- Debut, anniversary, celebration, subscriber/follower milestones, thank-you specials.
+- Milestone tokens such as: birthday, 10k, 100k, sub goal, donothon.
+
+Exclusion Criteria:
+- Routine streams with generic excitement but no milestone evidence.
+
+Mapping Guidance:
+- Prefer topic = community_milestone when the title is primarily a debut, model debut, birthday, anniversary, subathon wrap-up, subscriber milestone, thank-you event, membership launch, or community celebration.
+- Co-occurs with other primaries; do not force topic changes if another domain is dominant, such as a named game, karaoke/cover, or explicit ASMR format.
+- Add tags such as `debut`, `anniversary`, `milestone`, `celebration`.

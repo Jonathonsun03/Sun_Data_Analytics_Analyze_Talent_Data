@@ -1,0 +1,17 @@
+PRIMARY CODE: PERSONALITY_CONVERSATION
+
+Definition:
+Content centered on direct speaking, Q&A, life updates, reactions, or open conversation.
+
+Inclusion Criteria:
+- "chat", "talk", "zatsu", "free talk", "free chat", "Q&A", "questions", "marshmallow", "storytime", "life update", "rantcast", "reacts to".
+
+Exclusion Criteria:
+- Pure gameplay/performance titles where conversation is secondary.
+- ASMR/sleep titles, art/doodle/handcam creation titles, milestone/debut titles, and explicit work-along streams should use their more specific creator-life topic when available.
+
+Mapping Guidance:
+- Usually topic = free_chat_zatsu, qna_marshmallow, personality_short, education, comedy, or news_commentary depending on subject.
+- Use topic = lifestyle only as a fallback for creator-life/personality content that does not fit a more specific creator-life topic.
+- Podcast/interview framing may imply format = podcast_style.
+- Add concise tags such as `qna`, `storytime`, `reaction`, `discussion`.

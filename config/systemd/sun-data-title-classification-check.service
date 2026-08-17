@@ -1,0 +1,13 @@
+[Unit]
+Description=Advance an active title-classification batch
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+Environment=TALENT_REPO_ROOT=%h/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+Environment=RENV_CONFIG_AUTOLOADER_ENABLED=FALSE
+ExecStart=%h/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/bin/linux/classification/run_title_classification_scheduled.sh --check-only
+NoNewPrivileges=true
+PrivateTmp=true

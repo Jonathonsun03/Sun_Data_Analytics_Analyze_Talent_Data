@@ -1,141 +1,161 @@
-# Classification Shell Wrappers
+# Title Classification Wrappers
 
-## `run_title_classification_batch.sh`
-Preferred runner for production title classification.
+Title classification uses the unified talent lakehouse returned by
+`talent_lakehouse_db_path()`.
 
-This creates OpenAI Batch API jobs using the current compiled prompt bundle from
-`classification/config/talent_profiles.json` and `classification/prompts/`.
-Batch jobs are asynchronous and cheaper than synchronous API calls.
+Canonical storage:
 
-### Build pending batch
-`bin/linux/classification/run_title_classification_batch.sh --run-id "title_v7_$(date +%Y-%m-%d_%H-%M-%S)" -- --batch-size 25`
+- `catalog.videos`: current title, title hash, talent, and video metadata.
+- `classification.title_versions`: prompt, definitions, and output schema stored together by version.
+- `catalog.talent_profiles`: reusable versioned profiles; title guidance is stored under the `title_classification` context.
+- `classification.title_classification_results`: one result payload with title/version/profile/run lineage.
+- `classification.title_classification_status`: queryable `classified`, `changed_title`, or `new_or_unclassified` status for the active version.
+- `ops.pipeline_runs` and `ops.source_files`: execution and source provenance.
 
-### Build and submit a full reclassification with current definitions
-`bin/linux/classification/run_title_classification_batch.sh --run-id "title_v7_full_$(date +%Y-%m-%d_%H-%M-%S)" --execute -- --batch-size 25 --force-reclassify`
+## Publish maintained assets
 
-Batch JSON artifacts are written under:
-`/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/classification/title_classification/batch_runs/`
+Validate the repository prompt source without writing:
 
-### Check and retrieve completed output
-`bin/linux/classification/run_title_classification_batch.sh --mode check --run-dir "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/classification/title_classification/batch_runs/<run_id>" --retrieve-output`
+```bash
+Rscript r_scripts/run/title_classification/publish_title_version.R
+```
 
-### Apply retrieved output and refresh current/archive CSVs
-`bin/linux/classification/run_title_classification_batch.sh --mode apply --run-dir "/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/classification/title_classification/batch_runs/<run_id>"`
+Publish it as the active version:
 
-Windows users can call:
-`bin\windows\classification\run_title_classification_batch.bat`
+```bash
+Rscript r_scripts/run/title_classification/publish_title_version.R --execute
+```
 
-## `run_title_classification.sh`
-Legacy synchronous runner.
+Build a reusable profile from current lakehouse titles (dry-run by default):
 
-Wrapper for:
-`r_scripts/run/title_classification/07_run_weekly_classification.R`
+```bash
+bin/linux/classification/run_talent_profile_builder.sh --talent TER4
+bin/linux/classification/run_talent_profile_builder.sh --talent TER4 --execute
+```
 
-This runs the title classification pipeline from a CSV by talent:
-- ingests rows into DuckDB `videos`
-- classifies only pending rows by default (idempotent)
-- supports force rerun for prompt tests
+## Batch lifecycle
 
-### Run (weekly default)
-From repo root:
-`bin/linux/classification/run_title_classification.sh`
+Build requests only for new, changed, or missing titles:
 
-### Smoke test (5 rows per talent)
-`bin/linux/classification/run_title_classification.sh --limit-per-talent 5`
+```bash
+bin/linux/classification/run_title_classification_batch.sh \
+  --run-id "title_$(date +%Y-%m-%d_%H-%M-%S)" \
+  -- --batch-size 25
+```
 
-### Slow API run
-`bin/linux/classification/run_title_classification.sh --timeout-seconds 300 --batch-size 10`
+Submit, check, preview, and apply:
 
-### Force rerun (prompt testing)
-`bin/linux/classification/run_title_classification.sh --limit-per-talent 5 --force-reclassify`
+```bash
+bin/linux/classification/run_title_classification_batch.sh --mode submit --run-dir PATH --execute
+bin/linux/classification/run_title_classification_batch.sh --mode check --run-dir PATH --retrieve-output
+bin/linux/classification/run_title_classification_batch.sh --mode preview --run-dir PATH
+bin/linux/classification/run_title_classification_batch.sh --mode apply --run-dir PATH
+```
 
-### Single talent
-`bin/linux/classification/run_title_classification.sh --talent "Leia_Memoria_Variance_Project"`
+Preview mode is read-only with respect to DuckDB. It validates and flattens the
+nested Batch API response, prints a concise title/topic/confidence table, and
+writes `batch_response_preview.csv` in the run directory for spreadsheet review.
 
-## `run_title_classification_weekly.sh`
-Compatibility wrapper around the Batch API runner.
+`--force-reclassify` is explicit opt-in. Without it, the pending key is the
+current `(video_id, title_hash, title_version_id)`. Changing a title therefore
+requeues that video, while activating a new title version naturally queues all
+current videos.
 
-Exports to:
-Current export:
-`/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/current/classification_export_current.csv`
+## Backfill and weekly automation
 
-Archived timestamped exports:
-`/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Title_classification/archived/`
+The general backfill wrapper uses the same incremental selection logic. A dry
+run builds a reviewable batch without contacting OpenAI:
 
-Set `TITLE_CLASSIFICATIONS_DIR` to override the export folder for a one-off run.
+```bash
+bin/linux/classification/run_title_classification_weekly.sh \
+  --model gpt-5.6-terra \
+  --batch-size 25
+```
 
-### Run (classification + export)
-`bin/linux/classification/run_title_classification_weekly.sh`
+Add `--execute` to start or advance the durable lifecycle:
 
-### Smoke test (5 rows per talent + export)
-`bin/linux/classification/run_title_classification_weekly.sh --limit-per-talent 5`
+```bash
+bin/linux/classification/run_title_classification_weekly.sh \
+  --model gpt-5.6-terra \
+  --batch-size 25 \
+  --execute
+```
 
-## `run_title_classification_scheduled.sh`
-Durable scheduled OpenAI Batch API lifecycle for production title classification.
+The lifecycle builds all currently pending titles, submits one OpenAI Batch
+job, stores its state in DuckDB, retrieves and applies completed output,
+refreshes both CSV exports, and submits a retry batch for failed or missing
+requests. It is safe to invoke repeatedly: when a run is active it advances
+that run, and when no run is active it selects only new, changed, or missing
+titles.
 
-This is the preferred scheduled entrypoint. It is idempotent and keeps a pending
-state pointer in `classifications.duckdb`:
+Advance an active run without ever starting another batch:
 
-`/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data/classifications.duckdb`
+```bash
+bin/linux/classification/run_title_classification_scheduled.sh --check-only
+```
 
-Table:
-`title_classification_scheduled_state`
+Scheduled state is stored in
+`classification.title_classification_scheduled_state` in the unified lakehouse.
 
-Lifecycle:
+Checked-in user-systemd units provide the production cadence:
 
-1. Refresh title rows from DataLake video analytics into `notes/titles.csv`.
-2. Detect unclassified or newly changed videos from DuckDB using the current
-   taxonomy, prompt version, and model.
-3. Build a timestamped run directory under
-   `/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/classification/title_classification/batch_runs/`.
-4. Write `batch_input.jsonl` with one video per Batch API request.
-5. Use stable `custom_id` values based on talent, `video_id`, and title hash.
-6. Upload the JSONL file and create an OpenAI Batch job.
-7. Save `batch_id`, `input_file_id`, status metadata, manifest, input JSONL,
-   and submit response in the run directory and DuckDB state table.
-8. On later runs, check the existing batch before building anything new.
-9. Retrieve `batch_output.jsonl` and `batch_errors.jsonl` when available.
-10. Parse output by `custom_id`, validate the existing title-classification
-    schema, apply successful rows to DuckDB, and refresh the current/archive CSV
-    exports.
-11. If any request fails or is missing, create a retry run containing only those
-    failed/missing `custom_id`s.
-12. Clear pending state only after a run has been applied and no retry is needed.
+- `sun-data-title-classification-weekly.timer` starts Mondays at 03:00 UTC;
+- `sun-data-title-classification-check.timer` checks an active batch hourly,
+  with a randomized delay of up to five minutes.
 
-Logs are written to
-`/mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/classification/title_classification_scheduled/`
-and each run also gets `logs/scheduled.log` inside its run directory.
+Install or refresh the units with:
 
-### Run the scheduled lifecycle once
-`bin/linux/classification/run_title_classification_scheduled.sh`
+```bash
+mkdir -p "$HOME/.config/systemd/user"
+cp config/systemd/sun-data-title-classification-{weekly,check}.{service,timer} \
+  "$HOME/.config/systemd/user/"
+systemctl --user daemon-reload
+systemctl --user enable --now \
+  sun-data-title-classification-weekly.timer \
+  sun-data-title-classification-check.timer
+```
 
-### Recommended cron entry
-Do not overwrite the existing crontab automatically. Add this manually with
-`crontab -e` if cron is preferred:
+Inspect the schedule and recent work with:
 
-`30 9 * * 2 cd /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data && bin/linux/classification/run_title_classification_scheduled.sh >> /mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/classification/title_classification_scheduled/cron.log 2>&1`
+```bash
+systemctl --user list-timers 'sun-data-title-classification-*'
+journalctl --user -u sun-data-title-classification-weekly.service \
+  -u sun-data-title-classification-check.service
+```
 
-Because Batch API jobs are asynchronous, running the scheduled wrapper more than
-once per week is useful. A daily check can retrieve/apply a batch after it
-finishes without submitting duplicates:
+## Read-only pipeline audit
 
-`30 9 * * * cd /home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data && bin/linux/classification/run_title_classification_scheduled.sh >> /mnt/datalake/DataLake/Sun_Data_Analytics/Processed/Logs/classification/title_classification_scheduled/cron.log 2>&1`
+Render the pipeline explainer and live database checks without building,
+submitting, or applying a batch:
 
-## `run_talent_profile_builder.sh`
-Wrapper for:
-`r_scripts/run/title_classification/talent_profile/build_talent_profile.R`
+```bash
+quarto render r_scripts/notebooks/tests/title_classification_pipeline.qmd
+```
 
-This runs the talent profile builder, which creates/updates:
-- `classification/config/talents/<talent_slug>.json`
-- `classification/prompts/talents/<talent_slug>/overlay.txt`
-- `classification/config/talent_profiles.json` (when `--update-master-config` is used)
+If the project renv autoloader stalls before rendering begins, run the same
+read-only audit with `RENV_CONFIG_AUTOLOADER_ENABLED=FALSE` for that command.
 
-### Run
-From repo root:
-`bin/linux/classification/run_talent_profile_builder.sh --csv notes/titles.csv --all-talents --talent-col talent --title-col "Title" --content-type-col "Content Type" --write-overlay --update-master-config`
+Limit row previews to one talent code with:
 
-### Single Talent
-`bin/linux/classification/run_talent_profile_builder.sh --csv notes/titles.csv --talent "Terberri_Solaris_Ch" --talent-col talent --title-col "Title" --content-type-col "Content Type" --write-overlay --update-master-config`
+```bash
+quarto render r_scripts/notebooks/tests/title_classification_pipeline.qmd \
+  -P talent_code:TER4
+```
 
-### GPT Discovery Mode (Optional)
-`OPENAI_MODEL=gpt-5-mini bin/linux/classification/run_talent_profile_builder.sh --csv notes/titles.csv --all-talents --talent-col talent --title-col "Title" --content-type-col "Content Type" --write-overlay --update-master-config --use-gpt --sample-size 250`
+## CSV export
+
+The apply step refreshes both locations under the DataLake:
+
+- `Processed/Title_classification/current/classification_export_current.csv`
+- `Processed/Title_classification/archived/classification_export_<timestamp>.csv`
+
+Run the exporter directly with:
+
+```bash
+Rscript r_scripts/run/title_classification/05_export_results_csv.R
+```
+
+The export keeps the latest active-version result for every classified video.
+`classification_status`, `classified_title_hash`, and `current_title_hash` make
+changed titles explicit without silently dropping their prior result. All CSV
+text is written as UTF-8.

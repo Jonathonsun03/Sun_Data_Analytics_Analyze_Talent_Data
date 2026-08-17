@@ -1,0 +1,18 @@
+PRIMARY CODE: INTERACTIVE_ENTERTAINMENT
+
+Definition:
+Content framed around active play, challenge, or audience-participatory entertainment.
+
+Inclusion Criteria:
+- Game title names, rankings, match language, challenge framing, speedrun, or collab play.
+- "Let's play", "grind", "boss", "ranked", "duo", "co-op", or tournament signals.
+- Applies to both live and short content when gameplay anchors are explicit.
+
+Exclusion Criteria:
+- Passive commentary that references games without gameplay focus.
+- Music/performance streams where game terms are incidental.
+
+Mapping Guidance:
+- Prefer topic = gaming when this code is dominant.
+- Add focused tags such as `ranked`, `challenge`, `collab_gameplay`, `boss_run`.
+- Do not suppress this code only because content_type is `short`.

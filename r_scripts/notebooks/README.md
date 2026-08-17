@@ -7,6 +7,8 @@ notebook sources.
 
 - `dashboards/`
   - interactive and published dashboard notebooks
+  - `dashboards/data_admin/dashboard.qmd` is the read-only Shiny operations
+    view for title-classification runs, artifacts, tags, and coverage
 - `models/`
   - model development, evaluation, diagnostics, and model explainers
   - group related notebooks by analytical family, such as `day_of_week/` or
@@ -15,6 +17,8 @@ notebook sources.
   - descriptive and project-facing reports that primarily present results
 - `tests/`
   - executable notebooks that validate repository or environment behavior
+  - `title_classification_pipeline.qmd` documents the mixed R/Python title
+    pipeline and runs read-only health checks against the unified DuckDB
 
 ## Boundaries
 

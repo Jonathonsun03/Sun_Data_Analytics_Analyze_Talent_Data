@@ -1,0 +1,33 @@
+PRIMARY CODE: PERFORMANCE_ARTISTRY
+
+Definition:
+Content centered on musical or performative expression as the primary focus (singing, karaoke, covers, concerts, instrument performance, music videos).
+
+Inclusion Criteria:
+1. Explicit performance framing (strong evidence):
+- Karaoke, singing, cover, concert, remix, acapella, MV/music video, live vocal, instrument performance.
+- Original song, オリジナル曲, 歌ってみた, 弾いてみた.
+
+2. Canonical standalone song-title formatting (strong enough to classify TRUE, especially for short/video):
+- Title matches canonical song/artist formatting:
+  - "<Song Title> - <Artist>"
+  - "<Song Title> — <Artist>"
+  - "<Song Title>" by <Artist>
+  - "<Song Title> | <Artist>"
+- And the title is mostly song + artist with little/no non-music context.
+- If this standalone canonical song pattern is present, you MUST classify `performance_artistry = TRUE` even when words like "cover" or "karaoke" are absent.
+- This rule captures short-form cover clips that omit explicit keywords (for example: "Spark Again - Aimer").
+
+Exclusion Criteria:
+- Background music while doing unrelated content.
+- Casual humming or jokes with no performance focus.
+- Song mention embedded inside broader non-music framing (for example: discussing a song while gaming) does NOT count.
+- Background music references do not count.
+
+Important Exception:
+- A standalone title that clearly follows canonical song formatting (for example, "<Song Title> - <Artist>") SHOULD be treated as `performance_artistry = TRUE`, even if explicit words like "cover" or "karaoke" are absent.
+
+Mapping Guidance:
+- Prefer topic = music when performance is central.
+- Set is_music = true when explicit performance signals are present OR standalone canonical song-title pattern evidence is present.
+- Add tags such as `karaoke`, `cover`, `concert`, `acapella`, `original_song`, `song_title_format`.

@@ -1,0 +1,15 @@
+PRIMARY CODE: MEME_VIRAL
+
+Definition:
+Content framed around memes, trends, shitpost energy, or intentionally viral phrasing.
+
+Inclusion Criteria:
+- Meme slang, trend references, absurd or ironic viral hooks, parody title framing.
+
+Exclusion Criteria:
+- Straightforward informational titles with no trend/meme framing.
+
+Mapping Guidance:
+- Frequently ambiguous; lower confidence when semantics are unclear.
+- Often short_form or highlight when title style indicates clips/reposts.
+- Add tags such as `meme`, `trend`, `viral`, `parody` when justified.

@@ -1,0 +1,26 @@
+Classify each YouTube title record into the JSON schema.
+
+Rules:
+1. Return JSON only. No markdown, comments, or extra keys.
+2. Return one item for every input record and preserve the same `video_id`.
+3. Confidence must be between 0 and 1.
+4. Use only enum values listed in the schema.
+5. Keep `tags` concise, specific, and bounded by schema limits.
+6. Apply definitions jointly in one pass; categories may co-occur when title evidence supports it.
+7. Use conservative confidence when wording is ambiguous, ironic, or meme-like.
+8. Extract references:
+   - If topic = gaming, set `primary_reference` to the primary game/IP title when identifiable.
+   - If topic = music, set `primary_reference` to the primary song title when identifiable.
+   - Fill `referenced_entities` with up to 5 key game/song references found in the title.
+   - If no clear reference exists, set `primary_reference` to an empty string and keep `referenced_entities` empty.
+
+Topic routing for creator-life stream formats:
+- Use `free_chat_zatsu` for open conversation, zatsu, free talk, life updates, opinion/rant talk, return streams, travel/event thoughts, or general hangout streams.
+- Use `work_stream_productivity` for work-along streams, recording sessions, schedule/planning streams, creator operations, goals, resolutions, or "work with me" framing.
+- Use `community_milestone` for debuts, model debuts, birthdays, anniversaries, subathon wrap-ups, subscriber milestones, thank-you events, membership launches, and community celebrations.
+- Use `asmr_sleep_relaxation` for ASMR, 3DIO, sleep aid, relaxation, tingles, whispers, ear cleaning, ear massage, triggers, or bedtime/good-night framing.
+- Use `art_handcam_creation` for drawing, doodle-and-chat, art tips, profile pictures, emotes, crafts, nails, food/cooking/eating handcam, unboxing, or other tactile creator activity.
+- Use `qna_marshmallow` for Q&A, marshmallow, AMA, advice, answering questions, or viewer question streams.
+- Use `personality_short` for short-form skits, one-off opinions, vague personality bits, meme-like hooks, or context-poor shorts where no stronger topic is identifiable.
+- Keep `lifestyle` as a fallback only when the title clearly belongs to creator-life/personality content but none of the more specific creator-life topics fits.
+- Stronger domain anchors win over creator-life topics: named games/media -> `gaming`; karaoke/cover/song performance -> `music`; tutorials/explainers -> `education`; topical public affairs -> `news_commentary`.

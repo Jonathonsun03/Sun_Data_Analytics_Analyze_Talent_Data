@@ -21,7 +21,10 @@ default_title_classifications_export_dir <- function() {
     return(file.path(dirname(datalake_root), "Processed", "Title_classification"))
   }
 
-  file.path("classification", "output", "title_classifications")
+  stop(
+    "Unable to resolve the DataLake title-classification export directory. ",
+    "Set TITLE_CLASSIFICATIONS_DIR or load get_datalake_root()."
+  )
 }
 
 current_title_classifications_path <- function(
@@ -90,7 +93,15 @@ load_title_classifications <- function(
     path <- resolve_latest_title_classifications_path()
   }
 
-  titles <- readr::read_csv(path, show_col_types = FALSE, progress = FALSE)
+  titles <- readr::read_csv(
+    path,
+    show_col_types = FALSE,
+    progress = FALSE,
+    col_types = readr::cols(
+      profile_id = readr::col_character(),
+      pipeline_run_id = readr::col_character()
+    )
+  )
 
   required <- c("video_id", "talent_name")
   missing <- setdiff(required, names(titles))
@@ -107,9 +118,19 @@ load_title_classifications <- function(
 
     talent_keys <- unique(normalize_talent_key(talent))
     titles <- titles %>%
-      dplyr::mutate(.talent_key = normalize_talent_key(.data$talent_name))
+      dplyr::mutate(
+        .talent_key = normalize_talent_key(.data$talent_name),
+        .talent_code_key = if ("talent_code" %in% names(titles)) {
+          normalize_talent_key(.data$talent_code)
+        } else {
+          ""
+        }
+      )
 
-    exact_match <- dplyr::filter(titles, .data$.talent_key %in% talent_keys)
+    exact_match <- dplyr::filter(
+      titles,
+      .data$.talent_key %in% talent_keys | .data$.talent_code_key %in% talent_keys
+    )
     if (nrow(exact_match) > 0) {
       titles <- exact_match
     } else if (length(talent_keys) == 1 && nzchar(talent_keys[[1]])) {
@@ -137,7 +158,10 @@ load_title_classifications <- function(
       )
     }
 
-    titles <- dplyr::select(titles, -dplyr::any_of(".talent_key"))
+    titles <- dplyr::select(
+      titles,
+      -dplyr::any_of(c(".talent_key", ".talent_code_key"))
+    )
   }
 
   if (isTRUE(latest_per_video)) {

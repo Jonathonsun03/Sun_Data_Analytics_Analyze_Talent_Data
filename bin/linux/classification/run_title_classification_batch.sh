@@ -21,11 +21,10 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 BUILD_SCRIPT="r_scripts/run/title_classification/08_build_batch_classification.R"
 APPLY_SCRIPT="r_scripts/run/title_classification/09_apply_batch_classification.R"
-TITLE_EXPORT_SCRIPT="r_scripts/run/Title_analysis/Export_titles.r"
+PREVIEW_SCRIPT="r_scripts/run/title_classification/04_preview_results.R"
 SUBMIT_SCRIPT="py_scripts/run/qualitative_coding/submit_qualitative_batch.py"
 CHECK_SCRIPT="py_scripts/run/qualitative_coding/check_qualitative_batch.py"
 EXPORT_SCRIPT="r_scripts/run/title_classification/05_export_results_csv.R"
-CONFIG_JSON="classification/config/talent_profiles.json"
 
 TALENT_DATA_ROOT="${TALENT_DATALAKE_ROOT:?Set TALENT_DATA_ROOT or TALENT_DATALAKE_ROOT in .env}"
 TALENT_DATA_ROOT="${TALENT_DATA_ROOT%/}"
@@ -47,7 +46,7 @@ Usage:
   bin/linux/classification/run_title_classification_batch.sh [wrapper options] -- [build options]
 
 Wrapper options:
-  --mode build|submit|check|apply
+  --mode build|submit|check|preview|apply
   --run-id VALUE       Folder name under the title-classification batch_runs folder.
   --run-dir PATH       Existing run directory for submit/check/apply.
   --execute            Submit mode: upload and create the OpenAI Batch API job.
@@ -57,15 +56,20 @@ Wrapper options:
 Apply options after --:
   --allow-failures     Continue and refresh exports when some responses failed validation.
 
+Preview mode validates and flattens a retrieved response without writing to
+DuckDB. It prints a concise table and writes batch_response_preview.csv in the
+run directory.
+
 Build options after --:
-  --csv PATH
   --talent NAME
+  --title-version-id ID
+  --limit-per-talent N
   --batch-size N       Rows per Batch API request. Default: 25.
   --model NAME
   --force-reclassify
 
-Build mode refreshes notes/titles.csv from the DataLake before creating the
-Batch API request file.
+Build mode queries canonical `catalog.videos` and only selects titles that are
+missing for the active title version and current title hash.
 
 Examples:
   Build pending v7 requests:
@@ -102,24 +106,13 @@ if [[ -z "$RUN_DIR" && -n "$RUN_ID" ]]; then
 fi
 
 refresh_exports() {
-  local model prompt_version taxonomy_version stamp archive_csv current_csv
-  model="${OPENAI_MODEL:-gpt-5-mini}"
-  prompt_version="$(Rscript --vanilla -e "x <- jsonlite::fromJSON('${CONFIG_JSON}'); cat(x[['prompt_version']])" | tail -n 1 | tr -d '\r')"
-  taxonomy_version="$(Rscript --vanilla -e "x <- jsonlite::fromJSON('${CONFIG_JSON}'); cat(x[['taxonomy_version']])" | tail -n 1 | tr -d '\r')"
+  local stamp archive_csv current_csv
   stamp="$(date -u +"%Y%m%d_%H%M%S")"
   mkdir -p "${EXPORT_ROOT}/current" "${EXPORT_ROOT}/archived"
-  archive_csv="${EXPORT_ROOT}/archived/classification_export_${model}_${prompt_version}_${taxonomy_version}_${stamp}.csv"
+  archive_csv="${EXPORT_ROOT}/archived/classification_export_${stamp}.csv"
   current_csv="${EXPORT_ROOT}/current/classification_export_current.csv"
-  Rscript "${EXPORT_SCRIPT}" \
-    --model "${model}" \
-    --prompt-version "${prompt_version}" \
-    --taxonomy-version "${taxonomy_version}" \
-    --out "${archive_csv}"
-  Rscript "${EXPORT_SCRIPT}" \
-    --model "${model}" \
-    --prompt-version "${prompt_version}" \
-    --taxonomy-version "${taxonomy_version}" \
-    --out "${current_csv}"
+  Rscript "${EXPORT_SCRIPT}" --out "${archive_csv}"
+  Rscript "${EXPORT_SCRIPT}" --out "${current_csv}"
   echo "Current export: ${current_csv}"
   echo "Archived export: ${archive_csv}"
 }
@@ -130,8 +123,6 @@ case "$MODE" in
       RUN_ID="title_classification_batch_$(date +%Y-%m-%d_%H-%M-%S_%z)"
       RUN_DIR="${BATCH_RUN_ROOT%/}/${RUN_ID}"
     fi
-    echo "Refreshing notes/titles.csv from DataLake video analytics..."
-    Rscript "${TITLE_EXPORT_SCRIPT}" --out "notes/titles.csv"
     Rscript "${BUILD_SCRIPT}" \
       --run-id "$RUN_ID" \
       --run-root "$BATCH_RUN_ROOT" \
@@ -161,6 +152,13 @@ case "$MODE" in
     check_args=(--run-dir "$RUN_DIR")
     [[ "$RETRIEVE_OUTPUT" == "true" ]] && check_args+=(--retrieve-output)
     python3 "$CHECK_SCRIPT" "${check_args[@]}"
+    ;;
+  preview)
+    if [[ -z "$RUN_DIR" ]]; then
+      echo "Error: --run-dir or --run-id is required for preview mode." >&2
+      exit 1
+    fi
+    Rscript "${PREVIEW_SCRIPT}" --run-dir "$RUN_DIR" "${CLASSIFY_ARGS[@]}"
     ;;
   apply)
     if [[ -z "$RUN_DIR" ]]; then

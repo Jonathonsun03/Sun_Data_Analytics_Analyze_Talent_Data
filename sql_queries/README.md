@@ -21,6 +21,8 @@ library is:
 ```text
 sql_queries/
   unified_db/
+    classification/
+      current_title_status.sql
     daily/
       public_subscribers.sql
       subscriber_daily.sql
