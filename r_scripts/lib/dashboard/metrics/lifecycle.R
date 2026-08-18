@@ -23,7 +23,7 @@ dashboard_build_lifecycle_data <- function(
     titles = title_classifications,
     talent = talent_folder
   )
-  panel <- dashboard_apply_publish_window(panel, start_date, end_date)
+  panel <- dashboard_apply_snapshot_window(panel, start_date, end_date)
   panel <- dashboard_filter_bundle_e_content_types(panel, content_types)
 
   video_summary <- build_bundle_e_video_summary(panel) %>%

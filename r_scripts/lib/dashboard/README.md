@@ -39,11 +39,16 @@ Cloudflare's permissions Worker must provide `X-SDA-Verified-Email` and
 session intersects those exact codes with `catalog.talents` before rendering the
 selector and validates the selected code again before querying DuckDB.
 
-Each new Shiny session reloads the talent catalog from DuckDB so publication
-date bounds and the displayed latest analytics snapshot do not remain pinned to
-the long-running Quarto process's startup state. The publication date selector
-still filters by video publish date; the separate analytics freshness message
-reports the latest available snapshot date.
+Each new Shiny session reloads the talent catalog from DuckDB so analytics
+snapshot bounds do not remain pinned to the long-running Quarto process's
+startup state. While a session remains open, its analytics freshness status refreshes
+from DuckDB once per minute and reports the latest available daily snapshot and
+the number of tracked videos collected in that snapshot. The date selector
+filters the longitudinal `(video_id, snapshot_date)` panel. Cards and rankings
+use the latest snapshot in the selected range, lifecycle panels use every
+selected daily snapshot, and the overview performance chart retains its
+original monthly aggregation. Video publication dates do not control the
+dashboard date window.
 
 For an explicit local-only preview, set both development mode and a narrow list
 of test codes:

@@ -20,26 +20,50 @@ build_creator_dashboard_data <- function(
     talent_path <- NA_character_
     talent_folder <- unified_data$talent_name
     talent_files <- unified_data$talent_files
-    latest_analytics <- unified_data$latest_analytics
     title_classifications <- unified_data$title_classifications
   } else {
     data_root <- dashboard_resolve_data_root(data_source = data_source, data_root = data_root)
     talent_path <- select_talent(talent, root = data_root)
     talent_folder <- basename(talent_path)
     talent_files <- TalentFiles(talent_path)
-    latest_analytics_path <- latest_talent_snapshot_path(
-      talent_path,
-      snapshot_type = "video_analytics"
-    )
-    latest_analytics <- .get_type_data(
-      TalentFiles(list(latest_analytics_path)),
-      type = "video_analytics"
-    )
     title_classifications <- load_title_classifications(talent = talent_folder)
   }
 
   dashboard_files <- .normalize_talent_files(talent_files)
-  dashboard_files$video_analytics <- latest_analytics
+  analytics_history <- dashboard_apply_snapshot_window(
+    .get_type_data(dashboard_files, "video_analytics"),
+    start_date,
+    end_date
+  )
+  if (nrow(analytics_history) == 0) {
+    stop("No analytics snapshots are available in the selected date range.", call. = FALSE)
+  }
+
+  monetary_history <- dashboard_apply_snapshot_window(
+    .get_type_data(dashboard_files, "video_monetary"),
+    start_date,
+    end_date
+  )
+  demo_history <- dashboard_apply_snapshot_window(
+    .get_type_data(dashboard_files, "video_demographics"),
+    start_date,
+    end_date
+  )
+  geo_history <- dashboard_try(
+    dashboard_apply_snapshot_window(
+      .get_type_data(dashboard_files, "video_geography"),
+      start_date,
+      end_date
+    ),
+    NULL
+  )
+
+  # Cards, rankings, and recommendations use the latest snapshot inside the
+  # selected window. The full histories remain available for longitudinal
+  # plots so cumulative metrics are never summed repeatedly in cross-sections.
+  dashboard_files$video_analytics <- dashboard_latest_snapshot_rows(analytics_history)
+  dashboard_files$video_monetary <- dashboard_latest_snapshot_rows(monetary_history)
+  dashboard_files$video_demographics <- dashboard_latest_snapshot_rows(demo_history)
 
   prepared <- video_preps_with_titles(
     files = dashboard_files,
@@ -56,13 +80,10 @@ build_creator_dashboard_data <- function(
     content_type_sets = c("analytics", "monetary")
   )
 
-  analytics <- dashboard_apply_publish_window(prepared$analytics, start_date, end_date)
-  monetary <- dashboard_apply_publish_window(prepared$monetary, start_date, end_date)
-  demo <- dashboard_apply_publish_window(prepared$demo, start_date, end_date)
-  geo <- dashboard_try(
-    dashboard_apply_publish_window(.get_type_data(talent_files, "video_geography"), start_date, end_date),
-    NULL
-  )
+  analytics <- prepared$analytics
+  monetary <- prepared$monetary
+  demo <- prepared$demo
+  geo <- dashboard_latest_snapshot_rows(geo_history)
 
   content_types <- dashboard_canonical_content_types(content_types)
   stream_video_level <- analytics
@@ -188,7 +209,9 @@ build_creator_dashboard_data <- function(
     source_data = list(
       talent_path = talent_path,
       analytics = analytics,
+      analytics_history = analytics_history,
       monetary = monetary,
+      monetary_history = monetary_history,
       demo = demo,
       geo = geo,
       content = content,

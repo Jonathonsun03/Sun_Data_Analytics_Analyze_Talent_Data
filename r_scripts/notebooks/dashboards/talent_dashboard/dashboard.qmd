@@ -11,6 +11,21 @@ execute:
 ---
 
 <style>
+@media (min-width: 769px) {
+  body.dashboard-sidebar .bslib-sidebar-layout {
+    --bslib-sidebar-width: 320px;
+  }
+}
+
+#snapshot_dates .input-daterange {
+  flex-wrap: nowrap;
+}
+
+#snapshot_dates .input-daterange .form-control {
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
 @media (max-width: 768px) {
   .card:not(.bslib-value-box) {
     min-height: 24rem;
@@ -75,11 +90,11 @@ dashboard_database_path <- dashboard_resolve_database_path()
 dashboard_startup_talents <- dashboard_unified_talent_catalog(dashboard_database_path)
 
 dashboard_global_min_date <- min(
-  dashboard_startup_talents$earliest_publish_date,
+  dashboard_startup_talents$earliest_analytics_snapshot_date,
   na.rm = TRUE
 )
 dashboard_global_max_date <- max(
-  dashboard_startup_talents$latest_publish_date,
+  dashboard_startup_talents$latest_analytics_snapshot_date,
   na.rm = TRUE
 )
 if (!is.finite(dashboard_global_min_date)) {
@@ -122,8 +137,8 @@ uiOutput("talent_selector")
 uiOutput("dashboard_data_freshness")
 
 dateRangeInput(
-  inputId = "publish_dates",
-  label = "Published between",
+  inputId = "snapshot_dates",
+  label = "Analytics snapshots between",
   start = dashboard_global_min_date,
   end = dashboard_global_max_date,
   min = dashboard_global_min_date,
@@ -138,12 +153,12 @@ actionButton(
   class = "btn-primary"
 )
 
-helpText("Date filters use each video's publication date. Clear both dates to use the talent's entire lifespan. Applying a new selection can take a minute while lifecycle and audience summaries rebuild.")
+helpText("This filter selects daily analytics snapshots for every tracked video. Overview cards use the latest snapshot in the range; lifecycle panels use the selected daily history.")
 ```
 
 # Overview
 
-This page summarizes the selected creator, publication window, source data, and top-performing videos.
+This page summarizes the selected creator, analytics snapshot window, source data, and top-performing videos.
 
 ## Row {height=22%}
 
@@ -188,7 +203,7 @@ uiOutput("overview_top_videos")
 
 # Creator Performance
 
-This page summarizes lifecycle performance for the active talent and publication window.
+This page summarizes lifecycle performance for the active talent and analytics snapshot window.
 
 ## Row {height=45%}
 
@@ -276,7 +291,7 @@ uiOutput("strategy_collaboration_performance")
 
 # Publishing Schedule
 
-This page evaluates timing patterns for the active talent and publication window.
+This page evaluates timing patterns using the analytics snapshots in the selected window.
 
 ## Row {height=50%}
 
@@ -332,7 +347,7 @@ uiOutput("audience_summary")
 
 # Recommendations
 
-These recommendations are generated from the active talent/publication window and should be read as descriptive signals, not causal claims.
+These recommendations are generated from the selected talent and analytics snapshot window and should be read as descriptive signals, not causal claims.
 
 ## Row {height=42%}
 
@@ -388,7 +403,7 @@ uiOutput("method_filters")
 #| results: asis
 
 cat(
-  "- The date range filters videos by publication date, not by analytics snapshot date.\n",
+  "- The date range filters daily analytics snapshots; it does not filter videos by publication date.\n",
   "- Content type filters limit topic-weekday modeling and lifecycle displays to the requested formats.\n",
   "- Descriptive statistics can be affected by outliers, posting volume, and missing data.\n",
   "- Model-based recommendations are planning signals, not guarantees.\n",
@@ -414,6 +429,16 @@ dashboard_allowed_talents <- dashboard_talents %>%
   dplyr::filter(
     .data$talent_code %in% dashboard_session_access$allowed_talent_codes
   )
+
+# Keep analytics freshness current for sessions left open across a daily
+# ingestion. Existing dashboard metrics still use the latest complete snapshot.
+dashboard_live_talents <- reactive({
+  invalidateLater(60 * 1000, session)
+  tryCatch(
+    dashboard_unified_talent_catalog(dashboard_database_path),
+    error = function(e) dashboard_talents
+  )
+})
 
 output$dashboard_identity <- renderUI({
   if (!dashboard_session_access$authorized) {
@@ -453,43 +478,98 @@ output$dashboard_data_freshness <- renderUI({
     return(NULL)
   }
 
+  live_allowed_talents <- dashboard_live_talents() %>%
+    dplyr::filter(
+      .data$talent_code %in% dashboard_session_access$allowed_talent_codes
+    )
   selected_code <- input$talent
   if (is.null(selected_code) || !dashboard_talent_is_authorized(selected_code, dashboard_session_access)) {
     selected_code <- dashboard_allowed_talents$talent_code[[1]]
   }
-  selected <- dashboard_allowed_talents %>%
+  selected <- live_allowed_talents %>%
     dplyr::filter(.data$talent_code == selected_code) %>%
     dplyr::slice_head(n = 1)
+  if (nrow(selected) == 0) {
+    return(NULL)
+  }
   latest_snapshot <- selected$latest_analytics_snapshot_date[[1]]
+  latest_video_count <- selected$latest_analytics_video_count[[1]]
 
-  htmltools::tags$small(
-    class = "text-muted",
+  htmltools::div(
+    class = "alert alert-info py-2 px-3",
     if (is.na(latest_snapshot)) {
       "Latest analytics snapshot is unavailable."
     } else {
-      paste("Analytics available through", format(latest_snapshot, "%Y-%m-%d"))
+      htmltools::tagList(
+        htmltools::tags$strong(
+          paste("Analytics available through", format(latest_snapshot, "%Y-%m-%d"))
+        ),
+        if (!is.na(latest_video_count)) {
+          htmltools::tagList(
+            htmltools::tags$br(),
+            htmltools::tags$small(
+              paste(
+                scales::comma(latest_video_count),
+                "tracked videos were collected in the latest daily snapshot."
+              )
+            )
+          )
+        }
+      )
     }
   )
 })
 
-observeEvent(input$talent, {
+dashboard_snapshot_bounds <- reactiveVal(NULL)
+
+observe({
   req(dashboard_talent_is_authorized(input$talent, dashboard_session_access))
-  selected <- dashboard_allowed_talents %>%
+  selected <- dashboard_live_talents() %>%
     dplyr::filter(.data$talent_code == input$talent) %>%
     dplyr::slice_head(n = 1)
   if (nrow(selected) == 1 &&
-      !is.na(selected$earliest_publish_date[[1]]) &&
-      !is.na(selected$latest_publish_date[[1]])) {
+      !is.na(selected$earliest_analytics_snapshot_date[[1]]) &&
+      !is.na(selected$latest_analytics_snapshot_date[[1]])) {
+    new_bounds <- list(
+      talent_code = input$talent,
+      min = selected$earliest_analytics_snapshot_date[[1]],
+      max = selected$latest_analytics_snapshot_date[[1]]
+    )
+    old_bounds <- isolate(dashboard_snapshot_bounds())
+    if (!is.null(old_bounds) &&
+        identical(old_bounds$talent_code, new_bounds$talent_code) &&
+        identical(old_bounds$min, new_bounds$min) &&
+        identical(old_bounds$max, new_bounds$max)) {
+      return()
+    }
+
+    current_dates <- isolate(input$snapshot_dates)
+    talent_changed <- is.null(old_bounds) ||
+      !identical(old_bounds$talent_code, new_bounds$talent_code)
+    if (talent_changed || is.null(current_dates) || length(current_dates) < 2) {
+      selected_start <- new_bounds$min
+      selected_end <- new_bounds$max
+    } else {
+      selected_start <- max(as.Date(current_dates[[1]]), new_bounds$min, na.rm = TRUE)
+      current_end <- as.Date(current_dates[[2]])
+      selected_end <- if (is.na(current_end) || identical(current_end, old_bounds$max)) {
+        new_bounds$max
+      } else {
+        min(current_end, new_bounds$max)
+      }
+    }
+
     updateDateRangeInput(
       session,
-      inputId = "publish_dates",
-      start = selected$earliest_publish_date[[1]],
-      end = selected$latest_publish_date[[1]],
-      min = selected$earliest_publish_date[[1]],
-      max = selected$latest_publish_date[[1]]
+      inputId = "snapshot_dates",
+      start = selected_start,
+      end = selected_end,
+      min = new_bounds$min,
+      max = new_bounds$max
     )
+    dashboard_snapshot_bounds(new_bounds)
   }
-}, ignoreInit = FALSE)
+})
 
 dashboard_data_reactive <- eventReactive(
   input$apply_filters,
@@ -497,8 +577,8 @@ dashboard_data_reactive <- eventReactive(
     req(dashboard_session_access$authorized)
     req(dashboard_talent_is_authorized(input$talent, dashboard_session_access))
 
-    start_date <- dashboard_optional_input_date(input$publish_dates, 1)
-    end_date <- dashboard_optional_input_date(input$publish_dates, 2)
+    start_date <- dashboard_optional_input_date(input$snapshot_dates, 1)
+    end_date <- dashboard_optional_input_date(input$snapshot_dates, 2)
 
     withProgress(message = "Building dashboard", value = 0, {
       incProgress(0.15, detail = "Loading unified database data")
@@ -520,14 +600,14 @@ dashboard_data_reactive <- eventReactive(
 
 dashboard_filter_summary_reactive <- reactive({
   data <- dashboard_data_reactive()
-  start_date <- dashboard_optional_input_date(input$publish_dates, 1)
-  end_date <- dashboard_optional_input_date(input$publish_dates, 2)
+  start_date <- dashboard_optional_input_date(input$snapshot_dates, 1)
+  end_date <- dashboard_optional_input_date(input$snapshot_dates, 2)
   tibble::tibble(
     setting = c(
       "Talent",
       "Data source",
-      "Published from",
-      "Published through"
+      "Analytics snapshots from",
+      "Analytics snapshots through"
     ),
     value = c(
       dashboard_talent_label(data),

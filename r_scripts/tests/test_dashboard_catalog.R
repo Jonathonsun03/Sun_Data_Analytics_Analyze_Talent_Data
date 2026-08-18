@@ -40,7 +40,7 @@ run_dashboard_catalog_test <- function() {
       con,
       paste(
         "CREATE TABLE IF NOT EXISTS clean.video_analytics_snapshots (",
-        "talent_code VARCHAR, snapshot_date DATE)"
+        "talent_code VARCHAR, video_id VARCHAR, snapshot_date DATE)"
       )
     )
     DBI::dbExecute(con, "DELETE FROM catalog.talents")
@@ -57,7 +57,7 @@ run_dashboard_catalog_test <- function() {
     )
     DBI::dbExecute(
       con,
-      "INSERT INTO clean.video_analytics_snapshots VALUES ('AVA1', ?)",
+      "INSERT INTO clean.video_analytics_snapshots VALUES ('AVA1', 'video-1', ?)",
       params = list(as.Date(snapshot_date))
     )
   }
@@ -71,9 +71,19 @@ run_dashboard_catalog_test <- function() {
     "The initial catalog should report the latest video publish date."
   )
   assert_equal(
+    initial$earliest_analytics_snapshot_date[[1]],
+    as.Date("2026-08-10"),
+    "The initial catalog should report the earliest analytics snapshot date."
+  )
+  assert_equal(
     initial$latest_analytics_snapshot_date[[1]],
     as.Date("2026-08-10"),
     "The initial catalog should report the latest analytics snapshot date."
+  )
+  assert_equal(
+    initial$latest_analytics_video_count[[1]],
+    1L,
+    "The initial catalog should report tracked videos in the latest snapshot."
   )
 
   write_catalog_fixture("2026-08-11", "2026-08-11")
@@ -88,6 +98,11 @@ run_dashboard_catalog_test <- function() {
     refreshed$latest_analytics_snapshot_date[[1]],
     as.Date("2026-08-11"),
     "A new session catalog read should observe the latest analytics snapshot."
+  )
+  assert_equal(
+    refreshed$latest_analytics_video_count[[1]],
+    1L,
+    "A refreshed catalog should report tracked videos in the latest snapshot."
   )
 }
 

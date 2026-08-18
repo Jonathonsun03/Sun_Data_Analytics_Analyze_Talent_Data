@@ -127,19 +127,32 @@ dashboard_unified_talent_catalog <- function(database_path = NULL) {
       "), analytics_bounds AS (",
       "  SELECT",
       "    talent_code,",
+      "    MIN(snapshot_date) AS earliest_analytics_snapshot_date,",
       "    MAX(snapshot_date) AS latest_analytics_snapshot_date",
       "  FROM clean.video_analytics_snapshots",
       "  GROUP BY talent_code",
+      "), latest_analytics_coverage AS (",
+      "  SELECT",
+      "    a.talent_code,",
+      "    COUNT(DISTINCT s.video_id) AS latest_analytics_video_count",
+      "  FROM analytics_bounds AS a",
+      "  JOIN clean.video_analytics_snapshots AS s",
+      "    ON s.talent_code = a.talent_code",
+      "   AND s.snapshot_date = a.latest_analytics_snapshot_date",
+      "  GROUP BY a.talent_code",
       ")",
       "SELECT",
       "  t.talent_code,",
       "  t.talent_name,",
       "  p.earliest_publish_date,",
       "  p.latest_publish_date,",
-      "  a.latest_analytics_snapshot_date",
+      "  a.earliest_analytics_snapshot_date,",
+      "  a.latest_analytics_snapshot_date,",
+      "  c.latest_analytics_video_count",
       "FROM catalog.talents AS t",
       "LEFT JOIN publish_bounds AS p USING (talent_code)",
       "LEFT JOIN analytics_bounds AS a USING (talent_code)",
+      "LEFT JOIN latest_analytics_coverage AS c USING (talent_code)",
       "WHERE t.active",
       "ORDER BY t.talent_name"
     )
@@ -152,7 +165,9 @@ dashboard_unified_talent_catalog <- function(database_path = NULL) {
     dplyr::mutate(
       earliest_publish_date = as.Date(.data$earliest_publish_date),
       latest_publish_date = as.Date(.data$latest_publish_date),
-      latest_analytics_snapshot_date = as.Date(.data$latest_analytics_snapshot_date)
+      earliest_analytics_snapshot_date = as.Date(.data$earliest_analytics_snapshot_date),
+      latest_analytics_snapshot_date = as.Date(.data$latest_analytics_snapshot_date),
+      latest_analytics_video_count = as.integer(.data$latest_analytics_video_count)
     )
 }
 

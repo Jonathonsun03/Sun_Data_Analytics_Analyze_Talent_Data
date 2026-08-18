@@ -2,8 +2,8 @@
 
 dashboard_build_overview <- function(analytics, monetary, demo, talent, data_source, data_root) {
   video_id_col <- bundle_a_optional_col(analytics, candidates = c("Video ID", "video_id"))
-  date_col <- bundle_a_optional_col(analytics, candidates = c("publish_date", "Published At", "date"))
-  publish_dates <- if (is.null(date_col)) as.Date(character()) else bundle_a_as_date(analytics[[date_col]])
+  date_col <- bundle_a_optional_col(analytics, candidates = c("snapshot_date", "date"))
+  snapshot_dates <- if (is.null(date_col)) as.Date(character()) else bundle_a_as_date(analytics[[date_col]])
   source_location_label <- if (identical(data_source, "unified_db")) {
     "Database path"
   } else {
@@ -19,7 +19,7 @@ dashboard_build_overview <- function(analytics, monetary, demo, talent, data_sou
       "Monetary rows",
       "Audience rows",
       "Unique videos",
-      "Publish date range"
+      "Analytics snapshot date"
     ),
     value = c(
       talent,
@@ -29,10 +29,10 @@ dashboard_build_overview <- function(analytics, monetary, demo, talent, data_sou
       scales::comma(nrow(monetary)),
       scales::comma(nrow(demo)),
       if (is.null(video_id_col)) "N/A" else scales::comma(dplyr::n_distinct(analytics[[video_id_col]])),
-      if (length(stats::na.omit(publish_dates)) == 0) {
+      if (length(stats::na.omit(snapshot_dates)) == 0) {
         "N/A"
       } else {
-        paste0(format(min(publish_dates, na.rm = TRUE), "%Y-%m-%d"), " to ", format(max(publish_dates, na.rm = TRUE), "%Y-%m-%d"))
+        format(max(snapshot_dates, na.rm = TRUE), "%Y-%m-%d")
       }
     )
   )
