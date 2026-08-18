@@ -32,6 +32,9 @@ sql_queries/
       video_monetary.sql
     metadata/
       list_tables.sql
+    normalization/
+      current_title_tags.sql
+      ensure_label_dictionary.sql
     qualitative/
       chat_metadata.sql
       codebook_view_metadata.sql

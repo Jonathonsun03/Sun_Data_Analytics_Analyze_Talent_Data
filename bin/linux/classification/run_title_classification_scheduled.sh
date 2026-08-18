@@ -22,6 +22,11 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 BATCH_RUNNER="bin/linux/classification/run_title_classification_batch.sh"
 STATE_TOOL="r_scripts/run/title_classification/update_scheduled_state.R"
 RETRY_TOOL="py_scripts/run/title_classification/build_retry_batch.py"
+TAG_NORMALIZER="py_scripts/run/publish_tag_normalization.py"
+PYTHON_CMD="${REPO_ROOT}/.venv/bin/python"
+if [[ ! -x "${PYTHON_CMD}" ]]; then
+  PYTHON_CMD="python3"
+fi
 
 TALENT_DATA_ROOT="${TALENT_DATALAKE_ROOT:?Set TALENT_DATA_ROOT or TALENT_DATALAKE_ROOT in .env}"
 TALENT_DATA_ROOT="${TALENT_DATA_ROOT%/}"
@@ -136,6 +141,16 @@ clear_state() {
   Rscript "${STATE_TOOL}" clear --db-path "${STATE_DB_PATH}" --archive-path "${archive_path}"
 }
 
+publish_tag_normalization() {
+  local run_dir="$1"
+  run_logged \
+    "${run_dir}" \
+    "${PYTHON_CMD}" \
+    "${TAG_NORMALIZER}" \
+    --db-path "${STATE_DB_PATH}" \
+    --execute
+}
+
 manifest_field() {
   local run_dir="$1"
   local field="$2"
@@ -203,7 +218,9 @@ if state_exists; then
         archive_state "${RETRY_RUN_DIR}/pending_state.json"
         log "Retry state saved. Original state retained in ${RUN_DIR}/completed_state.json"
       else
-        log "No retry needed. Clearing pending state."
+        log "No retry needed. Publishing the current tag-normalization dictionary."
+        publish_tag_normalization "${RUN_DIR}"
+        log "Tag normalization is current. Clearing pending state."
         clear_state "${RUN_DIR}/completed_state.json"
       fi
       ;;
@@ -243,6 +260,7 @@ log "Pending rows: ${PENDING_ROWS}; batch requests: ${REQUEST_COUNT}"
 
 if [[ "${REQUEST_COUNT}" == "0" ]]; then
   log "No videos need classification. No batch submitted."
+  publish_tag_normalization "${RUN_DIR}"
   log "Finished at $(date -Is)"
   exit 0
 fi

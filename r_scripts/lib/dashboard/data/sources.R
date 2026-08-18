@@ -319,12 +319,40 @@ dashboard_load_unified_database <- function(database_path, talent) {
     value <- details[[field]]
     if (is.null(value) || length(value) == 0) NA_character_ else as.character(value[[1]])
   }
+  tag_mapping <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      "SELECT raw_label, canonical_label
+       FROM normalization.active_label_mappings
+       WHERE dictionary_id = 'title_tags'"
+    ),
+    error = function(e) data.frame(
+      raw_label = character(),
+      canonical_label = character()
+    )
+  )
+  canonical_tag_lookup <- stats::setNames(
+    tag_mapping$canonical_label,
+    tag_mapping$raw_label
+  )
   titles$topic <- vapply(classification_details, classification_value, character(1), field = "topic")
   titles$tags <- vapply(
     classification_details,
     function(details) {
       tags <- details$tags
       if (is.null(tags) || length(tags) == 0) NA_character_ else paste(tags, collapse = ", ")
+    },
+    character(1)
+  )
+  titles$canonical_tags <- vapply(
+    classification_details,
+    function(details) {
+      tags <- details$tags
+      if (is.null(tags) || length(tags) == 0) return(NA_character_)
+      raw_tags <- as.character(tags)
+      canonical_tags <- unname(canonical_tag_lookup[raw_tags])
+      canonical_tags[is.na(canonical_tags)] <- raw_tags[is.na(canonical_tags)]
+      paste(unique(canonical_tags), collapse = ", ")
     },
     character(1)
   )

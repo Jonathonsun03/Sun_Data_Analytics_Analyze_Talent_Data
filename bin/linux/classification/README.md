@@ -84,9 +84,21 @@ bin/linux/classification/run_title_classification_weekly.sh \
 The lifecycle builds all currently pending titles, submits one OpenAI Batch
 job, stores its state in DuckDB, retrieves and applies completed output,
 refreshes both CSV exports, and submits a retry batch for failed or missing
-requests. It is safe to invoke repeatedly: when a run is active it advances
+requests. After the final apply—or immediately when no titles are pending—it
+publishes the current deterministic and guarded RapidFuzz tag dictionary for
+dashboard use. It is safe to invoke repeatedly: when a run is active it advances
 that run, and when no run is active it selects only new, changed, or missing
 titles.
+
+Preview or publish tag normalization directly:
+
+```bash
+.venv/bin/python py_scripts/run/publish_tag_normalization.py
+.venv/bin/python py_scripts/run/publish_tag_normalization.py --execute
+```
+
+Raw tags remain unchanged in `classification_json`; dashboard aggregation uses
+the active canonical mapping from the unified lakehouse.
 
 Advance an active run without ever starting another batch:
 

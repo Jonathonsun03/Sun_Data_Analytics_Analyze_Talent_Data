@@ -19,7 +19,8 @@ params:
 
 This notebook applies the selected starting workflow for turning free-form
 title tags into stable normalized labels. It does not update classification
-results or publish a normalization dictionary.
+results or publish a normalization dictionary; the production publisher uses
+the same shared normalization functions separately.
 
 The two stages are intentionally conservative:
 
@@ -53,7 +54,6 @@ import itertools
 import json
 import os
 import re
-import unicodedata
 from collections import defaultdict
 from pathlib import Path
 
@@ -75,6 +75,7 @@ os.chdir(REPO_ROOT)
 
 from py_scripts.lib.utils.env import load_repo_env
 from py_scripts.lib.utils.paths import unified_database_path
+from py_scripts.lib.tag_normalization import normalize_tag, numeric_signature
 
 
 load_repo_env(REPO_ROOT)
@@ -202,34 +203,6 @@ family, but they are not interchangeable aliases.
 
 ```{python}
 #| label: deterministic-normalization
-
-COMPACT_TOKEN_ALIASES = {
-    "masterduel": "master duel",
-    "subgoal": "sub goal",
-    "yugioh": "yu gi oh",
-}
-
-
-def normalize_tag(value: object) -> str:
-    text = unicodedata.normalize("NFKC", str(value)).casefold().strip()
-    text = text.replace("&", " and ")
-    text = re.sub(r"[_/\\-]+", " ", text)
-    text = re.sub(r"(?<=\d)(?=[a-z])|(?<=[a-z])(?=\d)", " ", text)
-    text = re.sub(r"[^\w\s]", " ", text, flags=re.UNICODE)
-    text = re.sub(r"\s+", " ", text).strip()
-
-    tokens = text.split()
-    expanded: list[str] = []
-    for token in tokens:
-        expanded.extend(COMPACT_TOKEN_ALIASES.get(token, token).split())
-    tokens = ["hour" if token == "hours" else token for token in expanded]
-    return " ".join(tokens)
-
-
-def numeric_signature(value: object) -> tuple[str, ...]:
-    normalized = normalize_tag(value)
-    return tuple(re.findall(r"\b\d+(?:\.\d+)?\s*k?\b", normalized))
-
 
 normalized_inventory = raw_inventory.copy()
 normalized_inventory["normalized_tag"] = normalized_inventory["raw_tag"].map(

@@ -23,6 +23,10 @@ alias consolidation with numeric and compound-tag guardrails. Semantic
 embeddings and topic clustering are deferred until tags have compatible
 descriptor types.
 
+Production uses the same functions through `lib/tag_normalization.py` and
+`run/publish_tag_normalization.py`. The publisher previews by default and uses
+`--execute` to activate a versioned mapping in the unified DuckDB.
+
 ## Structure
 
 - `run/`

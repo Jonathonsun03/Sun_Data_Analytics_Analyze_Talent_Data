@@ -17,6 +17,7 @@ Unified talent DuckDB
     |-- analytics      current and historical performance data
     |-- text           chat messages and subtitle units
     |-- classification title versions, results, status, scheduler state
+    |-- normalization versioned label dictionaries and mappings
     |-- qualitative    transcripts, codebooks, and coding results
     `-- ops            source-file and pipeline-run provenance
     |
@@ -115,6 +116,7 @@ copy of the same talent and video dimensions.
 | `analytics` | Video analytics and latest-performance relations |
 | `text` | Canonical chat and subtitle records |
 | `classification` | Versioned title classification inputs, results, status, and scheduled state |
+| `normalization` | Versioned raw, normalized, and canonical label dictionaries |
 | `qualitative` | Selected transcript snapshots, versioned codebooks, and coding results |
 | `ops` | Shared source-file and pipeline execution provenance |
 
@@ -153,6 +155,11 @@ and output schema together as one immutable database snapshot.
 | `classification.title_classification_scheduled_state` | Scheduled batch lifecycle state |
 | `ops.pipeline_runs` | Execution provenance shared with other pipelines |
 | `ops.source_files` | Source-asset provenance shared with other pipelines |
+
+Title tags retain their original values in `classification_json`. The weekly
+classification lifecycle publishes a versioned deterministic and guarded
+RapidFuzz mapping under `normalization`, and the dashboard uses canonical tags
+for aggregation while retaining raw tags for audit.
 
 Talent profiles are not exclusive to title classification. Their general
 identity and reusable information live in `catalog.talent_profiles`; title

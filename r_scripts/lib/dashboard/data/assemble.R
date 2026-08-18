@@ -108,6 +108,14 @@ build_creator_dashboard_data <- function(
     ),
     NULL
   )
+  tag_column <- if (
+    "canonical_tags" %in% names(analytics) &&
+      "canonical_tags" %in% names(monetary)
+  ) {
+    "canonical_tags"
+  } else {
+    "tags"
+  }
 
   out <- list(
     overview = dashboard_build_overview(analytics, monetary, demo, talent_folder, data_source, data_root),
@@ -139,6 +147,7 @@ build_creator_dashboard_data <- function(
         tag_performance_prep(
           analytics,
           monetary,
+          tags_col = tag_column,
           top_n = 15,
           min_videos = 2
         ),

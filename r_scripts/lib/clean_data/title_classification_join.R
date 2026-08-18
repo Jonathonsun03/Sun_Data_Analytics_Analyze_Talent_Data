@@ -216,6 +216,7 @@ load_title_classifications <- function(
     "published_at",
     "topic",
     "tags",
+    "canonical_tags",
     "primary_reference"
   )
 
