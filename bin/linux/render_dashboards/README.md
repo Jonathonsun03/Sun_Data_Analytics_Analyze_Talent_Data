@@ -14,7 +14,11 @@ is a separate entrypoint:
 
 The read-only title-classification operations dashboard is:
 
-- `r_scripts/notebooks/dashboards/data_admin/dashboard.qmd`
+- `r_scripts/notebooks/dashboards/data_admin/classification_dashboard/dashboard.qmd`
+
+The read-only raw talent data administration dashboard is:
+
+- `r_scripts/notebooks/dashboards/data_admin/raw_data_dashboard/dashboard.qmd`
 
 ## Container Environment Setup
 
@@ -54,12 +58,22 @@ process should restart after a failure or host reboot.
 Run the classification operations dashboard on a separate internal port:
 
 ```bash
-quarto serve r_scripts/notebooks/dashboards/data_admin/dashboard.qmd \
+quarto serve \
+  r_scripts/notebooks/dashboards/data_admin/classification_dashboard/dashboard.qmd \
   --host 0.0.0.0 \
   --port 3839
 ```
 
 Place this administrative endpoint behind an authenticated reverse proxy.
+
+Run the raw talent data explorer on another internal port:
+
+```bash
+quarto serve \
+  r_scripts/notebooks/dashboards/data_admin/raw_data_dashboard/dashboard.qmd \
+  --host 0.0.0.0 \
+  --port 3840
+```
 
 ## Basic Usage
 

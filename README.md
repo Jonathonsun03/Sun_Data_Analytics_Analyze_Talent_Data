@@ -298,7 +298,7 @@ advances that batch instead of duplicating it. Running it after completion
 selects only titles newly added or changed since the previous run.
 
 The checked-in user-systemd timers start the incremental pipeline every Monday
-at 03:00 UTC and check an active batch hourly:
+and Thursday at 03:00 UTC and check an active batch hourly:
 
 ```bash
 mkdir -p "$HOME/.config/systemd/user"
@@ -481,7 +481,8 @@ quarto serve r_scripts/notebooks/dashboards/talent_dashboard/dashboard.qmd \
 Serve the read-only title-classification operations dashboard:
 
 ```bash
-quarto serve r_scripts/notebooks/dashboards/data_admin/dashboard.qmd \
+quarto serve \
+  r_scripts/notebooks/dashboards/data_admin/classification_dashboard/dashboard.qmd \
   --host 0.0.0.0 \
   --port 3839
 ```
@@ -490,6 +491,18 @@ This mobile-friendly admin dashboard shows the latest batch, compact run
 history, included talents and tags, current coverage, and
 searchable/downloadable classification rows. Keep it behind an authenticated
 internal reverse proxy when hosted.
+
+Serve the read-only raw talent data administration dashboard separately:
+
+```bash
+quarto serve \
+  r_scripts/notebooks/dashboards/data_admin/raw_data_dashboard/dashboard.qmd \
+  --host 0.0.0.0 \
+  --port 3840
+```
+
+This explorer is limited to the talent catalog, analytics snapshots,
+subtitles, chat logs, and their operational lineage and quality signals.
 
 Report bundle wrappers live under `bin/linux/render_reports/`. For example:
 

@@ -1,8 +1,8 @@
 [Unit]
-Description=Start incremental title classification every Monday
+Description=Start incremental title classification every Monday and Thursday
 
 [Timer]
-OnCalendar=Mon *-*-* 03:00:00 UTC
+OnCalendar=Mon,Thu *-*-* 03:00:00 UTC
 Persistent=true
 Unit=sun-data-title-classification-weekly.service
 

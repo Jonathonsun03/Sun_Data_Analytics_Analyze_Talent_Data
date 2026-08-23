@@ -1,0 +1,690 @@
+---
+title: "Raw Talent Data Administration"
+format:
+  dashboard:
+    orientation: rows
+server: shiny
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+<style>
+.admin-path {
+  overflow-wrap: anywhere;
+  font-family: var(--bs-font-monospace);
+  font-size: 0.78rem;
+}
+
+.admin-note {
+  color: var(--bs-secondary-color);
+  font-size: 0.86rem;
+}
+
+.dataTables_wrapper {
+  font-size: 0.80rem;
+}
+
+@media (max-width: 768px) {
+  .dashboard-page .card,
+  .dashboard-page .card:not(.bslib-value-box) {
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  .bslib-value-box .value-box-value {
+    font-size: 1.4rem;
+  }
+
+  .dataTables_wrapper {
+    font-size: 0.72rem;
+  }
+}
+</style>
+
+```{r}
+#| label: setup
+#| context: setup
+#| include: false
+
+knitr::opts_knit$set(
+  root.dir = normalizePath(getwd(), winslash = "/", mustWork = TRUE)
+)
+
+dashboard_machine_library <- file.path(
+  path.expand("~/R"),
+  paste0(R.version$platform, "-library"),
+  paste(R.version$major, sub("\\..*$", "", R.version$minor), sep = ".")
+)
+if (dir.exists(dashboard_machine_library)) {
+  .libPaths(unique(c(.libPaths(), dashboard_machine_library)))
+}
+
+suppressPackageStartupMessages({
+  library(here)
+  library(shiny)
+  library(dplyr)
+  library(tidyr)
+  library(DT)
+  library(plotly)
+  library(bslib)
+  library(scales)
+})
+
+source(here::here("r_scripts", "lib", "utils", "repo_env.R"))
+source(here::here("r_scripts", "lib", "utils", "datalake_root.r"))
+source(here::here("r_scripts", "lib", "duckdb", "db_connect.R"))
+source(
+  here::here(
+    "r_scripts",
+    "lib",
+    "dashboard",
+    "data",
+    "raw_data_admin.R"
+  )
+)
+
+load_repo_env()
+raw_admin_database_path <- talent_lakehouse_db_path()
+
+raw_admin_value <- function(value, fallback = "—") {
+  if (length(value) == 0L || is.na(value[[1]]) || !nzchar(as.character(value[[1]]))) {
+    return(fallback)
+  }
+  as.character(value[[1]])
+}
+
+raw_admin_time <- function(value) {
+  if (length(value) == 0L || is.na(value[[1]])) return("Not available")
+  parsed <- as.POSIXct(value[[1]], tz = "UTC")
+  if (is.na(parsed)) return("Not available")
+  format(parsed, "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")
+}
+
+raw_admin_times <- function(values) {
+  parsed <- as.POSIXct(values, tz = "UTC")
+  formatted <- format(parsed, "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")
+  formatted[is.na(parsed)] <- "Not available"
+  formatted
+}
+
+raw_admin_value_box <- function(title, value) {
+  bslib::value_box(title = title, value = raw_admin_value(value))
+}
+
+raw_admin_input <- function(value, fallback) {
+  if (is.null(value) || length(value) == 0L) fallback else value
+}
+
+raw_admin_table <- function(data, page_length = 10L, filter = "top") {
+  if (nrow(data) == 0L) {
+    data <- data.frame(message = "No rows are available for this view.")
+    filter <- "none"
+  }
+  DT::datatable(
+    data,
+    rownames = FALSE,
+    filter = filter,
+    escape = TRUE,
+    options = list(
+      pageLength = page_length,
+      scrollX = TRUE,
+      autoWidth = TRUE,
+      dom = "tip"
+    )
+  )
+}
+
+raw_admin_empty_plot <- function(message) {
+  plotly::plot_ly() |>
+    plotly::layout(
+      xaxis = list(visible = FALSE),
+      yaxis = list(visible = FALSE),
+      annotations = list(list(
+        text = message,
+        x = 0.5,
+        y = 0.5,
+        xref = "paper",
+        yref = "paper",
+        showarrow = FALSE
+      ))
+    )
+}
+```
+
+# {.sidebar}
+
+```{r}
+actionButton("refresh_data", "Refresh database", class = "btn-primary")
+
+checkboxInput(
+  "auto_refresh",
+  "Refresh every five minutes",
+  value = TRUE
+)
+
+uiOutput("database_freshness")
+hr()
+uiOutput("relation_selector")
+uiOutput("talent_filter")
+textInput("video_filter", "Exact video ID", value = "")
+numericInput(
+  "row_limit",
+  "Maximum preview rows",
+  value = 500,
+  min = 25,
+  max = 5000,
+  step = 25
+)
+actionButton("load_preview", "Load preview")
+hr()
+helpText(
+  "Filters apply when the selected relation contains talent_code or video_id. ",
+  "All database connections are read-only."
+)
+```
+
+# Overview
+
+The overview inventories the in-scope talent catalog, analytics, subtitle,
+chat, and operational relations. Counts and timestamps come directly from the
+unified lakehouse.
+
+## Row {height=18%}
+
+```{r}
+#| title: "Scoped Relations"
+uiOutput("relation_count")
+```
+
+```{r}
+#| title: "Active Talents"
+uiOutput("active_talent_count")
+```
+
+```{r}
+#| title: "Catalog Videos"
+uiOutput("video_count")
+```
+
+```{r}
+#| title: "Checks Needing Review"
+uiOutput("issue_count")
+```
+
+## Row {height=40%}
+
+```{r}
+#| title: "Rows by Relation"
+plotlyOutput("relation_rows_plot", height = "100%")
+```
+
+```{r}
+#| title: "Videos with Analytics, Subtitles, or Chat"
+plotlyOutput("coverage_plot", height = "100%")
+```
+
+## Row {height=42%}
+
+```{r}
+#| title: "Relation Inventory and Recency"
+DTOutput("relation_inventory")
+```
+
+# Data Health
+
+These checks focus on broken catalog relationships, missing lineage, blank text,
+invalid count metrics, unresolved collection failures, and failed relevant
+pipeline runs. A nonzero result is a signal to investigate, not an automatic
+repair instruction.
+
+## Row {height=18%}
+
+```{r}
+#| title: "Critical Checks"
+uiOutput("critical_count")
+```
+
+```{r}
+#| title: "Warnings"
+uiOutput("warning_count")
+```
+
+```{r}
+#| title: "Passing Checks"
+uiOutput("passing_count")
+```
+
+## Row {height=82%}
+
+```{r}
+#| title: "Health Check Results"
+DTOutput("health_checks")
+```
+
+# Explore Relations
+
+Choose a relation and optional exact talent or video filter in the sidebar.
+The preview is deliberately row-limited; the download contains the same rows
+shown in the current preview.
+
+## Row {height=18%}
+
+```{r}
+#| title: "Selected Relation"
+uiOutput("selected_relation_name")
+```
+
+```{r}
+#| title: "Relation Rows"
+uiOutput("selected_relation_rows")
+```
+
+```{r}
+#| title: "Relation Columns"
+uiOutput("selected_relation_columns")
+```
+
+```{r}
+#| title: "Preview Export"
+div(
+  class = "p-3",
+  downloadButton("download_preview", "Download preview CSV"),
+  tags$p(
+    class = "admin-note mt-3",
+    "The export respects the relation, filters, and row limit."
+  )
+)
+```
+
+## Row {height=82%}
+
+```{r}
+#| title: "Relation Contents"
+DTOutput("relation_preview")
+```
+
+# Descriptive Statistics
+
+Column profiles report nulls and approximate distinct counts. Numeric summaries
+report minimum, mean, median, and maximum. Profiling can scan a large relation,
+so it only reruns when requested.
+
+## Row {height=14%}
+
+```{r}
+#| title: "Profile Controls"
+div(
+  class = "p-3",
+  actionButton("profile_relation", "Profile selected relation", class = "btn-primary"),
+  tags$span(class = "admin-note ms-3", textOutput("profiled_relation", inline = TRUE))
+)
+```
+
+## Row {height=43%}
+
+```{r}
+#| title: "Column Completeness and Cardinality"
+DTOutput("column_profile")
+```
+
+## Row {height=43%}
+
+```{r}
+#| title: "Numeric Summary"
+DTOutput("numeric_profile")
+```
+
+# Talent Coverage
+
+This page compares catalog membership with analytics, subtitle, and chat
+coverage for each talent. Zeroes can be valid when a source does not apply, but
+they make gaps easy to spot.
+
+## Row {height=42%}
+
+```{r}
+#| title: "Distinct Videos by Available Data Type"
+plotlyOutput("talent_coverage_plot", height = "100%")
+```
+
+## Row {height=58%}
+
+```{r}
+#| title: "Talent Coverage Detail"
+DTOutput("talent_coverage")
+```
+
+# Recent Activity
+
+Relevant pipeline runs exclude classification, qualitative coding, and summary
+generation. Ingestion events are retained when their destination is in
+`catalog`, `clean`, `analytics`, or `text`.
+
+## Row {height=48%}
+
+```{r}
+#| title: "Recent Relevant Pipeline Runs"
+DTOutput("recent_runs")
+```
+
+## Row {height=52%}
+
+```{r}
+#| title: "Recent Ingestion Events"
+DTOutput("recent_events")
+```
+
+```{r}
+#| label: server
+#| context: server
+#| include: false
+
+raw_admin_snapshot <- reactive({
+  input$refresh_data
+  if (isTRUE(input$auto_refresh)) {
+    invalidateLater(5 * 60 * 1000, session)
+  }
+  withProgress(message = "Refreshing raw-data administration", value = 0, {
+    incProgress(0.15, detail = "Inventorying relations")
+    snapshot <- raw_data_admin_snapshot(raw_admin_database_path)
+    incProgress(0.85, detail = "Preparing health and coverage views")
+    snapshot
+  })
+})
+
+output$database_freshness <- renderUI({
+  snapshot <- raw_admin_snapshot()
+  htmltools::tagList(
+    tags$small(
+      class = "text-muted",
+      paste("Dashboard refreshed", raw_admin_time(snapshot$refreshed_at))
+    ),
+    tags$br(),
+    tags$small(
+      class = "text-muted",
+      paste("DuckDB modified", raw_admin_time(snapshot$database_modified_at))
+    ),
+    tags$br(),
+    tags$small(
+      class = "text-muted admin-path",
+      snapshot$database_path
+    )
+  )
+})
+
+output$relation_selector <- renderUI({
+  relations <- raw_admin_snapshot()$relations
+  choices <- stats::setNames(
+    relations$relation,
+    paste(relations$domain, relations$relation, sep = " • ")
+  )
+  selected <- isolate(input$selected_relation)
+  if (is.null(selected) || !selected %in% relations$relation) {
+    preferred <- "analytics.video_latest_performance"
+    selected <- if (preferred %in% relations$relation) preferred else relations$relation[[1]]
+  }
+  selectInput("selected_relation", "Explore relation", choices, selected = selected)
+})
+
+output$talent_filter <- renderUI({
+  coverage <- raw_admin_snapshot()$talent_coverage
+  choices <- c(
+    "All talents" = "",
+    stats::setNames(
+      coverage$talent_code,
+      paste(coverage$talent_code, coverage$talent_name, sep = " • ")
+    )
+  )
+  selectizeInput("selected_talent", "Exact talent", choices, selected = "")
+})
+
+selected_relation_metadata <- reactive({
+  relations <- raw_admin_snapshot()$relations
+  relation <- input$selected_relation
+  if (is.null(relation) || !relation %in% relations$relation) {
+    relation <- relations$relation[[1]]
+  }
+  relations[relations$relation == relation, , drop = FALSE]
+})
+
+preview_data <- eventReactive(
+  input$load_preview,
+  {
+    metadata <- selected_relation_metadata()
+    withProgress(message = "Loading relation preview", value = 0.4, {
+      data <- raw_data_admin_preview(
+        database_path = raw_admin_database_path,
+        relation = metadata$relation[[1]],
+        talent_code = raw_admin_input(input$selected_talent, ""),
+        video_id = raw_admin_input(input$video_filter, ""),
+        limit = raw_admin_input(input$row_limit, 500L)
+      )
+      incProgress(0.6)
+      data
+    })
+  },
+  ignoreNULL = FALSE
+)
+
+profile_data <- eventReactive(
+  input$profile_relation,
+  {
+    metadata <- selected_relation_metadata()
+    withProgress(message = "Profiling selected relation", value = 0.2, {
+      profile <- raw_data_admin_profile(
+        raw_admin_database_path,
+        metadata$relation[[1]]
+      )
+      incProgress(0.8)
+      list(relation = metadata$relation[[1]], profile = profile)
+    })
+  },
+  ignoreNULL = FALSE
+)
+
+output$relation_count <- renderUI({
+  raw_admin_value_box("In-scope relations", nrow(raw_admin_snapshot()$relations))
+})
+
+output$active_talent_count <- renderUI({
+  coverage <- raw_admin_snapshot()$talent_coverage
+  raw_admin_value_box("Active talents", scales::comma(sum(coverage$active, na.rm = TRUE)))
+})
+
+output$video_count <- renderUI({
+  relation <- raw_admin_snapshot()$relations |>
+    filter(.data$relation == "catalog.videos")
+  raw_admin_value_box("Catalog videos", scales::comma(relation$row_count))
+})
+
+output$issue_count <- renderUI({
+  checks <- raw_admin_snapshot()$health_checks
+  count <- sum(checks$status %in% c("Critical", "Review", "Unavailable"))
+  raw_admin_value_box("Checks needing review", count)
+})
+
+output$critical_count <- renderUI({
+  checks <- raw_admin_snapshot()$health_checks
+  raw_admin_value_box("Critical checks", sum(checks$status == "Critical"))
+})
+
+output$warning_count <- renderUI({
+  checks <- raw_admin_snapshot()$health_checks
+  raw_admin_value_box(
+    "Warnings or unavailable",
+    sum(checks$status %in% c("Review", "Unavailable"))
+  )
+})
+
+output$passing_count <- renderUI({
+  checks <- raw_admin_snapshot()$health_checks
+  raw_admin_value_box("Passing checks", sum(checks$status == "Pass"))
+})
+
+output$relation_rows_plot <- renderPlotly({
+  relations <- raw_admin_snapshot()$relations |>
+    filter(!is.na(.data$row_count), .data$row_count > 0) |>
+    arrange(.data$row_count)
+  if (nrow(relations) == 0L) return(raw_admin_empty_plot("No relation counts available."))
+  plotly::plot_ly(
+    relations,
+    x = ~row_count,
+    y = ~stats::reorder(relation, row_count),
+    color = ~domain,
+    type = "bar",
+    orientation = "h",
+    hovertemplate = "%{y}<br>%{x:,} rows<extra></extra>"
+  ) |>
+    plotly::layout(
+      xaxis = list(title = "Rows", type = "log"),
+      yaxis = list(title = ""),
+      legend = list(orientation = "h"),
+      margin = list(l = 205, r = 20, t = 10, b = 50)
+    )
+})
+
+output$coverage_plot <- renderPlotly({
+  coverage <- raw_admin_snapshot()$talent_coverage
+  columns <- intersect(
+    c("videos_with_analytics", "videos_with_subtitles", "videos_with_chat"),
+    names(coverage)
+  )
+  if (nrow(coverage) == 0L || length(columns) == 0L) {
+    return(raw_admin_empty_plot("No talent coverage data available."))
+  }
+  long <- coverage |>
+    select(.data$talent_code, all_of(columns)) |>
+    pivot_longer(-.data$talent_code, names_to = "data_type", values_to = "videos")
+  plotly::plot_ly(
+    long,
+    x = ~talent_code,
+    y = ~videos,
+    color = ~data_type,
+    type = "bar",
+    hovertemplate = "%{x}<br>%{fullData.name}: %{y:,}<extra></extra>"
+  ) |>
+    plotly::layout(
+      barmode = "group",
+      xaxis = list(title = "Talent"),
+      yaxis = list(title = "Distinct videos"),
+      legend = list(orientation = "h"),
+      margin = list(l = 65, r = 20, t = 10, b = 75)
+    )
+})
+
+output$relation_inventory <- renderDT({
+  data <- raw_admin_snapshot()$relations |>
+    transmute(
+      .data$domain,
+      .data$relation,
+      type = .data$table_type,
+      rows = .data$row_count,
+      columns = .data$column_count,
+      recency_field = .data$recency_column,
+      earliest = .data$earliest_value,
+      latest = .data$latest_value,
+      .data$description
+    )
+  raw_admin_table(data, page_length = 20L)
+})
+
+output$health_checks <- renderDT({
+  checks <- raw_admin_snapshot()$health_checks
+  raw_admin_table(checks, page_length = 20L)
+})
+
+output$selected_relation_name <- renderUI({
+  raw_admin_value_box("Selected relation", selected_relation_metadata()$relation)
+})
+
+output$selected_relation_rows <- renderUI({
+  raw_admin_value_box(
+    "Relation rows",
+    scales::comma(selected_relation_metadata()$row_count)
+  )
+})
+
+output$selected_relation_columns <- renderUI({
+  raw_admin_value_box("Relation columns", selected_relation_metadata()$column_count)
+})
+
+output$relation_preview <- renderDT({
+  raw_admin_table(preview_data(), page_length = 25L)
+})
+
+output$download_preview <- downloadHandler(
+  filename = function() {
+    paste0(gsub("[.]", "_", selected_relation_metadata()$relation), "_preview.csv")
+  },
+  content = function(file) {
+    utils::write.csv(preview_data(), file, row.names = FALSE, na = "")
+  }
+)
+
+output$profiled_relation <- renderText({
+  paste("Current profile:", profile_data()$relation)
+})
+
+output$column_profile <- renderDT({
+  raw_admin_table(profile_data()$profile$columns, page_length = 25L)
+})
+
+output$numeric_profile <- renderDT({
+  raw_admin_table(profile_data()$profile$numeric, page_length = 25L)
+})
+
+output$talent_coverage_plot <- renderPlotly({
+  coverage <- raw_admin_snapshot()$talent_coverage
+  columns <- intersect(
+    c("videos_with_analytics", "videos_with_subtitles", "videos_with_chat"),
+    names(coverage)
+  )
+  if (nrow(coverage) == 0L || length(columns) == 0L) {
+    return(raw_admin_empty_plot("No talent coverage data available."))
+  }
+  long <- coverage |>
+    select(.data$talent_code, all_of(columns)) |>
+    pivot_longer(-.data$talent_code, names_to = "data_type", values_to = "videos")
+  plotly::plot_ly(
+    long,
+    x = ~talent_code,
+    y = ~videos,
+    color = ~data_type,
+    type = "bar",
+    hovertemplate = "%{x}<br>%{fullData.name}: %{y:,}<extra></extra>"
+  ) |>
+    plotly::layout(
+      barmode = "group",
+      xaxis = list(title = "Talent"),
+      yaxis = list(title = "Distinct videos"),
+      legend = list(orientation = "h")
+    )
+})
+
+output$talent_coverage <- renderDT({
+  raw_admin_table(raw_admin_snapshot()$talent_coverage, page_length = 25L)
+})
+
+output$recent_runs <- renderDT({
+  runs <- raw_admin_snapshot()$recent_runs
+  if (nrow(runs) > 0L) {
+    runs <- runs |>
+      mutate(
+        started_at = raw_admin_times(.data$started_at),
+        completed_at = raw_admin_times(.data$completed_at)
+      )
+  }
+  raw_admin_table(runs, page_length = 15L)
+})
+
+output$recent_events <- renderDT({
+  events <- raw_admin_snapshot()$recent_events
+  if (nrow(events) > 0L) {
+    events <- events |>
+      mutate(event_at = raw_admin_times(.data$event_at))
+  }
+  raw_admin_table(events, page_length = 15L)
+})
+```

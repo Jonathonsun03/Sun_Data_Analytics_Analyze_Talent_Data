@@ -8,7 +8,7 @@ library(lubridate)
 source(here("r_scripts", "lib", "utils", "staging_root.R"))
 source(here("r_scripts", "lib", "utils", "datalake_root.r"))
 source(here("r_scripts", "lib", "utils", "talent_select.R"))
-source(here("r_scripts", "lib", "clean_data", "clean_subtitles", "Clean_subtitles.R"))
+source(here("r_scripts", "lib", "clean_data", "clean_subtitles", "clean_subtitles.R"))
 source(here("r_scripts", "lib", "clean_data", "clean_subtitles", "subtitle_units.R"))
 
 ensure_utf8_locale <- function() {

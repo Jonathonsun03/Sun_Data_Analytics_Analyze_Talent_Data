@@ -349,7 +349,7 @@ qualitative_align_subtitle_rows <- function(coded, source_con) {
   if (!exists("CleanDuplicateTimestamps", mode = "function") ||
       !exists("period_to_seconds", mode = "function")) {
     stop(
-      "Source Clean_subtitles.R before aligning legacy subtitle rows.",
+      "Source clean_subtitles.R before aligning legacy subtitle rows.",
       call. = FALSE
     )
   }

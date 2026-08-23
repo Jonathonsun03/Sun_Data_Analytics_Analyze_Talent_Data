@@ -19,7 +19,7 @@ source(here::here(
   "lib",
   "clean_data",
   "clean_subtitles",
-  "Clean_subtitles.R"
+  "clean_subtitles.R"
 ))
 source(here::here("r_scripts", "lib", "duckdb", "db_connect.R"))
 source(here::here("r_scripts", "lib", "duckdb", "qualitative_schema.R"))

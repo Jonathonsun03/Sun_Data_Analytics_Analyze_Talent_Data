@@ -7,8 +7,12 @@ notebook sources.
 
 - `dashboards/`
   - interactive and published dashboard notebooks
-  - `dashboards/data_admin/dashboard.qmd` is the read-only Shiny operations
-    view for title-classification runs, artifacts, tags, and coverage
+  - `dashboards/data_admin/classification_dashboard/dashboard.qmd` is the
+    read-only Shiny operations view for title-classification runs, artifacts,
+    tags, and coverage
+  - `dashboards/data_admin/raw_data_dashboard/dashboard.qmd` is the read-only
+    DuckDB explorer for talent analytics, subtitles, chat, ingestion history,
+    and data-quality checks
 - `models/`
   - model development, evaluation, diagnostics, and model explainers
   - group related notebooks by analytical family, such as `day_of_week/` or

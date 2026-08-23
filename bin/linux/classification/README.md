@@ -111,7 +111,7 @@ Scheduled state is stored in
 
 Checked-in user-systemd units provide the production cadence:
 
-- `sun-data-title-classification-weekly.timer` starts Mondays at 03:00 UTC;
+- `sun-data-title-classification-weekly.timer` starts Mondays and Thursdays at 03:00 UTC;
 - `sun-data-title-classification-check.timer` checks an active batch hourly,
   with a randomized delay of up to five minutes.
 
