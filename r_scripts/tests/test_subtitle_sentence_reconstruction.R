@@ -35,6 +35,58 @@ words <- function(prefix, count) {
   paste(paste0(prefix, seq_len(count)), collapse = " ")
 }
 
+overlap_parts <- deduplicate_caption_overlaps(c(
+  "you're going to",
+  "going to really enjoy this",
+  "this is still natural",
+  "what the what is that"
+))
+assert_equal(
+  overlap_parts,
+  c(
+    "you're going to",
+    "really enjoy this",
+    "is still natural",
+    "what the what is that"
+  ),
+  "Exact suffix/prefix caption overlap was not removed conservatively"
+)
+assert_equal(
+  deduplicate_caption_overlaps(c("keep these words", "entirely different words"))[[2]],
+  "entirely different words",
+  "Non-overlapping captions should remain intact"
+)
+assert_equal(
+  deduplicate_caption_overlaps("what the what is that"),
+  "what the what is that",
+  "Repeated speech inside one caption should not be edited"
+)
+
+normalized_input <- normalize_punctuation_model_input(
+  ">> yeah.. you're, don't! I've: kept 3.14"
+)
+assert_equal(
+  normalized_input,
+  "yeah you're don't I've kept 3.14",
+  "Model input normalization changed words or retained restorable punctuation"
+)
+assert_true(
+  !grepl(">>", normalized_input, fixed = TRUE),
+  "Model input normalization retained a speaker marker"
+)
+assert_equal(
+  normalize_fullstop_punctuation("Yeah... Really?? Wait,, what?!"),
+  "Yeah. Really? Wait, what?!",
+  "Duplicate punctuation normalization changed mixed punctuation or missed runs"
+)
+
+capitalized <- split_punctuated_sentences("i don't know. \"really?\" yes!")
+assert_equal(
+  capitalized,
+  c("I don't know.", "\"Really?\"", "Yes!"),
+  "Sentence beginnings were not capitalized"
+)
+
 captions <- tibble::tibble(
   VideoID = c(rep("video-a", 4), rep("video-b", 2)),
   start_sec = c(0, 10, 20, 30, 0, 10),
@@ -60,6 +112,19 @@ assert_equal(
 assert_true(
   !any(grepl("a1", blocks$original_text[blocks$video_id == "video-b"], fixed = TRUE)),
   "A punctuation block crossed a video boundary"
+)
+
+marker_block <- build_punctuation_blocks(tibble::tibble(
+  VideoID = "video-marker",
+  start_sec = 0,
+  stop_sec = 2,
+  Text = ">> you're ready, aren't you?",
+  subtitle_language = "en"
+))
+assert_equal(
+  marker_block$model_input_text,
+  "you're ready aren't you",
+  "Block model input retained speaker markers or existing punctuation"
 )
 
 sentences <- split_punctuated_sentences(

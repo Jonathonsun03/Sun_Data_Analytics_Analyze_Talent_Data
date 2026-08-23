@@ -237,6 +237,98 @@ subtitle_language_is_english <- function(language, allow_unknown = TRUE) {
   english | (unknown & isTRUE(allow_unknown))
 }
 
+subtitle_word_locations <- function(text) {
+  text <- as.character(text)
+  locations <- stringr::str_locate_all(
+    text,
+    stringr::regex("[[:alnum:]]+(?:['’][[:alnum:]]+)*")
+  )[[1]]
+  if (nrow(locations) == 0L) {
+    return(tibble::tibble(start = integer(), end = integer(), word = character()))
+  }
+
+  starts <- locations[, "start"]
+  ends <- locations[, "end"]
+  tibble::tibble(
+    start = starts,
+    end = ends,
+    word = stringr::str_sub(text, starts, ends)
+  )
+}
+
+largest_exact_word_overlap <- function(existing_words, new_words) {
+  max_overlap <- min(length(existing_words), length(new_words))
+  if (max_overlap == 0L) return(0L)
+
+  existing_compare <- tolower(existing_words)
+  new_compare <- tolower(new_words)
+  for (overlap in seq.int(max_overlap, 1L)) {
+    if (identical(
+      utils::tail(existing_compare, overlap),
+      utils::head(new_compare, overlap)
+    )) {
+      return(as.integer(overlap))
+    }
+  }
+  0L
+}
+
+deduplicate_caption_overlaps <- function(caption_text) {
+  caption_text <- stringr::str_squish(as.character(caption_text))
+  accepted_words <- character()
+  appended_text <- rep("", length(caption_text))
+
+  for (i in seq_along(caption_text)) {
+    text <- caption_text[[i]]
+    if (is.na(text) || !nzchar(text)) next
+
+    word_locations <- subtitle_word_locations(text)
+    new_words <- word_locations$word
+    overlap <- largest_exact_word_overlap(accepted_words, new_words)
+
+    if (overlap == 0L) {
+      appended_text[[i]] <- text
+    } else if (overlap < length(new_words)) {
+      next_word_start <- word_locations$start[[overlap + 1L]]
+      appended_text[[i]] <- stringr::str_squish(stringr::str_sub(text, next_word_start))
+    }
+
+    if (overlap < length(new_words)) {
+      accepted_words <- c(accepted_words, new_words[seq.int(overlap + 1L, length(new_words))])
+    }
+  }
+
+  appended_text
+}
+
+normalize_punctuation_model_input <- function(text) {
+  text <- as.character(text)
+  text <- stringr::str_replace_all(text, stringr::fixed(">>"), " ")
+  text <- stringr::str_replace_all(text, "[?!:;]+", " ")
+  text <- stringr::str_replace_all(text, "(?<![0-9])\\.+(?![0-9])", " ")
+  text <- stringr::str_replace_all(text, "(?<![0-9]),+(?![0-9])", " ")
+  stringr::str_squish(text)
+}
+
+normalize_fullstop_punctuation <- function(text) {
+  text <- stringr::str_replace_all(as.character(text), "\\.{2,}", ".")
+  text <- stringr::str_replace_all(text, "\\?{2,}", "?")
+  stringr::str_replace_all(text, ",{2,}", ",")
+}
+
+capitalize_first_alphabetic <- function(text) {
+  text <- as.character(text)
+  location <- stringr::str_locate(text, stringr::regex("[[:alpha:]]"))
+  if (length(text) != 1L || is.na(text) || is.na(location[[1]])) return(text)
+
+  position <- location[[1]]
+  paste0(
+    stringr::str_sub(text, 1L, position - 1L),
+    toupper(stringr::str_sub(text, position, position)),
+    stringr::str_sub(text, position + 1L)
+  )
+}
+
 build_punctuation_blocks <- function(
     df,
     target_words = 175L,
@@ -280,7 +372,14 @@ build_punctuation_blocks <- function(
       .data$text != ""
     ) |>
     dplyr::arrange(.data$video_id, .data$start_sec, .data$end_sec, .data$source_order) |>
-    dplyr::mutate(word_count = subtitle_word_count(.data$text))
+    dplyr::group_by(.data$video_id) |>
+    dplyr::mutate(deduplicated_text = deduplicate_caption_overlaps(.data$text)) |>
+    dplyr::ungroup() |>
+    dplyr::mutate(
+      model_input_text = normalize_punctuation_model_input(.data$deduplicated_text),
+      word_count = subtitle_word_count(.data$model_input_text)
+    ) |>
+    dplyr::filter(.data$word_count > 0L)
 
   empty_blocks <- tibble::tibble(
     video_id = character(),
@@ -289,6 +388,7 @@ build_punctuation_blocks <- function(
     start_sec = numeric(),
     end_sec = numeric(),
     original_text = character(),
+    model_input_text = character(),
     word_count = integer(),
     subtitle_language = character()
   )
@@ -304,14 +404,18 @@ build_punctuation_blocks <- function(
     languages <- unique(block_rows$subtitle_language)
     languages <- languages[!is.na(languages) & nzchar(trimws(languages))]
 
+    original_text <- stringr::str_squish(paste(block_rows$deduplicated_text, collapse = " "))
+    model_input_text <- normalize_punctuation_model_input(original_text)
+
     tibble::tibble(
       video_id = block_rows$video_id[[1]],
       talent_name = if (is.null(talent_name)) NA_character_ else as.character(talent_name[[1]]),
       block_number = as.integer(block_number),
       start_sec = start_sec,
       end_sec = end_sec,
-      original_text = stringr::str_squish(paste(block_rows$text, collapse = " ")),
-      word_count = sum(block_rows$word_count),
+      original_text = original_text,
+      model_input_text = model_input_text,
+      word_count = subtitle_word_count(model_input_text),
       subtitle_language = if (length(languages) == 0L) NA_character_ else languages[[1]]
     )
   }
@@ -359,6 +463,7 @@ split_punctuated_sentences <- function(text) {
   )
   sentences <- unlist(strsplit(marked, "\n", fixed = TRUE), use.names = FALSE)
   sentences <- stringr::str_squish(sentences)
+  sentences <- vapply(sentences, capitalize_first_alphabetic, character(1), USE.NAMES = FALSE)
   sentences[!is.na(sentences) & nzchar(sentences)]
 }
 
@@ -428,8 +533,13 @@ reconstruct_sentence_units <- function(
       next
     }
 
+    model_input_text <- if ("model_input_text" %in% names(block)) {
+      block$model_input_text[[1]]
+    } else {
+      normalize_punctuation_model_input(block$original_text[[1]])
+    }
     response <- punctuate_fn(
-      text = block$original_text[[1]],
+      text = model_input_text,
       url = url,
       timeout_sec = timeout_sec,
       include_model = TRUE
@@ -437,6 +547,7 @@ reconstruct_sentence_units <- function(
     if (is.character(response)) {
       response <- list(text = response[[1]], model = NA_character_)
     }
+    response$text <- normalize_fullstop_punctuation(response$text)
     results[[i]] <- sentence_units_from_block(
       block,
       punctuated_text = response$text,
