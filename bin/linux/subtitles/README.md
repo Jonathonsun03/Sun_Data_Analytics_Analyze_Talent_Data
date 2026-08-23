@@ -8,6 +8,7 @@ Wrapper script for:
 
 This runs subtitle cleaning for selected talents and writes outputs to each talent's `Subtitles/Processed` + `Subtitles/RData`, plus summary files in:
 
+- `<Talent>/Subtitles/Sentence_Units/<video>_subtitles.parquet`
 - `<Processed>/Talent_Data/subtitle_analysis/subtitle_summary.csv`
 - `<Processed>/Talent_Data/subtitle_analysis/subtitle_quotes_sample.csv`
 - `<Processed>/Talent_Data/subtitle_analysis/subtitle_ena_units.csv`
@@ -53,6 +54,16 @@ bin/linux/subtitles/run_subtitle_clean.sh --talent-query "Avaritia"
 - `--ena-as-final`
   - Sets `SUBTITLE_ENA_AS_FINAL=true` and writes ENA rows back to each video's
   - `<Talent>/Subtitles/Processed/<video>_subtitles.csv` as the final per-video format
+- `SUBTITLE_PUNCTUATION_ENABLED` (env var)
+  - Enables the sentence reconstruction stage (default: `true`)
+- `SUBTITLE_PUNCTUATION_URL` (env var)
+  - Punctuation endpoint (default: `http://192.168.1.165:8000/v1/punctuate`)
+- `SUBTITLE_PUNCTUATION_TIMEOUT_SEC` (env var)
+  - Per-block HTTP timeout in seconds (default: `120`)
+- `SUBTITLE_BLOCK_TARGET_WORDS` / `SUBTITLE_BLOCK_MAX_WORDS` (env vars)
+  - Approximate punctuation block size (defaults: `175` / `200`)
+- `SUBTITLE_PUNCTUATION_ALLOW_UNKNOWN_LANGUAGE` (env var)
+  - Treat legacy cleaned files without language metadata as English (default: `true`)
 - `-h`, `--help`
   - Show help
 
@@ -92,3 +103,17 @@ Run every Sunday at 02:15:
 - The pipeline uses `skip_existing = TRUE`, so existing processed subtitle files are skipped and only new files are cleaned.
 - If a processed file is deleted, that source file will be reprocessed on the next run.
 - Use `--reclean` when you want to overwrite/rebuild all existing processed subtitle outputs.
+- Sentence reconstruction reads the cleaned caption rows and writes separate Parquet files; it does not replace the cleaned CSVs.
+- FullStop is only called for English tracks. Legacy cleaned CSVs do not contain language metadata, so unknown language is treated as English unless `SUBTITLE_PUNCTUATION_ALLOW_UNKNOWN_LANGUAGE=false`.
+
+### Run sentence reconstruction for one cleaned file
+
+The sentence stage can run independently without downloading or cleaning subtitles again:
+
+```bash
+Rscript --vanilla r_scripts/run/Subtitle_clean/run_sentence_reconstruction.R \
+  "/path/to/Subtitles/Processed/video_subtitles.csv" \
+  "/path/to/Subtitles/Sentence_Units/video_subtitles.parquet" \
+  en \
+  "Talent Name"
+```

@@ -6,19 +6,24 @@ dashboard_lifecycle_data_available <- function(dashboard_data) {
     nrow(dashboard_data$lifecycle$video_summary) > 0
 }
 
+dashboard_lifecycle_ggplotly <- function(...) {
+  widget <- bundle_e_ggplotly(...)
+  widget$height <- "100%"
+  widget
+}
+
 dashboard_lifecycle_latest_views_age_plot <- function(dashboard_data, talent) {
   if (!dashboard_lifecycle_data_available(dashboard_data)) {
     return(dashboard_empty_state("Lifecycle data is unavailable for the active filters."))
   }
 
-  bundle_e_ggplotly(
+  dashboard_lifecycle_ggplotly(
     dashboard_lifecycle_card_ggplot(
       plot_bundle_e_latest_views_vs_age(dashboard_data$lifecycle$video_summary, talent)
     ),
     tooltip = "text",
     include_title = FALSE,
     compact = TRUE,
-    height = 520,
     tickangle = -35
   )
 }
@@ -28,14 +33,13 @@ dashboard_lifecycle_recent_vs_lifetime_plot <- function(dashboard_data, talent) 
     return(dashboard_empty_state("Lifecycle data is unavailable for the active filters."))
   }
 
-  bundle_e_ggplotly(
+  dashboard_lifecycle_ggplotly(
     dashboard_lifecycle_card_ggplot(
       plot_bundle_e_recent_vs_lifetime_rate(dashboard_data$lifecycle$video_summary, talent)
     ),
     tooltip = "text",
     include_title = FALSE,
     compact = TRUE,
-    height = 520,
     tickangle = -35
   )
 }
@@ -45,7 +49,7 @@ dashboard_lifecycle_topic_longevity_plot <- function(dashboard_data, talent) {
     return(dashboard_empty_state("Lifecycle data is unavailable for the active filters."))
   }
 
-  bundle_e_ggplotly(
+  dashboard_lifecycle_ggplotly(
     dashboard_lifecycle_card_ggplot(
       plot_bundle_e_topic_video_type_longevity(
         dashboard_data$lifecycle$video_summary,
@@ -57,7 +61,6 @@ dashboard_lifecycle_topic_longevity_plot <- function(dashboard_data, talent) {
     tooltip = "text",
     include_title = FALSE,
     compact = TRUE,
-    height = 520,
     tickangle = -35
   )
 }
@@ -110,7 +113,7 @@ dashboard_lifecycle_type_age_curve_plot <- function(dashboard_data, talent, cont
     tools::toTitleCase(content_type)
   )
 
-  bundle_e_ggplotly(
+  dashboard_lifecycle_ggplotly(
     dashboard_lifecycle_card_ggplot(
       plot_bundle_e_type_age_curve_comparison(
         curve_df,
@@ -121,7 +124,6 @@ dashboard_lifecycle_type_age_curve_plot <- function(dashboard_data, talent, cont
     tooltip = "text",
     include_title = FALSE,
     compact = TRUE,
-    height = 520,
     tickangle = -35
   )
 }

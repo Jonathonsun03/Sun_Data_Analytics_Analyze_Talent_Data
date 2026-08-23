@@ -9,6 +9,7 @@ source(here("r_scripts", "lib", "utils", "staging_root.R"))
 source(here("r_scripts", "lib", "utils", "datalake_root.r"))
 source(here("r_scripts", "lib", "utils", "talent_select.R"))
 source(here("r_scripts", "lib", "clean_data", "clean_subtitles", "clean_subtitles.R"))
+source(here("r_scripts", "lib", "clean_data", "clean_subtitles", "punctuation_client.R"))
 source(here("r_scripts", "lib", "clean_data", "clean_subtitles", "subtitle_units.R"))
 
 ensure_utf8_locale <- function() {
@@ -49,12 +50,29 @@ write_ena_txt <- tolower(Sys.getenv("SUBTITLE_WRITE_ENA_TXT", unset = "false")) 
 reclean <- tolower(Sys.getenv("SUBTITLE_RECLEAN", unset = "false")) %in% c("1", "true", "yes")
 n_cores <- as.integer(Sys.getenv("SUBTITLE_N_CORES", unset = "1"))
 ena_as_final <- tolower(Sys.getenv("SUBTITLE_ENA_AS_FINAL", unset = "false")) %in% c("1", "true", "yes")
+punctuation_enabled <- tolower(Sys.getenv("SUBTITLE_PUNCTUATION_ENABLED", unset = "true")) %in% c("1", "true", "yes")
+punctuation_url <- Sys.getenv(
+  "SUBTITLE_PUNCTUATION_URL",
+  unset = "http://192.168.1.165:8000/v1/punctuate"
+)
+punctuation_timeout_sec <- as.numeric(Sys.getenv("SUBTITLE_PUNCTUATION_TIMEOUT_SEC", unset = "120"))
+punctuation_target_words <- as.integer(Sys.getenv("SUBTITLE_BLOCK_TARGET_WORDS", unset = "175"))
+punctuation_max_words <- as.integer(Sys.getenv("SUBTITLE_BLOCK_MAX_WORDS", unset = "200"))
+punctuation_allow_unknown_language <- tolower(Sys.getenv(
+  "SUBTITLE_PUNCTUATION_ALLOW_UNKNOWN_LANGUAGE",
+  unset = "true"
+)) %in% c("1", "true", "yes")
 
 if (is.na(n_quotes) || n_quotes < 1) n_quotes <- 3
 if (is.na(context_rows) || context_rows < 0) context_rows <- 10
 if (is.na(top_k_sheets) || top_k_sheets < 1) top_k_sheets <- 1
 if (is.na(pause_gap_sec) || pause_gap_sec < 0) pause_gap_sec <- 2.0
 if (is.na(n_cores) || n_cores < 1) n_cores <- 1
+if (is.na(punctuation_timeout_sec) || punctuation_timeout_sec <= 0) punctuation_timeout_sec <- 120
+if (is.na(punctuation_target_words) || punctuation_target_words < 1) punctuation_target_words <- 175L
+if (is.na(punctuation_max_words) || punctuation_max_words < punctuation_target_words) {
+  punctuation_max_words <- max(200L, punctuation_target_words)
+}
 
 max_cores <- suppressWarnings(parallel::detectCores(logical = FALSE))
 if (!is.na(max_cores) && max_cores > 0) {
@@ -89,6 +107,7 @@ message("Using datalake root: ", datalake_root)
 message("Selected talents: ", paste(selected_talent_names, collapse = ", "))
 message("Using subtitle worker cores: ", n_cores)
 message("ENA as final per-video output: ", ena_as_final)
+message("Punctuation sentence reconstruction enabled: ", punctuation_enabled)
 
 TalentSubtitlePath <- function(talent_name) {
   candidates <- c(
@@ -151,6 +170,60 @@ sheet_tasks <- subtitle_dfs_by_talent |>
     })
   }) |>
   unlist(recursive = FALSE)
+
+sentence_results <- list()
+if (punctuation_enabled && length(sheet_tasks) > 0L) {
+  message("Starting punctuation sentence reconstruction stage... (files=", length(sheet_tasks), ")")
+  sentence_results <- run_apply(
+    seq_along(sheet_tasks),
+    function(i) {
+      task <- sheet_tasks[[i]]
+      label <- paste0(task$talent, " / ", task$sheet)
+      log_worker("sentences", i, length(sheet_tasks), label, "start")
+
+      blocks <- build_punctuation_blocks(
+        task$df,
+        target_words = punctuation_target_words,
+        max_words = punctuation_max_words,
+        talent_name = task$talent
+      )
+      sentences <- reconstruct_sentence_units(
+        blocks,
+        url = punctuation_url,
+        timeout_sec = punctuation_timeout_sec,
+        allow_unknown_language = punctuation_allow_unknown_language
+      )
+
+      output_path <- NA_character_
+      if (nrow(sentences) > 0L) {
+        output_dir <- file.path(subtitle_root_by_talent[[task$talent]], "Sentence_Units")
+        output_name <- paste0(tools::file_path_sans_ext(task$sheet), ".parquet")
+        output_path <- file.path(output_dir, output_name)
+        write_sentence_units_parquet(sentences, output_path)
+      }
+
+      log_worker(
+        "sentences",
+        i,
+        length(sheet_tasks),
+        label,
+        "done",
+        sprintf("blocks=%d sentences=%d", nrow(blocks), nrow(sentences))
+      )
+      list(
+        talent = task$talent,
+        sheet = task$sheet,
+        blocks = nrow(blocks),
+        sentences = sentences,
+        output_path = output_path
+      )
+    },
+    n_cores = 1L
+  )
+  message("Completed punctuation sentence reconstruction stage.")
+} else if (!punctuation_enabled) {
+  message("Skipping punctuation sentence reconstruction stage (disabled).")
+}
 
 subtitle_summary <- imap_dfr(subtitle_dfs_by_talent, function(dfs, talent_name) {
   sheet_stats <- imap_dfr(dfs, function(df, sheet_name) {

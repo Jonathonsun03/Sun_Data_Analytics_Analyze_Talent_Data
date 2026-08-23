@@ -21,6 +21,7 @@ This directory contains the repository's maintained R code.
   - production reads and writes the unified DuckDB returned by `talent_lakehouse_db_path()`
 - Subtitle cleaning and text replay
   - entrypoints live under `r_scripts/run/Subtitle_clean/` and `r_scripts/run/text_replay/`
+  - `run_sentence_reconstruction.R` can punctuate an already-cleaned subtitle CSV and write separate sentence-level Parquet output
 - R-based stream summarization
   - the maintained runner is `r_scripts/run/Text_Replay_Analysis/Text_replay_analysis_openAI`
   - shared summarization helpers live under `r_scripts/lib/stream_summaries/`

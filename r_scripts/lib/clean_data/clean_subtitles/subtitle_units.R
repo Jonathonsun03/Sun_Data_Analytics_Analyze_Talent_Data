@@ -209,3 +209,319 @@ write_ena_units_txt <- function(units_df, txt_path) {
   writeLines(lines, txt_path, useBytes = TRUE)
   invisible(txt_path)
 }
+
+subtitle_word_count <- function(text) {
+  text <- stringr::str_squish(as.character(text))
+  vapply(text, function(value) {
+    if (is.na(value) || !nzchar(value)) return(0L)
+    length(stringr::str_split(value, "\\s+")[[1]])
+  }, integer(1))
+}
+
+subtitle_pick_column <- function(df, candidates, required = TRUE) {
+  matched <- match(tolower(candidates), tolower(names(df)), nomatch = 0L)
+  matched <- matched[matched > 0L]
+  if (length(matched) > 0L) return(names(df)[[matched[[1]]]])
+  if (!isTRUE(required)) return(NA_character_)
+  stop(
+    "Missing required subtitle column; expected one of: ",
+    paste(candidates, collapse = ", "),
+    call. = FALSE
+  )
+}
+
+subtitle_language_is_english <- function(language, allow_unknown = TRUE) {
+  normalized <- tolower(trimws(as.character(language)))
+  unknown <- is.na(normalized) | normalized == ""
+  english <- normalized == "english" | grepl("^en([_-].*)?$", normalized)
+  english | (unknown & isTRUE(allow_unknown))
+}
+
+build_punctuation_blocks <- function(
+    df,
+    target_words = 175L,
+    max_words = 200L,
+    subtitle_language = NULL,
+    talent_name = NULL) {
+  if (target_words < 1L || max_words < target_words) {
+    stop("Block word limits must satisfy 1 <= target_words <= max_words.", call. = FALSE)
+  }
+
+  video_col <- subtitle_pick_column(df, c("VideoID", "video_id"))
+  start_col <- subtitle_pick_column(df, c("start_sec", "subtitle_start"))
+  stop_col <- subtitle_pick_column(df, c("stop_sec", "end_sec", "subtitle_end"))
+  text_col <- subtitle_pick_column(df, c("Text", "text", "subtitle_text"))
+  language_col <- subtitle_pick_column(
+    df,
+    c("subtitle_language", "language", "lang"),
+    required = FALSE
+  )
+
+  language_values <- if (!is.null(subtitle_language)) {
+    rep(as.character(subtitle_language[[1]]), nrow(df))
+  } else if (!is.na(language_col)) {
+    as.character(df[[language_col]])
+  } else {
+    rep(NA_character_, nrow(df))
+  }
+
+  work <- tibble::tibble(
+    source_order = seq_len(nrow(df)),
+    video_id = as.character(df[[video_col]]),
+    start_sec = suppressWarnings(as.numeric(df[[start_col]])),
+    end_sec = suppressWarnings(as.numeric(df[[stop_col]])),
+    text = stringr::str_squish(as.character(df[[text_col]])),
+    subtitle_language = language_values
+  ) |>
+    dplyr::filter(
+      !is.na(.data$video_id),
+      .data$video_id != "",
+      !is.na(.data$text),
+      .data$text != ""
+    ) |>
+    dplyr::arrange(.data$video_id, .data$start_sec, .data$end_sec, .data$source_order) |>
+    dplyr::mutate(word_count = subtitle_word_count(.data$text))
+
+  empty_blocks <- tibble::tibble(
+    video_id = character(),
+    talent_name = character(),
+    block_number = integer(),
+    start_sec = numeric(),
+    end_sec = numeric(),
+    original_text = character(),
+    word_count = integer(),
+    subtitle_language = character()
+  )
+  if (nrow(work) == 0L) return(empty_blocks)
+
+  make_block <- function(indices, block_number) {
+    block_rows <- work[indices, , drop = FALSE]
+    start_sec <- suppressWarnings(min(block_rows$start_sec, na.rm = TRUE))
+    end_sec <- suppressWarnings(max(block_rows$end_sec, na.rm = TRUE))
+    if (!is.finite(start_sec)) start_sec <- NA_real_
+    if (!is.finite(end_sec)) end_sec <- NA_real_
+
+    languages <- unique(block_rows$subtitle_language)
+    languages <- languages[!is.na(languages) & nzchar(trimws(languages))]
+
+    tibble::tibble(
+      video_id = block_rows$video_id[[1]],
+      talent_name = if (is.null(talent_name)) NA_character_ else as.character(talent_name[[1]]),
+      block_number = as.integer(block_number),
+      start_sec = start_sec,
+      end_sec = end_sec,
+      original_text = stringr::str_squish(paste(block_rows$text, collapse = " ")),
+      word_count = sum(block_rows$word_count),
+      subtitle_language = if (length(languages) == 0L) NA_character_ else languages[[1]]
+    )
+  }
+
+  blocks <- list()
+  for (video_id in unique(work$video_id)) {
+    video_indices <- which(work$video_id == video_id)
+    current_indices <- integer()
+    current_words <- 0L
+    block_number <- 0L
+
+    emit_current <- function() {
+      if (length(current_indices) == 0L) return(invisible(NULL))
+      block_number <<- block_number + 1L
+      blocks[[length(blocks) + 1L]] <<- make_block(current_indices, block_number)
+      current_indices <<- integer()
+      current_words <<- 0L
+      invisible(NULL)
+    }
+
+    for (row_index in video_indices) {
+      next_words <- work$word_count[[row_index]]
+      if (length(current_indices) > 0L && current_words + next_words > max_words) {
+        emit_current()
+      }
+
+      current_indices <- c(current_indices, row_index)
+      current_words <- current_words + next_words
+      if (current_words >= target_words) emit_current()
+    }
+    emit_current()
+  }
+
+  dplyr::bind_rows(blocks)
+}
+
+split_punctuated_sentences <- function(text) {
+  text <- stringr::str_squish(as.character(text))
+  if (length(text) != 1L || is.na(text) || !nzchar(text)) return(character())
+
+  marked <- stringr::str_replace_all(
+    text,
+    "([.!?]+[\\\"'’”]*)[[:space:]]+",
+    "\\1\n"
+  )
+  sentences <- unlist(strsplit(marked, "\n", fixed = TRUE), use.names = FALSE)
+  sentences <- stringr::str_squish(sentences)
+  sentences[!is.na(sentences) & nzchar(sentences)]
+}
+
+empty_sentence_units <- function() {
+  tibble::tibble(
+    video_id = character(),
+    talent_name = character(),
+    block_number = integer(),
+    sentence_number = integer(),
+    start_sec = numeric(),
+    end_sec = numeric(),
+    text = character(),
+    punctuation_model = character(),
+    timestamps_approximate = logical(),
+    timestamp_method = character()
+  )
+}
+
+sentence_units_from_block <- function(block, punctuated_text, punctuation_model = NA_character_) {
+  if (nrow(block) != 1L) stop("`block` must contain exactly one row.", call. = FALSE)
+
+  sentences <- split_punctuated_sentences(punctuated_text)
+  if (length(sentences) == 0L) {
+    return(empty_sentence_units())
+  }
+
+  word_counts <- subtitle_word_count(sentences)
+  total_words <- sum(word_counts)
+  if (total_words <= 0L) return(empty_sentence_units())
+
+  block_start <- as.numeric(block$start_sec[[1]])
+  block_end <- as.numeric(block$end_sec[[1]])
+  duration <- max(0, block_end - block_start)
+  cumulative_fraction <- cumsum(word_counts) / total_words
+  end_sec <- block_start + duration * cumulative_fraction
+  start_sec <- c(block_start, utils::head(end_sec, -1L))
+
+  tibble::tibble(
+    video_id = as.character(block$video_id[[1]]),
+    talent_name = as.character(block$talent_name[[1]]),
+    block_number = as.integer(block$block_number[[1]]),
+    sentence_number = seq_along(sentences),
+    start_sec = start_sec,
+    end_sec = end_sec,
+    text = sentences,
+    punctuation_model = as.character(punctuation_model[[1]]),
+    timestamps_approximate = TRUE,
+    timestamp_method = "block_word_proportion"
+  )
+}
+
+reconstruct_sentence_units <- function(
+    blocks,
+    url = "http://192.168.1.165:8000/v1/punctuate",
+    timeout_sec = 120,
+    allow_unknown_language = TRUE,
+    punctuate_fn = punctuate_text) {
+  if (nrow(blocks) == 0L) return(empty_sentence_units())
+
+  results <- vector("list", nrow(blocks))
+  for (i in seq_len(nrow(blocks))) {
+    block <- blocks[i, , drop = FALSE]
+    if (!subtitle_language_is_english(
+      block$subtitle_language[[1]],
+      allow_unknown = allow_unknown_language
+    )) {
+      next
+    }
+
+    response <- punctuate_fn(
+      text = block$original_text[[1]],
+      url = url,
+      timeout_sec = timeout_sec,
+      include_model = TRUE
+    )
+    if (is.character(response)) {
+      response <- list(text = response[[1]], model = NA_character_)
+    }
+    results[[i]] <- sentence_units_from_block(
+      block,
+      punctuated_text = response$text,
+      punctuation_model = response$model
+    )
+  }
+
+  sentences <- dplyr::bind_rows(results)
+  if (nrow(sentences) == 0L) return(empty_sentence_units())
+
+  sentences |>
+    dplyr::arrange(.data$video_id, .data$block_number, .data$sentence_number) |>
+    dplyr::group_by(.data$video_id) |>
+    dplyr::mutate(sentence_number = dplyr::row_number()) |>
+    dplyr::ungroup()
+}
+
+write_sentence_units_parquet <- function(sentence_units, output_path) {
+  required <- c(
+    "video_id", "block_number", "sentence_number", "start_sec", "end_sec",
+    "text", "punctuation_model"
+  )
+  missing <- setdiff(required, names(sentence_units))
+  if (length(missing) > 0L) {
+    stop("Sentence units are missing columns: ", paste(missing, collapse = ", "), call. = FALSE)
+  }
+
+  output_dir <- dirname(output_path)
+  dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+  temporary_path <- tempfile("sentence-units-", tmpdir = output_dir, fileext = ".parquet")
+  on.exit(unlink(temporary_path), add = TRUE)
+
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  duckdb::duckdb_register(con, "sentence_units_output", as.data.frame(sentence_units))
+  on.exit(duckdb::duckdb_unregister(con, "sentence_units_output"), add = TRUE)
+
+  quoted_path <- as.character(DBI::dbQuoteString(con, temporary_path))
+  DBI::dbExecute(
+    con,
+    paste0(
+      "COPY sentence_units_output TO ", quoted_path,
+      " (FORMAT PARQUET, COMPRESSION ZSTD)"
+    )
+  )
+  if (!file.copy(temporary_path, output_path, overwrite = TRUE)) {
+    stop("Could not write sentence Parquet: ", output_path, call. = FALSE)
+  }
+
+  invisible(output_path)
+}
+
+reconstruct_sentence_file <- function(
+    input_path,
+    output_path,
+    subtitle_language = NULL,
+    talent_name = NULL,
+    target_words = 175L,
+    max_words = 200L,
+    url = "http://192.168.1.165:8000/v1/punctuate",
+    timeout_sec = 120,
+    allow_unknown_language = TRUE,
+    punctuate_fn = punctuate_text) {
+  cleaned <- readr::read_csv(input_path, show_col_types = FALSE)
+  blocks <- build_punctuation_blocks(
+    cleaned,
+    target_words = target_words,
+    max_words = max_words,
+    subtitle_language = subtitle_language,
+    talent_name = talent_name
+  )
+  sentences <- reconstruct_sentence_units(
+    blocks,
+    url = url,
+    timeout_sec = timeout_sec,
+    allow_unknown_language = allow_unknown_language,
+    punctuate_fn = punctuate_fn
+  )
+  write_sentence_units_parquet(sentences, output_path)
+
+  list(
+    input_path = input_path,
+    output_path = output_path,
+    cleaned_rows = nrow(cleaned),
+    blocks = blocks,
+    sentences = sentences
+  )
+}
