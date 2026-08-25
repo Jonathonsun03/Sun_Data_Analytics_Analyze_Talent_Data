@@ -83,7 +83,7 @@ build_creator_dashboard_data <- function(
   analytics <- prepared$analytics
   monetary <- prepared$monetary
   demo <- prepared$demo
-  geo <- dashboard_latest_snapshot_rows(geo_history)
+  geo <- geo_history
 
   content_types <- dashboard_canonical_content_types(content_types)
   stream_video_level <- analytics

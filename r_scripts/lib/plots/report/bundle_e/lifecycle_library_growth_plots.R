@@ -219,12 +219,11 @@ plot_bundle_e_recent_vs_lifetime_rate <- function(video_summary, talent) {
       x = .data$lifetime_avg_views_per_day,
       y = .data$recent_30d_avg_views_per_day,
       size = .data$latest_views,
-      color = .data$profile,
       shape = .data$content_type_label,
       text = .data$tooltip_text
     )
   ) +
-    ggplot2::geom_point(alpha = 0.7) +
+    ggplot2::geom_point(color = "#59636E", alpha = 0.7) +
     ggplot2::facet_wrap(~profile, scales = "free") +
     theme_nyt() +
     ggplot2::labs(
@@ -233,10 +232,8 @@ plot_bundle_e_recent_vs_lifetime_rate <- function(video_summary, talent) {
       x = "Lifetime average views per day",
       y = "Recent 30-day average views per day",
       size = "Latest views",
-      color = "Profile",
       shape = "Content type"
     ) +
-    ggplot2::guides(color = "none") +
     ggplot2::scale_shape_manual(
       values = c(
         "Short" = 17,

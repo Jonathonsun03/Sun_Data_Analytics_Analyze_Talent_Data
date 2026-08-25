@@ -6,8 +6,27 @@ dashboard_lifecycle_data_available <- function(dashboard_data) {
     nrow(dashboard_data$lifecycle$video_summary) > 0
 }
 
-dashboard_lifecycle_ggplotly <- function(...) {
-  bundle_e_ggplotly(...)
+dashboard_lifecycle_ggplotly <- function(..., legend_title = "") {
+  widget <- bundle_e_ggplotly(...)
+  plotly::layout(
+    widget,
+    margin = list(b = 96),
+    legend = list(
+      orientation = "h",
+      x = 0.5,
+      xanchor = "center",
+      y = -0.24,
+      yanchor = "top",
+      title = list(
+        text = legend_title,
+        side = "top center",
+        font = list(size = 9)
+      ),
+      font = list(size = 9),
+      itemsizing = "constant",
+      traceorder = "normal"
+    )
+  )
 }
 
 dashboard_lifecycle_latest_views_age_plot <- function(dashboard_data, talent) {
@@ -38,7 +57,8 @@ dashboard_lifecycle_recent_vs_lifetime_plot <- function(dashboard_data, talent) 
     tooltip = "text",
     include_title = FALSE,
     compact = TRUE,
-    tickangle = -35
+    tickangle = -35,
+    legend_title = "Shape = content type; point size = latest views"
   )
 }
 

@@ -66,12 +66,13 @@ dashboard_lifecycle_card_ggplot <- function(plot_obj) {
   }
 
   dashboard_card_ggplot(plot_obj) +
+    ggplot2::guides(size = "none") +
     ggplot2::theme(
       axis.title = ggplot2::element_text(size = 9),
       axis.text = ggplot2::element_text(size = 8),
       strip.text = ggplot2::element_text(size = 8),
       legend.position = "bottom",
-      legend.title = ggplot2::element_text(size = 8),
+      legend.title = ggplot2::element_blank(),
       legend.text = ggplot2::element_text(size = 8),
       legend.key.size = grid::unit(0.45, "lines")
     )

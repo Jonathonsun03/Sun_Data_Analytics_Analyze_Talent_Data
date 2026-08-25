@@ -63,6 +63,13 @@ audience_geography_plotly <- function(
   }
 
   snapshot_count <- dplyr::n_distinct(plot_df$snapshot_date_label)
+  cumulative_views_colorscale <- list(
+    list(0, "#F2F2F2"),
+    list(0.25, "#C6DBEF"),
+    list(0.5, "#6BAED6"),
+    list(0.75, "#2171B5"),
+    list(1, "#08306B")
+  )
   plot_args <- list(
     data = plot_df,
     type = "choropleth",
@@ -71,7 +78,7 @@ audience_geography_plotly <- function(
     text = ~hover_text,
     hoverinfo = "text",
     locationmode = "ISO-3",
-    colorscale = "Blues",
+    colorscale = cumulative_views_colorscale,
     marker = list(line = list(color = "white", width = 0.4)),
     colorbar = list(title = metric_label)
   )
