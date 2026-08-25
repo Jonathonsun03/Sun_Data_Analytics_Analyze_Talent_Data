@@ -117,6 +117,14 @@ dashboard_render_ui <- function(value_fn, empty_message = "No data are available
   })
 }
 
+dashboard_render_plotly <- function(value_fn, empty_message = "No data are available for the active filters.") {
+  plotly::renderPlotly({
+    value <- value_fn()
+    shiny::validate(shiny::need(inherits(value, "plotly"), empty_message))
+    value
+  })
+}
+
 dashboard_talent_label <- function(data) {
   data$overview$value[data$overview$metric == "Talent"][[1]]
 }
@@ -209,12 +217,12 @@ This page summarizes lifecycle performance for the active talent and analytics s
 
 ```{r}
 #| title: "Latest Views vs Video Age"
-uiOutput("creator_latest_views_age")
+plotlyOutput("creator_latest_views_age", height = "100%")
 ```
 
 ```{r}
 #| title: "Recent Momentum vs Lifetime Rate"
-uiOutput("creator_recent_vs_lifetime")
+plotlyOutput("creator_recent_vs_lifetime", height = "100%")
 ```
 
 ```{r}
@@ -226,17 +234,17 @@ uiOutput("creator_lifecycle_guide")
 
 ```{r}
 #| title: "Shorts"
-uiOutput("creator_short_lifecycle")
+plotlyOutput("creator_short_lifecycle", height = "100%")
 ```
 
 ```{r}
 #| title: "Videos"
-uiOutput("creator_video_lifecycle")
+plotlyOutput("creator_video_lifecycle", height = "100%")
 ```
 
 ```{r}
 #| title: "Live Streams"
-uiOutput("creator_live_lifecycle")
+plotlyOutput("creator_live_lifecycle", height = "100%")
 ```
 
 # Content Strategy
@@ -263,7 +271,7 @@ uiOutput("strategy_tag_performance")
 
 ```{r}
 #| title: "Topic Longevity by Video Type"
-uiOutput("strategy_topic_longevity")
+plotlyOutput("strategy_topic_longevity", height = "100%")
 ```
 
 ## Row {height=50%}
@@ -642,27 +650,27 @@ output$overview_top_videos <- dashboard_render_ui(function() {
   dashboard_top_videos_table(dashboard_data_reactive())
 })
 
-output$creator_latest_views_age <- dashboard_render_ui(function() {
+output$creator_latest_views_age <- dashboard_render_plotly(function() {
   data <- dashboard_data_reactive()
   dashboard_lifecycle_latest_views_age_plot(data, dashboard_talent_label(data))
-})
-output$creator_recent_vs_lifetime <- dashboard_render_ui(function() {
+}, empty_message = "Lifecycle data is unavailable for the active filters.")
+output$creator_recent_vs_lifetime <- dashboard_render_plotly(function() {
   data <- dashboard_data_reactive()
   dashboard_lifecycle_recent_vs_lifetime_plot(data, dashboard_talent_label(data))
-})
+}, empty_message = "Lifecycle data is unavailable for the active filters.")
 output$creator_lifecycle_guide <- dashboard_render_ui(dashboard_lifecycle_classification_guide)
-output$creator_short_lifecycle <- dashboard_render_ui(function() {
+output$creator_short_lifecycle <- dashboard_render_plotly(function() {
   data <- dashboard_data_reactive()
   dashboard_lifecycle_type_age_curve_plot(data, dashboard_talent_label(data), "short")
-})
-output$creator_video_lifecycle <- dashboard_render_ui(function() {
+}, empty_message = "Lifecycle curve data is unavailable for the active filters.")
+output$creator_video_lifecycle <- dashboard_render_plotly(function() {
   data <- dashboard_data_reactive()
   dashboard_lifecycle_type_age_curve_plot(data, dashboard_talent_label(data), "video")
-})
-output$creator_live_lifecycle <- dashboard_render_ui(function() {
+}, empty_message = "Lifecycle curve data is unavailable for the active filters.")
+output$creator_live_lifecycle <- dashboard_render_plotly(function() {
   data <- dashboard_data_reactive()
   dashboard_lifecycle_type_age_curve_plot(data, dashboard_talent_label(data), "live")
-})
+}, empty_message = "Lifecycle curve data is unavailable for the active filters.")
 
 output$strategy_topic_performance <- dashboard_render_ui(function() {
   data <- dashboard_data_reactive()
@@ -672,10 +680,10 @@ output$strategy_tag_performance <- dashboard_render_ui(function() {
   data <- dashboard_data_reactive()
   dashboard_tag_performance_plot(data, dashboard_talent_label(data))
 })
-output$strategy_topic_longevity <- dashboard_render_ui(function() {
+output$strategy_topic_longevity <- dashboard_render_plotly(function() {
   data <- dashboard_data_reactive()
   dashboard_lifecycle_topic_longevity_plot(data, dashboard_talent_label(data))
-})
+}, empty_message = "Lifecycle data is unavailable for the active filters.")
 output$strategy_topic_table <- dashboard_render_ui(function() {
   dashboard_topic_performance_table(dashboard_data_reactive(), page_length = 10)
 })

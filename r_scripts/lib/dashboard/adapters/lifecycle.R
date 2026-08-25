@@ -7,9 +7,7 @@ dashboard_lifecycle_data_available <- function(dashboard_data) {
 }
 
 dashboard_lifecycle_ggplotly <- function(...) {
-  widget <- bundle_e_ggplotly(...)
-  widget$height <- "100%"
-  widget
+  bundle_e_ggplotly(...)
 }
 
 dashboard_lifecycle_latest_views_age_plot <- function(dashboard_data, talent) {
