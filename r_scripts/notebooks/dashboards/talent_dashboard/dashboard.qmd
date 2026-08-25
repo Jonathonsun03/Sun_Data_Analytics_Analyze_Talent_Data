@@ -357,14 +357,7 @@ uiOutput("audience_summary")
 
 These recommendations are generated from the selected talent and analytics snapshot window and should be read as descriptive signals, not causal claims.
 
-## Row {height=42%}
-
-```{r}
-#| title: "Highest-Priority Recommendations"
-uiOutput("recommendations_top")
-```
-
-## Row {height=42%}
+## Row {height=48%}
 
 ```{r}
 #| title: "Publishing Strategy"
@@ -376,7 +369,7 @@ uiOutput("recommendations_publishing")
 uiOutput("recommendations_content")
 ```
 
-## Row {height=42%}
+## Row {height=48%}
 
 ```{r}
 #| title: "Audience Strategy"
@@ -739,9 +732,6 @@ output$audience_summary <- dashboard_render_ui(function() {
   dashboard_datatable(dashboard_data_reactive()$audience_summary, page_length = 15)
 })
 
-output$recommendations_top <- dashboard_render_ui(function() {
-  dashboard_recommendation_cards(dashboard_data_reactive()$recommendations$story$top)
-})
 output$recommendations_publishing <- dashboard_render_ui(function() {
   dashboard_recommendation_cards(
     dashboard_data_reactive()$recommendations$story,
