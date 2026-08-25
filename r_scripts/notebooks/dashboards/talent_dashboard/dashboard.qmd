@@ -141,7 +141,12 @@ dashboard_optional_input_date <- function(date_range, index) {
 
 ```{r}
 uiOutput("dashboard_identity")
-uiOutput("talent_selector")
+selectInput(
+  inputId = "talent",
+  label = "Talent",
+  choices = c("Loading authorized talents..." = ""),
+  selected = ""
+)
 uiOutput("dashboard_data_freshness")
 
 dateRangeInput(
@@ -279,15 +284,17 @@ plotlyOutput("strategy_topic_longevity", height = "100%")
 ### Column {width=33%}
 
 ```{r}
-#| title: "Topic Table"
-uiOutput("strategy_topic_table")
+#| title: "Videos by Topic"
+uiOutput("strategy_topic_filter")
+uiOutput("strategy_topic_videos")
 ```
 
 ### Column {width=33%}
 
 ```{r}
-#| title: "Tag Table"
-uiOutput("strategy_tag_table")
+#| title: "Videos by Tag"
+uiOutput("strategy_tag_filter")
+uiOutput("strategy_tag_videos")
 ```
 
 ### Column {width=34%}
@@ -430,6 +437,10 @@ dashboard_allowed_talents <- dashboard_talents %>%
   dplyr::filter(
     .data$talent_code %in% dashboard_session_access$allowed_talent_codes
   )
+dashboard_allowed_talent_choices <- dashboard_authorized_talent_choices(
+  dashboard_talents,
+  dashboard_session_access
+)
 
 # Keep analytics freshness current for sessions left open across a daily
 # ingestion. Existing dashboard metrics still use the latest complete snapshot.
@@ -457,22 +468,28 @@ output$dashboard_identity <- renderUI({
   )
 })
 
-output$talent_selector <- renderUI({
-  if (!dashboard_session_access$authorized || nrow(dashboard_allowed_talents) == 0) {
-    return(NULL)
+session$onFlushed(function() {
+  if (length(dashboard_allowed_talent_choices) == 0) {
+    updateSelectInput(
+      session,
+      inputId = "talent",
+      choices = c("No authorized talents" = ""),
+      selected = ""
+    )
+    return()
   }
 
-  choices <- stats::setNames(
-    dashboard_allowed_talents$talent_code,
-    gsub("_", " ", dashboard_allowed_talents$talent_name, fixed = TRUE)
-  )
-  selectInput(
+  selected_code <- isolate(input$talent)
+  if (!dashboard_talent_is_authorized(selected_code, dashboard_session_access)) {
+    selected_code <- unname(dashboard_allowed_talent_choices[[1]])
+  }
+  updateSelectInput(
+    session,
     inputId = "talent",
-    label = "Talent",
-    choices = choices,
-    selected = dashboard_allowed_talents$talent_code[[1]]
+    choices = dashboard_allowed_talent_choices,
+    selected = selected_code
   )
-})
+}, once = TRUE)
 
 output$dashboard_data_freshness <- renderUI({
   if (!dashboard_session_access$authorized || nrow(dashboard_allowed_talents) == 0) {
@@ -522,6 +539,7 @@ output$dashboard_data_freshness <- renderUI({
 })
 
 dashboard_snapshot_bounds <- reactiveVal(NULL)
+dashboard_initial_talent_ready <- reactiveVal(FALSE)
 
 observe({
   req(dashboard_talent_is_authorized(input$talent, dashboard_session_access))
@@ -572,8 +590,15 @@ observe({
   }
 })
 
+observeEvent(input$talent, {
+  if (!dashboard_initial_talent_ready() &&
+      dashboard_talent_is_authorized(input$talent, dashboard_session_access)) {
+    dashboard_initial_talent_ready(TRUE)
+  }
+}, ignoreInit = FALSE)
+
 dashboard_data_reactive <- eventReactive(
-  input$apply_filters,
+  list(input$apply_filters, dashboard_initial_talent_ready()),
   {
     req(dashboard_session_access$authorized)
     req(dashboard_talent_is_authorized(input$talent, dashboard_session_access))
@@ -677,12 +702,66 @@ output$strategy_topic_longevity <- dashboard_render_plotly(function() {
   data <- dashboard_data_reactive()
   dashboard_lifecycle_topic_longevity_plot(data, dashboard_talent_label(data))
 }, empty_message = "Lifecycle data is unavailable for the active filters.")
-output$strategy_topic_table <- dashboard_render_ui(function() {
-  dashboard_topic_performance_table(dashboard_data_reactive(), page_length = 10)
+output$strategy_topic_filter <- renderUI({
+  choices <- dashboard_content_video_choices(
+    dashboard_data_reactive(),
+    classification = "topic"
+  )
+  if (length(choices) == 0) {
+    return(dashboard_empty_state("No classified topics are available for the active filters."))
+  }
+  selectizeInput(
+    inputId = "strategy_topic_selection",
+    label = "Select or type a topic",
+    choices = choices,
+    selected = unname(choices[[1]]),
+    multiple = FALSE,
+    width = "100%",
+    options = list(
+      create = FALSE,
+      placeholder = "Search topics"
+    )
+  )
 })
-output$strategy_tag_table <- dashboard_render_ui(function() {
-  dashboard_tag_performance_table(dashboard_data_reactive(), page_length = 15)
+output$strategy_topic_videos <- dashboard_render_ui(function() {
+  req(input$strategy_topic_selection)
+  dashboard_content_video_table(
+    dashboard_data_reactive(),
+    classification = "topic",
+    selection = input$strategy_topic_selection,
+    page_length = 10
+  )
+}, empty_message = "No videos match the selected topic.")
+output$strategy_tag_filter <- renderUI({
+  choices <- dashboard_content_video_choices(
+    dashboard_data_reactive(),
+    classification = "tag"
+  )
+  if (length(choices) == 0) {
+    return(dashboard_empty_state("No classified tags are available for the active filters."))
+  }
+  selectizeInput(
+    inputId = "strategy_tag_selection",
+    label = "Select or type a tag",
+    choices = choices,
+    selected = unname(choices[[1]]),
+    multiple = FALSE,
+    width = "100%",
+    options = list(
+      create = FALSE,
+      placeholder = "Search tags"
+    )
+  )
 })
+output$strategy_tag_videos <- dashboard_render_ui(function() {
+  req(input$strategy_tag_selection)
+  dashboard_content_video_table(
+    dashboard_data_reactive(),
+    classification = "tag",
+    selection = input$strategy_tag_selection,
+    page_length = 10
+  )
+}, empty_message = "No videos match the selected tag.")
 output$strategy_collaboration_performance <- dashboard_render_ui(function() {
   dashboard_collaboration_performance_compact_plot(dashboard_data_reactive())
 })

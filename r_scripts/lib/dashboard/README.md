@@ -39,6 +39,13 @@ Cloudflare's permissions Worker must provide `X-SDA-Verified-Email` and
 session intersects those exact codes with `catalog.talents` before rendering the
 selector and validates the selected code again before querying DuckDB.
 
+The sidebar mounts the talent dropdown immediately, then the Shiny session
+replaces its loading option with only the authorized talent choices after the
+client connection is ready. The first authorized selection triggers the initial
+dashboard load; later filter changes continue to use the Apply filters button.
+Missing or invalid authorization leaves the control empty and does not fall
+back to the full talent catalog.
+
 Each new Shiny session reloads the talent catalog from DuckDB so analytics
 snapshot bounds do not remain pinned to the long-running Quarto process's
 startup state. While a session remains open, its analytics freshness status refreshes

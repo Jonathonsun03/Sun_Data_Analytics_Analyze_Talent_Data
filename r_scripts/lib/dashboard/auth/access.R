@@ -74,3 +74,26 @@ dashboard_talent_is_authorized <- function(talent_code, access_context) {
     !is.na(talent_code) &&
     talent_code %in% access_context$allowed_talent_codes
 }
+
+dashboard_authorized_talent_choices <- function(talent_catalog, access_context) {
+  required_columns <- c("talent_code", "talent_name")
+  if (!is.data.frame(talent_catalog) ||
+      !all(required_columns %in% names(talent_catalog)) ||
+      !isTRUE(access_context$authorized)) {
+    return(character())
+  }
+
+  allowed <- talent_catalog[
+    talent_catalog$talent_code %in% access_context$allowed_talent_codes,
+    required_columns,
+    drop = FALSE
+  ]
+  if (nrow(allowed) == 0) {
+    return(character())
+  }
+
+  stats::setNames(
+    as.character(allowed$talent_code),
+    gsub("_", " ", as.character(allowed$talent_name), fixed = TRUE)
+  )
+}

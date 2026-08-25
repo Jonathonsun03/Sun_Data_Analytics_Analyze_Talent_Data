@@ -429,13 +429,16 @@ Topic Longevity by Video Type
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 33fr) minmax(3em, 33fr) minmax(3em, 34fr);
 grid-auto-rows: minmax(0, 1fr);">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
-<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Topic Table" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Videos by Topic" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
-Topic Table
+Videos by Topic
 </span></div></div>
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
-<div id="strategy_topic_table" class="shiny-html-output html-fill-item html-fill-container"></div>
+<div id="strategy_topic_filter" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="strategy_topic_videos" class="shiny-html-output html-fill-item html-fill-container"></div>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -445,13 +448,16 @@ Topic Table
     </span>
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div><div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
-<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Tag Table" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Videos by Tag" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
-Tag Table
+Videos by Tag
 </span></div></div>
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
-<div id="strategy_tag_table" class="shiny-html-output html-fill-item html-fill-container"></div>
+<div id="strategy_tag_filter" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="strategy_tag_videos" class="shiny-html-output html-fill-item html-fill-container"></div>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -1148,12 +1154,66 @@ output$strategy_topic_longevity <- dashboard_render_plotly(function() {
   data <- dashboard_data_reactive()
   dashboard_lifecycle_topic_longevity_plot(data, dashboard_talent_label(data))
 }, empty_message = "Lifecycle data is unavailable for the active filters.")
-output$strategy_topic_table <- dashboard_render_ui(function() {
-  dashboard_topic_performance_table(dashboard_data_reactive(), page_length = 10)
+output$strategy_topic_filter <- renderUI({
+  choices <- dashboard_content_video_choices(
+    dashboard_data_reactive(),
+    classification = "topic"
+  )
+  if (length(choices) == 0) {
+    return(dashboard_empty_state("No classified topics are available for the active filters."))
+  }
+  selectizeInput(
+    inputId = "strategy_topic_selection",
+    label = "Select or type a topic",
+    choices = choices,
+    selected = unname(choices[[1]]),
+    multiple = FALSE,
+    width = "100%",
+    options = list(
+      create = FALSE,
+      placeholder = "Search topics"
+    )
+  )
 })
-output$strategy_tag_table <- dashboard_render_ui(function() {
-  dashboard_tag_performance_table(dashboard_data_reactive(), page_length = 15)
+output$strategy_topic_videos <- dashboard_render_ui(function() {
+  req(input$strategy_topic_selection)
+  dashboard_content_video_table(
+    dashboard_data_reactive(),
+    classification = "topic",
+    selection = input$strategy_topic_selection,
+    page_length = 10
+  )
+}, empty_message = "No videos match the selected topic.")
+output$strategy_tag_filter <- renderUI({
+  choices <- dashboard_content_video_choices(
+    dashboard_data_reactive(),
+    classification = "tag"
+  )
+  if (length(choices) == 0) {
+    return(dashboard_empty_state("No classified tags are available for the active filters."))
+  }
+  selectizeInput(
+    inputId = "strategy_tag_selection",
+    label = "Select or type a tag",
+    choices = choices,
+    selected = unname(choices[[1]]),
+    multiple = FALSE,
+    width = "100%",
+    options = list(
+      create = FALSE,
+      placeholder = "Search tags"
+    )
+  )
 })
+output$strategy_tag_videos <- dashboard_render_ui(function() {
+  req(input$strategy_tag_selection)
+  dashboard_content_video_table(
+    dashboard_data_reactive(),
+    classification = "tag",
+    selection = input$strategy_tag_selection,
+    page_length = 10
+  )
+}, empty_message = "No videos match the selected tag.")
 output$strategy_collaboration_performance <- dashboard_render_ui(function() {
   dashboard_collaboration_performance_compact_plot(dashboard_data_reactive())
 })

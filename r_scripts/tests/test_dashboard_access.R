@@ -33,10 +33,31 @@ assert_true(
   "A browser-supplied but unassigned code should fail authorization."
 )
 
+talent_catalog <- data.frame(
+  talent_code = c("AVA1", "KAT2", "LEI3"),
+  talent_name = c("Avaritia_Hawthorne", "Katya_Sable", "Leia_Memoria")
+)
+authorized_choices <- dashboard_authorized_talent_choices(talent_catalog, context)
+assert_equal(
+  unname(authorized_choices),
+  c("AVA1", "LEI3"),
+  "The talent dropdown should contain only authorized talent codes."
+)
+assert_equal(
+  names(authorized_choices),
+  c("Avaritia Hawthorne", "Leia Memoria"),
+  "The talent dropdown should use readable talent names."
+)
+
 missing_context <- dashboard_access_context(list(), c("AVA1"))
 assert_true(
   !missing_context$authorized,
   "Production authorization must fail closed when trusted headers are absent."
+)
+assert_equal(
+  dashboard_authorized_talent_choices(talent_catalog, missing_context),
+  character(),
+  "An unauthorized session must not receive talent dropdown choices."
 )
 
 invalid_request <- list(
