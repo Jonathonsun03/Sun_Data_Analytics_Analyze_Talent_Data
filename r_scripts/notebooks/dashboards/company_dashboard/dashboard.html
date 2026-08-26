@@ -72,7 +72,7 @@ ul.task-list li input[type="checkbox"] {
         
       </div>
     </div>
-<div id="dashboard-collapse" class="navbar-collapse collapse"><ul class="navbar-nav navbar-nav-scroll me-auto" role="tablist"><li class="nav-item" role="presentation"><a id="tab-overview" class="nav-link active" data-bs-toggle="tab" role="tab" data-bs-target="#overview" data-scrolling="false" href="#overview" aria-controls="overview" aria-selected="true"><span class="nav-link-text">Overview</span></a></li><li class="nav-item" role="presentation"><a id="tab-publishing-activity" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#publishing-activity" data-scrolling="false" href="#publishing-activity" aria-controls="publishing-activity" aria-selected="false"><span class="nav-link-text">Publishing Activity</span></a></li><li class="nav-item" role="presentation"><a id="tab-content-mix" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#content-mix" data-scrolling="false" href="#content-mix" aria-controls="content-mix" aria-selected="false"><span class="nav-link-text">Content Mix</span></a></li><li class="nav-item" role="presentation"><a id="tab-method-notes" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#method-notes" data-scrolling="false" href="#method-notes" aria-controls="method-notes" aria-selected="false"><span class="nav-link-text">Method Notes</span></a></li></ul></div></div>
+<div id="dashboard-collapse" class="navbar-collapse collapse"><ul class="navbar-nav navbar-nav-scroll me-auto" role="tablist"><li class="nav-item" role="presentation"><a id="tab-overview" class="nav-link active" data-bs-toggle="tab" role="tab" data-bs-target="#overview" data-scrolling="false" href="#overview" aria-controls="overview" aria-selected="true"><span class="nav-link-text">Overview</span></a></li><li class="nav-item" role="presentation"><a id="tab-performance-attention" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#performance-attention" data-scrolling="false" href="#performance-attention" aria-controls="performance-attention" aria-selected="false"><span class="nav-link-text">Performance &amp; Attention</span></a></li><li class="nav-item" role="presentation"><a id="tab-talent-portfolio" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#talent-portfolio" data-scrolling="false" href="#talent-portfolio" aria-controls="talent-portfolio" aria-selected="false"><span class="nav-link-text">Talent Portfolio</span></a></li><li class="nav-item" role="presentation"><a id="tab-publishing-activity" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#publishing-activity" data-scrolling="false" href="#publishing-activity" aria-controls="publishing-activity" aria-selected="false"><span class="nav-link-text">Publishing Activity</span></a></li><li class="nav-item" role="presentation"><a id="tab-content-mix" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#content-mix" data-scrolling="false" href="#content-mix" aria-controls="content-mix" aria-selected="false"><span class="nav-link-text">Content Mix</span></a></li><li class="nav-item" role="presentation"><a id="tab-video-explorer-data-extraction" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#video-explorer-data-extraction" data-scrolling="false" href="#video-explorer-data-extraction" aria-controls="video-explorer-data-extraction" aria-selected="false"><span class="nav-link-text">Video Explorer &amp; Data Extraction</span></a></li><li class="nav-item" role="presentation"><a id="tab-fun-statistics" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#fun-statistics" data-scrolling="false" href="#fun-statistics" aria-controls="fun-statistics" aria-selected="false"><span class="nav-link-text">Fun Statistics</span></a></li><li class="nav-item" role="presentation"><a id="tab-method-notes" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#method-notes" data-scrolling="false" href="#method-notes" aria-controls="method-notes" aria-selected="false"><span class="nav-link-text">Method Notes</span></a></li></ul></div></div>
 </nav>
 </header>
 <div class="page-layout-custom quarto-dashboard-content bslib-gap-spacing html-fill-container bslib-page-fill quarto-dashboard-pages dashboard-sidebar-container">  
@@ -112,6 +112,45 @@ ul.task-list li input[type="checkbox"] {
   min-height: 0;
 }
 
+.company-downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.75rem 0;
+}
+
+.company-fun-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+}
+
+.company-fun-stat {
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 0.5rem;
+  padding: 0.8rem;
+  background: var(--bs-body-bg, #fff);
+}
+
+.company-fun-stat-value {
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.company-fun-stat-label {
+  color: var(--bs-secondary-color, #666);
+  font-size: 0.82rem;
+}
+
+.company-value-note {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--bs-secondary-color, #666);
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.25;
+}
+
 @media (max-width: 768px) {
   .card:not(.bslib-value-box) {
     min-height: 24rem;
@@ -130,7 +169,7 @@ ul.task-list li input[type="checkbox"] {
 <div class="tab-content bslib-grid html-fill-item html-fill-container" style="display: grid; grid-template-columns: minmax(3em, 1fr);
 grid-auto-rows: minmax(0, 1fr);">
 <div id="overview" class="dashboard-page tab-pane show active html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-overview">
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content) minmax(3em, 22fr) minmax(3em, 58fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content) minmax(3em, 22fr) minmax(3em, 22fr) minmax(3em, 48fr); grid-auto-columns: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <p>Company totals aggregate the latest selected snapshot for each selected talent. Each video is counted once, so cumulative analytics are not summed across days.</p>
@@ -141,7 +180,7 @@ grid-auto-rows: minmax(0, 1fr);">
         <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
     </span>
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr) minmax(3em, 1fr) minmax(3em, 1fr) minmax(3em, 1fr) minmax(3em, 1fr);
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr) minmax(3em, 1fr) minmax(3em, 1fr) minmax(3em, 1fr);
 grid-auto-rows: minmax(0, 1fr);">
 <div class="card cell html-fill-item html-fill-container bslib-card" data-title="Total Views" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
@@ -171,13 +210,13 @@ Videos / Streams
     <span class="bslib-full-screen-enter badge rounded-pill">
         <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
     </span>
-</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-title="Streamed Hours" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-title="Total Content Hours" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
-Streamed Hours
+Total Content Hours
 </span></div></div>
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
-<div id="streamed_hours" class="shiny-html-output html-fill-item html-fill-container"></div>
+<div id="content_hours" class="shiny-html-output html-fill-item html-fill-container"></div>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -185,13 +224,13 @@ Streamed Hours
     <span class="bslib-full-screen-enter badge rounded-pill">
         <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
     </span>
-</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-title="Streamed Days" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-title="Video-Page Subscriptions" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
-Streamed Days
+Video-Page Subscriptions
 </span></div></div>
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
-<div id="streamed_days" class="shiny-html-output html-fill-item html-fill-container"></div>
+<div id="video_page_subscriptions" class="shiny-html-output html-fill-item html-fill-container"></div>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -199,13 +238,59 @@ Streamed Days
     <span class="bslib-full-screen-enter badge rounded-pill">
         <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
     </span>
-</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-title="Subscribers Gained" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr) minmax(3em, 1fr) minmax(3em, 1fr) minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Average Views per Release" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
-Subscribers Gained
+Average Views per Release
 </span></div></div>
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
-<div id="subscribers_gained" class="shiny-html-output html-fill-item html-fill-container"></div>
+<div id="average_views" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-title="Median Views per Release" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
+Median Views per Release
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="median_views" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-title="Average Video-Page Subscriptions" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
+Average Video-Page Subscriptions
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="subscriptions_per_release" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-title="Collaboration-Tagged Releases" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
+Collaboration-Tagged Releases
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="collaboration_releases" class="shiny-html-output html-fill-item html-fill-container"></div>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -238,6 +323,188 @@ Content Releases by Month
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
 <div id="content_month_plot" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div>
+</div><div id="performance-attention" class="dashboard-page tab-pane grid-skip html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-performance-attention">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content) minmax(3em, 24fr) minmax(3em, 68fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<p>Attention metrics use cumulative analytics from each talent’s selected snapshot. They describe observed channel performance, not unique audience reach or predicted campaign results.</p>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr) minmax(3em, 1fr) minmax(3em, 1fr) minmax(3em, 1fr) minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Watch Hours" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
+Watch Hours
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="watch_hours" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-title="Average View Duration" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
+Average View Duration
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="average_view_duration" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-title="Views-weighted Average View %" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
+Views-weighted Average View %
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="weighted_view_percentage" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-title="Views per Content Hour" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
+Views per Content Hour
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="views_per_content_hour" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-title="Video-Page Subscriptions per 1,000 Views" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
+Video-Page Subscriptions per 1,000 Views
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="subscriptions_per_thousand_views" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr) minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Performance by Content Type" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
+Performance by Content Type
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="content_type_performance" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-title="Performance by Topic" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
+Performance by Topic
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="topic_performance" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div>
+</div><div id="talent-portfolio" class="dashboard-page tab-pane grid-skip html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-talent-portfolio">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content) minmax(3em, 48fr) minmax(3em, 44fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<p>Each contribution bar represents 100% of one metric across the active talent selection. The colored segments show how much each talent contributes to that total; they do not show growth or performance against a target.</p>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr) minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-title="How Talents Contribute to Company Totals" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
+How Talents Contribute to Company Totals
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="portfolio_share_plot" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-title="Talent Portfolio Summary" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
+Talent Portfolio Summary
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="portfolio_table" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Content Mix by Talent" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
+Content Mix by Talent
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="content_type_mix" class="shiny-html-output html-fill-item html-fill-container"></div>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -326,7 +593,7 @@ Weekday Release Table
 </div>
 </div>
 </div><div id="content-mix" class="dashboard-page tab-pane grid-skip html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-content-mix">
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content) minmax(3em, 46fr) minmax(3em, 48fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content) minmax(3em, 46fr) minmax(3em, 48fr) minmax(3em, 48fr); grid-auto-columns: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <p>Topic and reference values come from the same latest title-classification rows used by the creator dashboard.</p>
@@ -339,9 +606,9 @@ Weekday Release Table
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr) minmax(3em, 1fr);
 grid-auto-rows: minmax(0, 1fr);">
-<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Streamed Hours by Topic" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Content Hours by Topic" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
-Streamed Hours by Topic
+Content Hours by Topic
 </span></div></div>
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
@@ -387,9 +654,132 @@ Topic and Included Reference
     </span>
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div>
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr) minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Collaboration Performance" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
+Collaboration Performance
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="collaboration_performance" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-title="Representative Content" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
+Representative Content
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="representative_content" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div>
+</div><div id="video-explorer-data-extraction" class="dashboard-page tab-pane grid-skip html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-video-explorer-data-extraction">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content) minmax(3em, 18fr) minmax(3em, 72fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<p>The explorer contains one row per selected video at the applicable talent snapshot. Search and column filters support evidence review; downloads preserve the active company, talent, and snapshot selections.</p>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container">
+<div class="company-downloads html-fill-item html-fill-container">
+<a aria-disabled="true" class="btn btn-default shiny-download-link disabled" download="" href="" id="download_company_summary" tabindex="-1" target="_blank">
+<i class="fas fa-download" role="presentation" aria-label="download icon"></i>
+Company summary CSV
+</a>
+<a aria-disabled="true" class="btn btn-default shiny-download-link disabled" download="" href="" id="download_talent_portfolio" tabindex="-1" target="_blank">
+<i class="fas fa-download" role="presentation" aria-label="download icon"></i>
+Talent portfolio CSV
+</a>
+<a aria-disabled="true" class="btn btn-default shiny-download-link disabled" download="" href="" id="download_content_summary" tabindex="-1" target="_blank">
+<i class="fas fa-download" role="presentation" aria-label="download icon"></i>
+Content summary CSV
+</a>
+<a aria-disabled="true" class="btn btn-default shiny-download-link disabled" download="" href="" id="download_video_data" tabindex="-1" target="_blank">
+<i class="fas fa-download" role="presentation" aria-label="download icon"></i>
+Video-level CSV
+</a>
+</div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Searchable Video Explorer" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
+Searchable Video Explorer
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="video_explorer" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div>
+</div><div id="fun-statistics" class="dashboard-page tab-pane grid-skip html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-fun-statistics">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content) minmax(3em, 75fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<p>These are reproducible, graphic-friendly observations from the active selection. They are descriptive statistics rather than promotional claims.</p>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="fun_statistics" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
 </div>
 </div><div id="method-notes" class="dashboard-page tab-pane grid-skip html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-method-notes">
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 45fr) minmax(3em, 35fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 38fr) minmax(3em, 34fr) minmax(3em, 50fr); grid-auto-columns: minmax(0, 1fr);">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr) minmax(3em, 1fr);
 grid-auto-rows: minmax(0, 1fr);">
 <div class="card cell html-fill-item html-fill-container bslib-card" data-title="Active Filters" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
@@ -422,9 +812,55 @@ Snapshot Coverage
     </span>
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div>
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr) minmax(3em, 1fr);
 grid-auto-rows: minmax(0, 1fr);">
-<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Calculation Notes" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Metric Coverage" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
+Metric Coverage
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="metric_coverage" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-title="Audience Data Availability" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
+Audience Data Availability
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="audience_availability" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr) minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Metric Definitions" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
+Metric Definitions
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
+<div id="metric_definitions" class="shiny-html-output html-fill-item html-fill-container"></div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-title="Calculation Notes" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
 Calculation Notes
 </span></div></div>
@@ -432,9 +868,14 @@ Calculation Notes
 <ul>
 <li>Date filters apply to analytics snapshot dates, matching the creator dashboard.</li>
 <li>Each talent contributes only its latest snapshot within the selected range.</li>
-<li>Total views and subscriber gains are cumulative values at those snapshots.</li>
-<li>Streamed hours use the catalogued duration of each distinct video or stream.</li>
+<li>Total views and video-page subscription events are cumulative values at those snapshots.</li>
+<li>Total content hours sum the catalogued duration of each distinct video or stream; the displayed day conversion is a scale reference, not elapsed calendar time or audience watch time.</li>
+<li>Watch hours use cumulative estimated minutes watched from YouTube Analytics.</li>
+<li>Average view duration is aggregate watch seconds divided by total views.</li>
+<li>Average view percentage is weighted by views rather than averaged equally across releases.</li>
 <li>Monthly and weekday panels group those distinct videos by publication date.</li>
+<li>Representative content is selected reproducibly as the top three releases by cumulative views for each selected talent.</li>
+<li>Total views are not unique viewers or unique reach. Unsupported audience fields remain explicitly unavailable.</li>
 <li>Company membership is maintained in <code>config/dashboard/company_talents.csv</code>.</li>
 </ul>
 </div>
@@ -571,14 +1012,82 @@ company_render_ui <- function(
   })
 }
 
-company_value_box <- function(title, value) {
+company_value_box <- function(title, value, note = NULL) {
+  displayed_value <- if (is.null(note)) {
+    value
+  } else {
+    htmltools::tagList(
+      htmltools::tags$span(value),
+      htmltools::tags$small(class = "company-value-note", note)
+    )
+  }
   if (requireNamespace("bslib", quietly = TRUE)) {
-    return(bslib::value_box(title = title, value = value))
+    return(bslib::value_box(title = title, value = displayed_value))
   }
   htmltools::div(
     class = "dashboard-metric-card",
     htmltools::tags$div(class = "dashboard-metric-label", title),
-    htmltools::tags$div(class = "dashboard-metric-value", value)
+    htmltools::tags$div(class = "dashboard-metric-value", displayed_value)
+  )
+}
+
+company_number <- function(value, accuracy = 1) {
+  if (length(value) == 0 || !is.finite(value[[1]])) {
+    return("N/A")
+  }
+  scales::comma(value[[1]], accuracy = accuracy)
+}
+
+company_percent <- function(value, accuracy = 0.1) {
+  if (length(value) == 0 || !is.finite(value[[1]])) {
+    return("N/A")
+  }
+  scales::percent(value[[1]], accuracy = accuracy)
+}
+
+company_seconds <- function(value) {
+  if (length(value) == 0 || !is.finite(value[[1]])) {
+    return("N/A")
+  }
+  paste0(scales::number(value[[1]] / 60, accuracy = 0.1), " min")
+}
+
+company_searchable_datatable <- function(data, page_length = 25) {
+  if (is.null(data) || nrow(data) == 0) {
+    return(NULL)
+  }
+  DT::datatable(
+    data,
+    rownames = FALSE,
+    filter = "top",
+    class = "display stripe hover",
+    options = list(
+      pageLength = page_length,
+      scrollX = TRUE,
+      autoWidth = TRUE
+    )
+  )
+}
+
+company_fun_stat_cards <- function(data) {
+  if (is.null(data) || nrow(data) == 0) {
+    return(NULL)
+  }
+  htmltools::div(
+    class = "company-fun-stat-grid",
+    lapply(seq_len(nrow(data)), function(index) {
+      htmltools::div(
+        class = "company-fun-stat",
+        htmltools::div(
+          class = "company-fun-stat-value",
+          data$value[[index]]
+        ),
+        htmltools::div(
+          class = "company-fun-stat-label",
+          data$statistic[[index]]
+        )
+      )
+    })
   )
 }
 
@@ -647,6 +1156,120 @@ company_talent_weekday_plot <- function(data) {
     ggplot2::labs(x = NULL, y = "Content releases", fill = "Talent") +
     ggplot2::theme_minimal(base_size = 11) +
     ggplot2::theme(legend.position = "bottom")
+}
+
+company_portfolio_share_plot <- function(data) {
+  if (is.null(data) || nrow(data) == 0) {
+    return(NULL)
+  }
+  metric_levels <- c(
+    "Releases",
+    "Cumulative views",
+    "Audience watch hours",
+    "Video-page subscriptions"
+  )
+  plot_data <- dplyr::bind_rows(
+    data %>%
+      dplyr::transmute(
+        Talent = company_display_name(.data$talent_name),
+        Metric = "Releases",
+        Value = as.numeric(.data$`Videos / Streams`),
+        Share = .data$`Release Share`
+      ),
+    data %>%
+      dplyr::transmute(
+        Talent = company_display_name(.data$talent_name),
+        Metric = "Cumulative views",
+        Value = .data$`Total Views`,
+        Share = .data$`View Share`
+      ),
+    data %>%
+      dplyr::transmute(
+        Talent = company_display_name(.data$talent_name),
+        Metric = "Audience watch hours",
+        Value = .data$`Watch Hours`,
+        Share = .data$`Watch-time Share`
+      ),
+    data %>%
+      dplyr::transmute(
+        Talent = company_display_name(.data$talent_name),
+        Metric = "Video-page subscriptions",
+        Value = .data$`Video-Page Subscriptions`,
+        Share = .data$`Video-Page Subscription Share`
+      )
+  ) %>%
+    dplyr::group_by(.data$Metric) %>%
+    dplyr::mutate(
+      Total = sum(.data$Value, na.rm = TRUE),
+      `Contribution Value` = dplyr::if_else(
+        .data$Metric == "Audience watch hours",
+        scales::comma(.data$Value, accuracy = 0.1),
+        scales::comma(round(.data$Value))
+      ),
+      `Company Total` = dplyr::if_else(
+        .data$Metric == "Audience watch hours",
+        scales::comma(.data$Total, accuracy = 0.1),
+        scales::comma(round(.data$Total))
+      ),
+      `Share Label` = scales::percent(.data$Share, accuracy = 0.1),
+      Metric = factor(.data$Metric, levels = rev(metric_levels))
+    ) %>%
+    dplyr::ungroup()
+
+  ggplot2::ggplot(
+    plot_data,
+      ggplot2::aes(
+        x = .data$Share,
+        y = .data$Metric,
+        fill = .data$Talent,
+        text = paste0(
+          .data$Talent,
+          "<br>",
+          .data$Metric,
+          "<br>Contribution: ",
+          .data$`Contribution Value`,
+          " of ",
+          .data$`Company Total`,
+          "<br>Share: ",
+          .data$`Share Label`
+        )
+      )
+    ) +
+    ggplot2::geom_col(position = "stack", width = 0.7) +
+    ggplot2::geom_text(
+      ggplot2::aes(label = .data$`Share Label`),
+      position = ggplot2::position_stack(vjust = 0.5),
+      color = "white",
+      fontface = "bold",
+      size = 3.2,
+      show.legend = FALSE
+    ) +
+    ggplot2::scale_x_continuous(
+      labels = scales::label_percent(),
+      limits = c(0, 1),
+      expand = c(0, 0)
+    ) +
+    ggplot2::guides(fill = ggplot2::guide_legend(reverse = TRUE)) +
+    ggplot2::labs(
+      x = "Talent share of the selected-company total",
+      y = NULL,
+      fill = "Talent",
+      subtitle = paste(
+        "Each bar represents 100% of one metric across the selected talents.",
+        "Colored segments show each talent's contribution."
+      ),
+      caption = paste(
+        "Values use each talent's latest analytics snapshot inside the active",
+        "date window. Hover for exact contribution and total values."
+      )
+    ) +
+    ggplot2::theme_minimal(base_size = 11) +
+    ggplot2::theme(
+      legend.position = "bottom",
+      panel.grid.major.y = ggplot2::element_blank(),
+      plot.subtitle = ggplot2::element_text(color = "#555555"),
+      plot.caption = ggplot2::element_text(hjust = 0, color = "#666666")
+    )
 }
 </script>
  
@@ -889,6 +1512,54 @@ company_topic_reactive <- reactive({
   dashboard_company_topic_summary(company_analytics_reactive())
 })
 
+company_performance_reactive <- reactive({
+  dashboard_company_performance_summary(company_analytics_reactive())
+})
+
+company_attention_reactive <- reactive({
+  dashboard_company_attention_summary(company_analytics_reactive())
+})
+
+company_portfolio_reactive <- reactive({
+  dashboard_company_portfolio_summary(company_analytics_reactive())
+})
+
+company_content_type_reactive <- reactive({
+  dashboard_company_content_type_summary(company_analytics_reactive())
+})
+
+company_topic_performance_reactive <- reactive({
+  dashboard_company_performance_summary(
+    company_analytics_reactive(),
+    group_columns = "topic"
+  ) %>%
+    dplyr::arrange(dplyr::desc(.data$`Total Views`))
+})
+
+company_collaboration_performance_reactive <- reactive({
+  company_analytics_reactive() %>%
+    dplyr::mutate(
+      Collaboration = dplyr::if_else(.data$is_collab, "Yes", "No")
+    ) %>%
+    dashboard_company_performance_summary(group_columns = "Collaboration")
+})
+
+company_video_reactive <- reactive({
+  dashboard_company_video_explorer(company_analytics_reactive())
+})
+
+company_representative_reactive <- reactive({
+  dashboard_company_representative_content(company_analytics_reactive())
+})
+
+company_fun_statistics_reactive <- reactive({
+  dashboard_company_fun_statistics(company_analytics_reactive())
+})
+
+company_metric_coverage_reactive <- reactive({
+  dashboard_company_data_quality(company_analytics_reactive())
+})
+
 output$total_views <- company_render_ui(function() {
   company_value_box(
     "Total Views",
@@ -903,24 +1574,126 @@ output$video_count <- company_render_ui(function() {
   )
 })
 
-output$streamed_hours <- company_render_ui(function() {
+output$content_hours <- company_render_ui(function() {
+  total_hours <- company_totals_reactive()$total_hours[[1]]
   company_value_box(
-    "Streamed Hours",
-    scales::comma(company_totals_reactive()$total_hours[[1]], accuracy = 0.1)
+    "Total Content Hours",
+    scales::comma(total_hours, accuracy = 0.1),
+    paste0(
+      "Equivalent to ",
+      scales::comma(total_hours / 24, accuracy = 0.1),
+      " continuous 24-hour days of content"
+    )
   )
 })
 
-output$streamed_days <- company_render_ui(function() {
+output$video_page_subscriptions <- company_render_ui(function() {
   company_value_box(
-    "Streamed Days",
-    scales::comma(company_totals_reactive()$total_days[[1]], accuracy = 0.1)
+    "Video-Page Subscriptions",
+    scales::comma(
+      round(company_totals_reactive()$video_page_subscriptions[[1]])
+    ),
+    "Cumulative watch-page events; not current subscriber total"
   )
 })
 
-output$subscribers_gained <- company_render_ui(function() {
+output$average_views <- company_render_ui(function() {
   company_value_box(
-    "Subscribers Gained",
-    scales::comma(round(company_totals_reactive()$subscribers_gained[[1]]))
+    "Average Views per Release",
+    company_number(company_performance_reactive()$`Average Views`, accuracy = 1)
+  )
+})
+
+output$median_views <- company_render_ui(function() {
+  company_value_box(
+    "Median Views per Release",
+    company_number(company_performance_reactive()$`Median Views`, accuracy = 1)
+  )
+})
+
+output$subscriptions_per_release <- company_render_ui(function() {
+  performance <- company_performance_reactive()
+  company_value_box(
+    "Average Video-Page Subscriptions",
+    company_number(
+      performance$`Video-Page Subscriptions per Release`,
+      accuracy = 0.1
+    ),
+    paste0(
+      scales::comma(round(performance$`Video-Page Subscriptions`[[1]])),
+      " events across ",
+      scales::comma(performance$`Videos / Streams`[[1]]),
+      " releases"
+    )
+  )
+})
+
+output$collaboration_releases <- company_render_ui(function() {
+  performance <- company_performance_reactive()
+  collaboration_count <- performance$`Collaboration-Tagged Releases`[[1]]
+  release_count <- performance$`Videos / Streams`[[1]]
+  company_value_box(
+    "Collaboration-Tagged Releases",
+    paste0(
+      scales::comma(collaboration_count),
+      " of ",
+      scales::comma(release_count)
+    ),
+    paste0(
+      company_percent(
+        performance$`Collaboration-Tagged Share`,
+        accuracy = 0.1
+      ),
+      " of selected releases"
+    )
+  )
+})
+
+output$watch_hours <- company_render_ui(function() {
+  company_value_box(
+    "Watch Hours",
+    company_number(company_attention_reactive()$`Watch Hours`, accuracy = 0.1)
+  )
+})
+
+output$average_view_duration <- company_render_ui(function() {
+  company_value_box(
+    "Average View Duration",
+    company_seconds(
+      company_attention_reactive()$`Average View Duration (sec)`
+    )
+  )
+})
+
+output$weighted_view_percentage <- company_render_ui(function() {
+  value <- company_attention_reactive()$`Views-weighted Average View %`
+  company_value_box(
+    "Views-weighted Average View %",
+    if (length(value) == 0 || !is.finite(value[[1]])) {
+      "N/A"
+    } else {
+      paste0(company_number(value, accuracy = 0.1), "%")
+    }
+  )
+})
+
+output$views_per_content_hour <- company_render_ui(function() {
+  company_value_box(
+    "Views per Content Hour",
+    company_number(
+      company_attention_reactive()$`Views per Content Hour`,
+      accuracy = 0.1
+    )
+  )
+})
+
+output$subscriptions_per_thousand_views <- company_render_ui(function() {
+  company_value_box(
+    "Video-Page Subscriptions per 1,000 Views",
+    company_number(
+      company_attention_reactive()$`Video-Page Subscriptions per 1,000 Views`,
+      accuracy = 0.01
+    )
   )
 })
 
@@ -928,17 +1701,138 @@ output$talent_summary <- company_render_ui(function() {
   dashboard_company_talent_summary(company_analytics_reactive()) %>%
     dplyr::mutate(
       Talent = company_display_name(.data$talent_name),
-      `Streamed Hours` = round(.data$`Streamed Hours`, 1)
+      `Content Hours` = round(.data$`Content Hours`, 1)
     ) %>%
     dplyr::select(dplyr::all_of(c(
       "Talent",
       "Videos / Streams",
-      "Streamed Hours",
+      "Content Hours",
       "Total Views",
-      "Subscribers Gained",
+      "Video-Page Subscriptions",
       "Snapshot Date"
     ))) %>%
     dashboard_datatable(page_length = 10)
+})
+
+output$content_type_performance <- company_render_ui(function() {
+  dashboard_company_performance_summary(
+    company_analytics_reactive(),
+    group_columns = "Content Type"
+  ) %>%
+    dplyr::mutate(
+      `Content Type` = stringr::str_to_title(.data$`Content Type`),
+      dplyr::across(
+        dplyr::all_of(c(
+          "Average Views",
+          "Median Views",
+          "Watch Hours",
+          "Average View Duration (sec)",
+          "Views-weighted Average View %",
+          "Video-Page Subscriptions per Release"
+        )),
+        ~ round(.x, 1)
+      )
+    ) %>%
+    dplyr::select(dplyr::all_of(c(
+      "Content Type",
+      "Videos / Streams",
+      "Average Views",
+      "Median Views",
+      "Watch Hours",
+      "Average View Duration (sec)",
+      "Views-weighted Average View %",
+      "Video-Page Subscriptions per Release"
+    ))) %>%
+    dashboard_datatable(page_length = 10)
+})
+
+output$topic_performance <- company_render_ui(function() {
+  company_topic_performance_reactive() %>%
+    dplyr::mutate(
+      dplyr::across(
+        dplyr::all_of(c(
+          "Average Views",
+          "Median Views",
+          "Watch Hours",
+          "Video-Page Subscriptions per Release"
+        )),
+        ~ round(.x, 1)
+      )
+    ) %>%
+    dplyr::select(dplyr::all_of(c(
+      "topic",
+      "Videos / Streams",
+      "Average Views",
+      "Median Views",
+      "Watch Hours",
+      "Video-Page Subscriptions per Release"
+    ))) %>%
+    dplyr::rename(Topic = "topic") %>%
+    dashboard_datatable(page_length = 15)
+})
+
+output$portfolio_share_plot <- company_render_ui(function() {
+  company_portfolio_share_plot(company_portfolio_reactive())
+})
+
+output$portfolio_table <- company_render_ui(function() {
+  company_portfolio_reactive() %>%
+    dplyr::mutate(
+      Talent = company_display_name(.data$talent_name),
+      dplyr::across(
+        dplyr::all_of(c(
+          "Release Share",
+          "View Share",
+          "Watch-time Share",
+          "Video-Page Subscription Share",
+          "Collaboration-Tagged Share"
+        )),
+        ~ scales::percent(.x, accuracy = 0.1)
+      ),
+      `Median Views` = round(.data$`Median Views`),
+      `Watch Hours` = round(.data$`Watch Hours`, 1)
+    ) %>%
+    dplyr::select(dplyr::all_of(c(
+      "Talent",
+      "Videos / Streams",
+      "Release Share",
+      "View Share",
+      "Watch-time Share",
+      "Video-Page Subscription Share",
+      "Median Views",
+      "Collaboration-Tagged Share",
+      "Topic Breadth"
+    ))) %>%
+    dashboard_datatable(page_length = 10)
+})
+
+output$content_type_mix <- company_render_ui(function() {
+  company_content_type_reactive() %>%
+    dplyr::mutate(
+      Talent = company_display_name(.data$talent_name),
+      `Content Type` = stringr::str_to_title(.data$`Content Type`),
+      `Talent Release Share` = scales::percent(
+        .data$`Talent Release Share`,
+        accuracy = 0.1
+      ),
+      `Median Views` = round(.data$`Median Views`),
+      `Watch Hours` = round(.data$`Watch Hours`, 1),
+      `Collaboration-Tagged Share` = scales::percent(
+        .data$`Collaboration-Tagged Share`,
+        accuracy = 0.1
+      )
+    ) %>%
+    dplyr::select(dplyr::all_of(c(
+      "Talent",
+      "Content Type",
+      "Videos / Streams",
+      "Talent Release Share",
+      "Median Views",
+      "Watch Hours",
+      "Collaboration-Tagged Share",
+      "Topic Breadth"
+    ))) %>%
+    dashboard_datatable(page_length = 15)
 })
 
 output$content_month_plot <- company_render_ui(function() {
@@ -983,40 +1877,89 @@ output$weekday_table <- company_render_ui(function() {
 
 output$topic_plot <- company_render_ui(function() {
   company_topic_reactive() %>%
-    dplyr::slice_max(.data$`Streamed Hours`, n = 12, with_ties = FALSE) %>%
-    dplyr::mutate(topic = stats::reorder(.data$topic, .data$`Streamed Hours`)) %>%
+    dplyr::slice_max(.data$`Content Hours`, n = 12, with_ties = FALSE) %>%
+    dplyr::mutate(topic = stats::reorder(.data$topic, .data$`Content Hours`)) %>%
     ggplot2::ggplot(
       ggplot2::aes(
         x = .data$topic,
-        y = .data$`Streamed Hours`,
+        y = .data$`Content Hours`,
         text = paste0(
           .data$topic,
-          "<br>Streamed hours: ",
-          scales::comma(.data$`Streamed Hours`, accuracy = 0.1)
+          "<br>Content hours: ",
+          scales::comma(.data$`Content Hours`, accuracy = 0.1)
         )
       )
     ) +
     ggplot2::geom_col(fill = "#2c7fb8") +
     ggplot2::coord_flip() +
-    ggplot2::labs(x = NULL, y = "Streamed hours") +
+    ggplot2::labs(x = NULL, y = "Content hours") +
     ggplot2::theme_minimal(base_size = 11)
 })
 
 output$topic_table <- company_render_ui(function() {
   company_topic_reactive() %>%
-    dplyr::mutate(`Streamed Hours` = round(.data$`Streamed Hours`, 1)) %>%
+    dplyr::mutate(`Content Hours` = round(.data$`Content Hours`, 1)) %>%
     dplyr::rename(Topic = "topic") %>%
     dashboard_datatable(page_length = 12)
 })
 
 output$reference_table <- company_render_ui(function() {
   dashboard_company_reference_summary(company_analytics_reactive()) %>%
-    dplyr::mutate(`Streamed Hours` = round(.data$`Streamed Hours`, 1)) %>%
+    dplyr::mutate(`Content Hours` = round(.data$`Content Hours`, 1)) %>%
     dplyr::rename(
       Topic = "topic",
       `Reference / Tags` = "content_reference"
     ) %>%
     dashboard_datatable(page_length = 15)
+})
+
+output$collaboration_performance <- company_render_ui(function() {
+  company_collaboration_performance_reactive() %>%
+    dplyr::mutate(
+      `Average Views` = round(.data$`Average Views`),
+      `Median Views` = round(.data$`Median Views`),
+      `Watch Hours` = round(.data$`Watch Hours`, 1),
+      `Video-Page Subscriptions per Release` = round(
+        .data$`Video-Page Subscriptions per Release`,
+        2
+      )
+    ) %>%
+    dplyr::select(dplyr::all_of(c(
+      "Collaboration",
+      "Videos / Streams",
+      "Average Views",
+      "Median Views",
+      "Watch Hours",
+      "Video-Page Subscriptions per Release"
+    ))) %>%
+    dashboard_datatable(page_length = 10)
+})
+
+output$representative_content <- company_render_ui(function() {
+  company_representative_reactive() %>%
+    dplyr::mutate(
+      Talent = company_display_name(.data$Talent),
+      `Watch Hours` = round(.data$`Watch Hours`, 1)
+    ) %>%
+    dashboard_datatable(page_length = 10)
+})
+
+output$video_explorer <- company_render_ui(function() {
+  company_video_reactive() %>%
+    dplyr::mutate(
+      Talent = company_display_name(.data$Talent),
+      `Watch Hours` = round(.data$`Watch Hours`, 1),
+      `Average View Duration (sec)` = round(
+        .data$`Average View Duration (sec)`,
+        1
+      ),
+      `Average View %` = round(.data$`Average View %`, 1)
+    ) %>%
+    company_searchable_datatable(page_length = 25)
+})
+
+output$fun_statistics <- company_render_ui(function() {
+  company_fun_stat_cards(company_fun_statistics_reactive())
 })
 
 output$method_filters <- company_render_ui(function() {
@@ -1062,6 +2005,106 @@ output$snapshot_coverage <- company_render_ui(function() {
     ) %>%
     dashboard_datatable(page_length = 10)
 })
+
+output$metric_coverage <- company_render_ui(function() {
+  company_metric_coverage_reactive() %>%
+    dplyr::mutate(`Coverage %` = round(.data$`Coverage %`, 1)) %>%
+    dashboard_datatable(page_length = 12)
+})
+
+output$audience_availability <- company_render_ui(function() {
+  htmltools::div(
+    class = "alert alert-info",
+    htmltools::tags$strong("Available in this iteration"),
+    htmltools::tags$ul(
+      htmltools::tags$li("Total views and cumulative watch hours"),
+      htmltools::tags$li("Average view duration and average view percentage"),
+      htmltools::tags$li("Video-page subscription events and release-level performance")
+    ),
+    htmltools::tags$strong("Not available in the current source"),
+    htmltools::tags$ul(
+      htmltools::tags$li("Unique viewers or unique reach"),
+      htmltools::tags$li("Geography, age, and gender"),
+      htmltools::tags$li("Average concurrent livestream viewers")
+    ),
+    htmltools::tags$small(
+      "Total views must not be described as unique audience reach. Missing ",
+      "audience fields are not estimated."
+    )
+  )
+})
+
+output$metric_definitions <- company_render_ui(function() {
+  tibble::tribble(
+    ~Metric, ~Definition,
+    "Latest selected snapshot",
+    "Maximum available analytics snapshot date per selected talent inside the sidebar window.",
+    "Total views",
+    "Sum of cumulative video views at each talent's latest selected snapshot.",
+    "Average / median views",
+    "Unweighted distribution of cumulative views across distinct selected releases.",
+    "Total content hours",
+    "Sum of catalogued video or stream durations; this is content duration, not elapsed days or watch time.",
+    "Watch hours",
+    "Sum of cumulative estimated minutes watched divided by 60.",
+    "Average view duration",
+    "Total cumulative watch seconds divided by total cumulative views.",
+    "Views-weighted average view %",
+    "Average video view percentage weighted by cumulative views.",
+    "Views per content hour",
+    "Total cumulative views divided by catalogued content hours.",
+    "Video-page subscriptions",
+    "Cumulative subscription events attributed by YouTube Analytics to the selected videos' watch pages; not current or net channel subscribers.",
+    "Average video-page subscriptions",
+    "Video-page subscription events divided by distinct selected releases.",
+    "Collaboration-tagged releases",
+    "Count and share of distinct releases whose latest title classification has collaborative energy.",
+    "Representative content",
+    "Top three releases by cumulative views for each selected talent."
+  ) %>%
+    dashboard_datatable(page_length = 12)
+})
+
+company_export_filename <- function(suffix) {
+  company_code <- dashboard_filters()$company_code
+  safe_company_code <- gsub("[^A-Za-z0-9_-]", "_", company_code)
+  paste0(
+    tolower(safe_company_code),
+    "_",
+    suffix,
+    "_",
+    format(Sys.Date(), "%Y-%m-%d"),
+    ".csv"
+  )
+}
+
+output$download_company_summary <- downloadHandler(
+  filename = function() company_export_filename("company_summary"),
+  content = function(file) {
+    utils::write.csv(company_performance_reactive(), file, row.names = FALSE)
+  }
+)
+
+output$download_talent_portfolio <- downloadHandler(
+  filename = function() company_export_filename("talent_portfolio"),
+  content = function(file) {
+    utils::write.csv(company_portfolio_reactive(), file, row.names = FALSE)
+  }
+)
+
+output$download_content_summary <- downloadHandler(
+  filename = function() company_export_filename("content_summary"),
+  content = function(file) {
+    utils::write.csv(company_topic_performance_reactive(), file, row.names = FALSE)
+  }
+)
+
+output$download_video_data <- downloadHandler(
+  filename = function() company_export_filename("video_data"),
+  content = function(file) {
+    utils::write.csv(company_video_reactive(), file, row.names = FALSE)
+  }
+)
 </script>
  
 <script type="application/shiny-prerendered" data-context="server-extras">
@@ -1106,12 +2149,12 @@ ojs_define <- function(..., .session = shiny::getDefaultReactiveDomain()) {
 </p>
 <!--html_preserve-->
 <script type="application/shiny-prerendered" data-context="dependencies">
-{"type":"list","attributes":{},"value":[{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["bootstrap-datepicker-js"]},{"type":"character","attributes":{},"value":["1.10.0"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["www/shared/datepicker"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["js/bootstrap-datepicker.min.js"]},{"type":"NULL"},{"type":"character","attributes":{},"value":["<script>(function() {\n        var datepicker = $.fn.datepicker.noConflict();\n        $.fn.bsDatepicker = datepicker;\n      })();\n     <\/script>"]},{"type":"NULL"},{"type":"character","attributes":{},"value":["shiny"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["1.14.0"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["bootstrap-datepicker-css"]},{"type":"character","attributes":{},"value":["1.10.0"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["www/shared/datepicker"]}]},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["css/bootstrap-datepicker3.min.css"]},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["shiny"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["1.14.0"]}]}]}
+{"type":"list","attributes":{},"value":[{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["bootstrap-datepicker-js"]},{"type":"character","attributes":{},"value":["1.10.0"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["www/shared/datepicker"]}]},{"type":"NULL"},{"type":"character","attributes":{},"value":["js/bootstrap-datepicker.min.js"]},{"type":"NULL"},{"type":"character","attributes":{},"value":["<script>(function() {\n        var datepicker = $.fn.datepicker.noConflict();\n        $.fn.bsDatepicker = datepicker;\n      })();\n     <\/script>"]},{"type":"NULL"},{"type":"character","attributes":{},"value":["shiny"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["1.14.0"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["bootstrap-datepicker-css"]},{"type":"character","attributes":{},"value":["1.10.0"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["www/shared/datepicker"]}]},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["css/bootstrap-datepicker3.min.css"]},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["shiny"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["1.14.0"]}]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["name","version","src","meta","script","stylesheet","head","attachment","package","all_files","pkgVersion"]},"class":{"type":"character","attributes":{},"value":["html_dependency"]}},"value":[{"type":"character","attributes":{},"value":["font-awesome"]},{"type":"character","attributes":{},"value":["6.5.2"]},{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["file"]}},"value":[{"type":"character","attributes":{},"value":["fontawesome"]}]},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["css/all.min.css","css/v4-shims.min.css"]},{"type":"NULL"},{"type":"NULL"},{"type":"character","attributes":{},"value":["fontawesome"]},{"type":"logical","attributes":{},"value":[true]},{"type":"character","attributes":{},"value":["0.5.3"]}]}]}
 </script>
 <!--/html_preserve-->
 <!--html_preserve-->
 <script type="application/shiny-prerendered" data-context="execution_dependencies">
-{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["packages"]}},"value":[{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["packages","version"]},"class":{"type":"character","attributes":{},"value":["data.frame"]},"row.names":{"type":"integer","attributes":{},"value":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77]}},"value":[{"type":"character","attributes":{},"value":["base","bit","bit64","bslib","cachem","cli","compiler","crayon","data.table","datasets","DBI","digest","dplyr","DT","duckdb","evaluate","farver","fastmap","generics","ggplot2","glue","graphics","grDevices","grid","gtable","here","hms","htmltools","htmlwidgets","httpuv","httr","jquerylib","jsonlite","knitr","later","lazyeval","lifecycle","lubridate","magrittr","memoise","methods","mime","otel","parallel","pillar","pkgconfig","plotly","promises","purrr","R6","RColorBrewer","Rcpp","readr","rlang","rmarkdown","rprojroot","S7","sass","scales","shiny","stats","stringi","stringr","tibble","tidyr","tidyselect","timechange","tools","tzdb","utils","vctrs","viridisLite","vroom","withr","xfun","xtable","yaml"]},{"type":"character","attributes":{},"value":["4.5.0","4.6.0","4.8.2","0.11.0","1.1.0","3.6.6","4.5.0","1.5.3","1.18.4","4.5.0","1.3.0","0.6.39","1.2.1","0.34.0","1.5.4.3","1.0.5","2.1.2","1.2.0","0.1.4","4.0.3","1.8.1","4.5.0","4.5.0","4.5.0","0.3.6","1.0.2","1.1.4","0.5.9","1.6.4","1.6.17","1.4.8","0.1.4","2.0.0","1.51","1.4.8","0.2.3","1.0.5","1.9.5","2.0.5","2.0.1","4.5.0","0.13","0.2.0","4.5.0","1.11.1","2.0.3","4.12.0","1.5.0","1.2.2","2.6.1","1.1-3","1.1.1-1.1","2.2.0","1.2.0","2.31","2.1.1","0.2.2","0.4.10","1.4.0","1.14.0","4.5.0","1.8.7","1.6.0","3.3.1","1.3.2","1.2.1","0.4.0","4.5.0","0.5.0","4.5.0","0.7.3","0.4.3","1.7.1","3.0.3","0.59","1.8-8","2.3.12"]}]}]}
+{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["packages"]}},"value":[{"type":"list","attributes":{"names":{"type":"character","attributes":{},"value":["packages","version"]},"class":{"type":"character","attributes":{},"value":["data.frame"]},"row.names":{"type":"integer","attributes":{},"value":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78]}},"value":[{"type":"character","attributes":{},"value":["base","bit","bit64","bslib","cachem","cli","compiler","crayon","data.table","datasets","DBI","digest","dplyr","DT","duckdb","evaluate","farver","fastmap","fontawesome","generics","ggplot2","glue","graphics","grDevices","grid","gtable","here","hms","htmltools","htmlwidgets","httpuv","httr","jquerylib","jsonlite","knitr","later","lazyeval","lifecycle","lubridate","magrittr","memoise","methods","mime","otel","parallel","pillar","pkgconfig","plotly","promises","purrr","R6","RColorBrewer","Rcpp","readr","rlang","rmarkdown","rprojroot","S7","sass","scales","shiny","stats","stringi","stringr","tibble","tidyr","tidyselect","timechange","tools","tzdb","utils","vctrs","viridisLite","vroom","withr","xfun","xtable","yaml"]},{"type":"character","attributes":{},"value":["4.5.0","4.6.0","4.8.2","0.11.0","1.1.0","3.6.6","4.5.0","1.5.3","1.18.4","4.5.0","1.3.0","0.6.39","1.2.1","0.34.0","1.5.4.3","1.0.5","2.1.2","1.2.0","0.5.3","0.1.4","4.0.3","1.8.1","4.5.0","4.5.0","4.5.0","0.3.6","1.0.2","1.1.4","0.5.9","1.6.4","1.6.17","1.4.8","0.1.4","2.0.0","1.51","1.4.8","0.2.3","1.0.5","1.9.5","2.0.5","2.0.1","4.5.0","0.13","0.2.0","4.5.0","1.11.1","2.0.3","4.12.0","1.5.0","1.2.2","2.6.1","1.1-3","1.1.1-1.1","2.2.0","1.2.0","2.31","2.1.1","0.2.2","0.4.10","1.4.0","1.14.0","4.5.0","1.8.7","1.6.0","3.3.1","1.3.2","1.2.1","0.4.0","4.5.0","0.5.0","4.5.0","0.7.3","0.4.3","1.7.1","3.0.3","0.59","1.8-8","2.3.12"]}]}]}
 </script>
 <!--/html_preserve-->
 

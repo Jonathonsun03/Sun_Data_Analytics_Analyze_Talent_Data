@@ -45,6 +45,45 @@ execute:
   min-height: 0;
 }
 
+.company-downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.75rem 0;
+}
+
+.company-fun-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.75rem;
+}
+
+.company-fun-stat {
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 0.5rem;
+  padding: 0.8rem;
+  background: var(--bs-body-bg, #fff);
+}
+
+.company-fun-stat-value {
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.company-fun-stat-label {
+  color: var(--bs-secondary-color, #666);
+  font-size: 0.82rem;
+}
+
+.company-value-note {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--bs-secondary-color, #666);
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.25;
+}
+
 @media (max-width: 768px) {
   .card:not(.bslib-value-box) {
     min-height: 24rem;
@@ -142,14 +181,82 @@ company_render_ui <- function(
   })
 }
 
-company_value_box <- function(title, value) {
+company_value_box <- function(title, value, note = NULL) {
+  displayed_value <- if (is.null(note)) {
+    value
+  } else {
+    htmltools::tagList(
+      htmltools::tags$span(value),
+      htmltools::tags$small(class = "company-value-note", note)
+    )
+  }
   if (requireNamespace("bslib", quietly = TRUE)) {
-    return(bslib::value_box(title = title, value = value))
+    return(bslib::value_box(title = title, value = displayed_value))
   }
   htmltools::div(
     class = "dashboard-metric-card",
     htmltools::tags$div(class = "dashboard-metric-label", title),
-    htmltools::tags$div(class = "dashboard-metric-value", value)
+    htmltools::tags$div(class = "dashboard-metric-value", displayed_value)
+  )
+}
+
+company_number <- function(value, accuracy = 1) {
+  if (length(value) == 0 || !is.finite(value[[1]])) {
+    return("N/A")
+  }
+  scales::comma(value[[1]], accuracy = accuracy)
+}
+
+company_percent <- function(value, accuracy = 0.1) {
+  if (length(value) == 0 || !is.finite(value[[1]])) {
+    return("N/A")
+  }
+  scales::percent(value[[1]], accuracy = accuracy)
+}
+
+company_seconds <- function(value) {
+  if (length(value) == 0 || !is.finite(value[[1]])) {
+    return("N/A")
+  }
+  paste0(scales::number(value[[1]] / 60, accuracy = 0.1), " min")
+}
+
+company_searchable_datatable <- function(data, page_length = 25) {
+  if (is.null(data) || nrow(data) == 0) {
+    return(NULL)
+  }
+  DT::datatable(
+    data,
+    rownames = FALSE,
+    filter = "top",
+    class = "display stripe hover",
+    options = list(
+      pageLength = page_length,
+      scrollX = TRUE,
+      autoWidth = TRUE
+    )
+  )
+}
+
+company_fun_stat_cards <- function(data) {
+  if (is.null(data) || nrow(data) == 0) {
+    return(NULL)
+  }
+  htmltools::div(
+    class = "company-fun-stat-grid",
+    lapply(seq_len(nrow(data)), function(index) {
+      htmltools::div(
+        class = "company-fun-stat",
+        htmltools::div(
+          class = "company-fun-stat-value",
+          data$value[[index]]
+        ),
+        htmltools::div(
+          class = "company-fun-stat-label",
+          data$statistic[[index]]
+        )
+      )
+    })
   )
 }
 
@@ -219,6 +326,120 @@ company_talent_weekday_plot <- function(data) {
     ggplot2::theme_minimal(base_size = 11) +
     ggplot2::theme(legend.position = "bottom")
 }
+
+company_portfolio_share_plot <- function(data) {
+  if (is.null(data) || nrow(data) == 0) {
+    return(NULL)
+  }
+  metric_levels <- c(
+    "Releases",
+    "Cumulative views",
+    "Audience watch hours",
+    "Video-page subscriptions"
+  )
+  plot_data <- dplyr::bind_rows(
+    data %>%
+      dplyr::transmute(
+        Talent = company_display_name(.data$talent_name),
+        Metric = "Releases",
+        Value = as.numeric(.data$`Videos / Streams`),
+        Share = .data$`Release Share`
+      ),
+    data %>%
+      dplyr::transmute(
+        Talent = company_display_name(.data$talent_name),
+        Metric = "Cumulative views",
+        Value = .data$`Total Views`,
+        Share = .data$`View Share`
+      ),
+    data %>%
+      dplyr::transmute(
+        Talent = company_display_name(.data$talent_name),
+        Metric = "Audience watch hours",
+        Value = .data$`Watch Hours`,
+        Share = .data$`Watch-time Share`
+      ),
+    data %>%
+      dplyr::transmute(
+        Talent = company_display_name(.data$talent_name),
+        Metric = "Video-page subscriptions",
+        Value = .data$`Video-Page Subscriptions`,
+        Share = .data$`Video-Page Subscription Share`
+      )
+  ) %>%
+    dplyr::group_by(.data$Metric) %>%
+    dplyr::mutate(
+      Total = sum(.data$Value, na.rm = TRUE),
+      `Contribution Value` = dplyr::if_else(
+        .data$Metric == "Audience watch hours",
+        scales::comma(.data$Value, accuracy = 0.1),
+        scales::comma(round(.data$Value))
+      ),
+      `Company Total` = dplyr::if_else(
+        .data$Metric == "Audience watch hours",
+        scales::comma(.data$Total, accuracy = 0.1),
+        scales::comma(round(.data$Total))
+      ),
+      `Share Label` = scales::percent(.data$Share, accuracy = 0.1),
+      Metric = factor(.data$Metric, levels = rev(metric_levels))
+    ) %>%
+    dplyr::ungroup()
+
+  ggplot2::ggplot(
+    plot_data,
+      ggplot2::aes(
+        x = .data$Share,
+        y = .data$Metric,
+        fill = .data$Talent,
+        text = paste0(
+          .data$Talent,
+          "<br>",
+          .data$Metric,
+          "<br>Contribution: ",
+          .data$`Contribution Value`,
+          " of ",
+          .data$`Company Total`,
+          "<br>Share: ",
+          .data$`Share Label`
+        )
+      )
+    ) +
+    ggplot2::geom_col(position = "stack", width = 0.7) +
+    ggplot2::geom_text(
+      ggplot2::aes(label = .data$`Share Label`),
+      position = ggplot2::position_stack(vjust = 0.5),
+      color = "white",
+      fontface = "bold",
+      size = 3.2,
+      show.legend = FALSE
+    ) +
+    ggplot2::scale_x_continuous(
+      labels = scales::label_percent(),
+      limits = c(0, 1),
+      expand = c(0, 0)
+    ) +
+    ggplot2::guides(fill = ggplot2::guide_legend(reverse = TRUE)) +
+    ggplot2::labs(
+      x = "Talent share of the selected-company total",
+      y = NULL,
+      fill = "Talent",
+      subtitle = paste(
+        "Each bar represents 100% of one metric across the selected talents.",
+        "Colored segments show each talent's contribution."
+      ),
+      caption = paste(
+        "Values use each talent's latest analytics snapshot inside the active",
+        "date window. Hover for exact contribution and total values."
+      )
+    ) +
+    ggplot2::theme_minimal(base_size = 11) +
+    ggplot2::theme(
+      legend.position = "bottom",
+      panel.grid.major.y = ggplot2::element_blank(),
+      plot.subtitle = ggplot2::element_text(color = "#555555"),
+      plot.caption = ggplot2::element_text(hjust = 0, color = "#666666")
+    )
+}
 ```
 
 # {.sidebar}
@@ -265,21 +486,38 @@ uiOutput("video_count")
 ```
 
 ```{r}
-#| title: "Streamed Hours"
-uiOutput("streamed_hours")
+#| title: "Total Content Hours"
+uiOutput("content_hours")
 ```
 
 ```{r}
-#| title: "Streamed Days"
-uiOutput("streamed_days")
+#| title: "Video-Page Subscriptions"
+uiOutput("video_page_subscriptions")
+```
+
+## Row {height=22%}
+
+```{r}
+#| title: "Average Views per Release"
+uiOutput("average_views")
 ```
 
 ```{r}
-#| title: "Subscribers Gained"
-uiOutput("subscribers_gained")
+#| title: "Median Views per Release"
+uiOutput("median_views")
 ```
 
-## Row {height=58%}
+```{r}
+#| title: "Average Video-Page Subscriptions"
+uiOutput("subscriptions_per_release")
+```
+
+```{r}
+#| title: "Collaboration-Tagged Releases"
+uiOutput("collaboration_releases")
+```
+
+## Row {height=48%}
 
 ```{r}
 #| title: "Talent Breakdown"
@@ -289,6 +527,76 @@ uiOutput("talent_summary")
 ```{r}
 #| title: "Content Releases by Month"
 uiOutput("content_month_plot")
+```
+
+# Performance & Attention
+
+Attention metrics use cumulative analytics from each talent's selected
+snapshot. They describe observed channel performance, not unique audience reach
+or predicted campaign results.
+
+## Row {height=24%}
+
+```{r}
+#| title: "Watch Hours"
+uiOutput("watch_hours")
+```
+
+```{r}
+#| title: "Average View Duration"
+uiOutput("average_view_duration")
+```
+
+```{r}
+#| title: "Views-weighted Average View %"
+uiOutput("weighted_view_percentage")
+```
+
+```{r}
+#| title: "Views per Content Hour"
+uiOutput("views_per_content_hour")
+```
+
+```{r}
+#| title: "Video-Page Subscriptions per 1,000 Views"
+uiOutput("subscriptions_per_thousand_views")
+```
+
+## Row {height=68%}
+
+```{r}
+#| title: "Performance by Content Type"
+uiOutput("content_type_performance")
+```
+
+```{r}
+#| title: "Performance by Topic"
+uiOutput("topic_performance")
+```
+
+# Talent Portfolio
+
+Each contribution bar represents 100% of one metric across the active talent
+selection. The colored segments show how much each talent contributes to that
+total; they do not show growth or performance against a target.
+
+## Row {height=48%}
+
+```{r}
+#| title: "How Talents Contribute to Company Totals"
+uiOutput("portfolio_share_plot")
+```
+
+```{r}
+#| title: "Talent Portfolio Summary"
+uiOutput("portfolio_table")
+```
+
+## Row {height=44%}
+
+```{r}
+#| title: "Content Mix by Talent"
+uiOutput("content_type_mix")
 ```
 
 # Publishing Activity
@@ -328,7 +636,7 @@ used by the creator dashboard.
 ## Row {height=46%}
 
 ```{r}
-#| title: "Streamed Hours by Topic"
+#| title: "Content Hours by Topic"
 uiOutput("topic_plot")
 ```
 
@@ -344,9 +652,57 @@ uiOutput("topic_table")
 uiOutput("reference_table")
 ```
 
+## Row {height=48%}
+
+```{r}
+#| title: "Collaboration Performance"
+uiOutput("collaboration_performance")
+```
+
+```{r}
+#| title: "Representative Content"
+uiOutput("representative_content")
+```
+
+# Video Explorer & Data Extraction
+
+The explorer contains one row per selected video at the applicable talent
+snapshot. Search and column filters support evidence review; downloads preserve
+the active company, talent, and snapshot selections.
+
+## Row {height=18%}
+
+```{r}
+htmltools::div(
+  class = "company-downloads",
+  downloadButton("download_company_summary", "Company summary CSV"),
+  downloadButton("download_talent_portfolio", "Talent portfolio CSV"),
+  downloadButton("download_content_summary", "Content summary CSV"),
+  downloadButton("download_video_data", "Video-level CSV")
+)
+```
+
+## Row {height=72%}
+
+```{r}
+#| title: "Searchable Video Explorer"
+uiOutput("video_explorer")
+```
+
+# Fun Statistics
+
+These are reproducible, graphic-friendly observations from the active
+selection. They are descriptive statistics rather than promotional claims.
+
+## Row {height=75%}
+
+```{r}
+uiOutput("fun_statistics")
+```
+
 # Method Notes
 
-## Row {height=45%}
+## Row {height=38%}
 
 ```{r}
 #| title: "Active Filters"
@@ -358,7 +714,24 @@ uiOutput("method_filters")
 uiOutput("snapshot_coverage")
 ```
 
-## Row {height=35%}
+## Row {height=34%}
+
+```{r}
+#| title: "Metric Coverage"
+uiOutput("metric_coverage")
+```
+
+```{r}
+#| title: "Audience Data Availability"
+uiOutput("audience_availability")
+```
+
+## Row {height=50%}
+
+```{r}
+#| title: "Metric Definitions"
+uiOutput("metric_definitions")
+```
 
 ```{r}
 #| title: "Calculation Notes"
@@ -367,9 +740,14 @@ uiOutput("snapshot_coverage")
 cat(
   "- Date filters apply to analytics snapshot dates, matching the creator dashboard.\n",
   "- Each talent contributes only its latest snapshot within the selected range.\n",
-  "- Total views and subscriber gains are cumulative values at those snapshots.\n",
-  "- Streamed hours use the catalogued duration of each distinct video or stream.\n",
+  "- Total views and video-page subscription events are cumulative values at those snapshots.\n",
+  "- Total content hours sum the catalogued duration of each distinct video or stream; the displayed day conversion is a scale reference, not elapsed calendar time or audience watch time.\n",
+  "- Watch hours use cumulative estimated minutes watched from YouTube Analytics.\n",
+  "- Average view duration is aggregate watch seconds divided by total views.\n",
+  "- Average view percentage is weighted by views rather than averaged equally across releases.\n",
   "- Monthly and weekday panels group those distinct videos by publication date.\n",
+  "- Representative content is selected reproducibly as the top three releases by cumulative views for each selected talent.\n",
+  "- Total views are not unique viewers or unique reach. Unsupported audience fields remain explicitly unavailable.\n",
   "- Company membership is maintained in `config/dashboard/company_talents.csv`.\n",
   sep = ""
 )
@@ -618,6 +996,54 @@ company_topic_reactive <- reactive({
   dashboard_company_topic_summary(company_analytics_reactive())
 })
 
+company_performance_reactive <- reactive({
+  dashboard_company_performance_summary(company_analytics_reactive())
+})
+
+company_attention_reactive <- reactive({
+  dashboard_company_attention_summary(company_analytics_reactive())
+})
+
+company_portfolio_reactive <- reactive({
+  dashboard_company_portfolio_summary(company_analytics_reactive())
+})
+
+company_content_type_reactive <- reactive({
+  dashboard_company_content_type_summary(company_analytics_reactive())
+})
+
+company_topic_performance_reactive <- reactive({
+  dashboard_company_performance_summary(
+    company_analytics_reactive(),
+    group_columns = "topic"
+  ) %>%
+    dplyr::arrange(dplyr::desc(.data$`Total Views`))
+})
+
+company_collaboration_performance_reactive <- reactive({
+  company_analytics_reactive() %>%
+    dplyr::mutate(
+      Collaboration = dplyr::if_else(.data$is_collab, "Yes", "No")
+    ) %>%
+    dashboard_company_performance_summary(group_columns = "Collaboration")
+})
+
+company_video_reactive <- reactive({
+  dashboard_company_video_explorer(company_analytics_reactive())
+})
+
+company_representative_reactive <- reactive({
+  dashboard_company_representative_content(company_analytics_reactive())
+})
+
+company_fun_statistics_reactive <- reactive({
+  dashboard_company_fun_statistics(company_analytics_reactive())
+})
+
+company_metric_coverage_reactive <- reactive({
+  dashboard_company_data_quality(company_analytics_reactive())
+})
+
 output$total_views <- company_render_ui(function() {
   company_value_box(
     "Total Views",
@@ -632,24 +1058,126 @@ output$video_count <- company_render_ui(function() {
   )
 })
 
-output$streamed_hours <- company_render_ui(function() {
+output$content_hours <- company_render_ui(function() {
+  total_hours <- company_totals_reactive()$total_hours[[1]]
   company_value_box(
-    "Streamed Hours",
-    scales::comma(company_totals_reactive()$total_hours[[1]], accuracy = 0.1)
+    "Total Content Hours",
+    scales::comma(total_hours, accuracy = 0.1),
+    paste0(
+      "Equivalent to ",
+      scales::comma(total_hours / 24, accuracy = 0.1),
+      " continuous 24-hour days of content"
+    )
   )
 })
 
-output$streamed_days <- company_render_ui(function() {
+output$video_page_subscriptions <- company_render_ui(function() {
   company_value_box(
-    "Streamed Days",
-    scales::comma(company_totals_reactive()$total_days[[1]], accuracy = 0.1)
+    "Video-Page Subscriptions",
+    scales::comma(
+      round(company_totals_reactive()$video_page_subscriptions[[1]])
+    ),
+    "Cumulative watch-page events; not current subscriber total"
   )
 })
 
-output$subscribers_gained <- company_render_ui(function() {
+output$average_views <- company_render_ui(function() {
   company_value_box(
-    "Subscribers Gained",
-    scales::comma(round(company_totals_reactive()$subscribers_gained[[1]]))
+    "Average Views per Release",
+    company_number(company_performance_reactive()$`Average Views`, accuracy = 1)
+  )
+})
+
+output$median_views <- company_render_ui(function() {
+  company_value_box(
+    "Median Views per Release",
+    company_number(company_performance_reactive()$`Median Views`, accuracy = 1)
+  )
+})
+
+output$subscriptions_per_release <- company_render_ui(function() {
+  performance <- company_performance_reactive()
+  company_value_box(
+    "Average Video-Page Subscriptions",
+    company_number(
+      performance$`Video-Page Subscriptions per Release`,
+      accuracy = 0.1
+    ),
+    paste0(
+      scales::comma(round(performance$`Video-Page Subscriptions`[[1]])),
+      " events across ",
+      scales::comma(performance$`Videos / Streams`[[1]]),
+      " releases"
+    )
+  )
+})
+
+output$collaboration_releases <- company_render_ui(function() {
+  performance <- company_performance_reactive()
+  collaboration_count <- performance$`Collaboration-Tagged Releases`[[1]]
+  release_count <- performance$`Videos / Streams`[[1]]
+  company_value_box(
+    "Collaboration-Tagged Releases",
+    paste0(
+      scales::comma(collaboration_count),
+      " of ",
+      scales::comma(release_count)
+    ),
+    paste0(
+      company_percent(
+        performance$`Collaboration-Tagged Share`,
+        accuracy = 0.1
+      ),
+      " of selected releases"
+    )
+  )
+})
+
+output$watch_hours <- company_render_ui(function() {
+  company_value_box(
+    "Watch Hours",
+    company_number(company_attention_reactive()$`Watch Hours`, accuracy = 0.1)
+  )
+})
+
+output$average_view_duration <- company_render_ui(function() {
+  company_value_box(
+    "Average View Duration",
+    company_seconds(
+      company_attention_reactive()$`Average View Duration (sec)`
+    )
+  )
+})
+
+output$weighted_view_percentage <- company_render_ui(function() {
+  value <- company_attention_reactive()$`Views-weighted Average View %`
+  company_value_box(
+    "Views-weighted Average View %",
+    if (length(value) == 0 || !is.finite(value[[1]])) {
+      "N/A"
+    } else {
+      paste0(company_number(value, accuracy = 0.1), "%")
+    }
+  )
+})
+
+output$views_per_content_hour <- company_render_ui(function() {
+  company_value_box(
+    "Views per Content Hour",
+    company_number(
+      company_attention_reactive()$`Views per Content Hour`,
+      accuracy = 0.1
+    )
+  )
+})
+
+output$subscriptions_per_thousand_views <- company_render_ui(function() {
+  company_value_box(
+    "Video-Page Subscriptions per 1,000 Views",
+    company_number(
+      company_attention_reactive()$`Video-Page Subscriptions per 1,000 Views`,
+      accuracy = 0.01
+    )
   )
 })
 
@@ -657,17 +1185,138 @@ output$talent_summary <- company_render_ui(function() {
   dashboard_company_talent_summary(company_analytics_reactive()) %>%
     dplyr::mutate(
       Talent = company_display_name(.data$talent_name),
-      `Streamed Hours` = round(.data$`Streamed Hours`, 1)
+      `Content Hours` = round(.data$`Content Hours`, 1)
     ) %>%
     dplyr::select(dplyr::all_of(c(
       "Talent",
       "Videos / Streams",
-      "Streamed Hours",
+      "Content Hours",
       "Total Views",
-      "Subscribers Gained",
+      "Video-Page Subscriptions",
       "Snapshot Date"
     ))) %>%
     dashboard_datatable(page_length = 10)
+})
+
+output$content_type_performance <- company_render_ui(function() {
+  dashboard_company_performance_summary(
+    company_analytics_reactive(),
+    group_columns = "Content Type"
+  ) %>%
+    dplyr::mutate(
+      `Content Type` = stringr::str_to_title(.data$`Content Type`),
+      dplyr::across(
+        dplyr::all_of(c(
+          "Average Views",
+          "Median Views",
+          "Watch Hours",
+          "Average View Duration (sec)",
+          "Views-weighted Average View %",
+          "Video-Page Subscriptions per Release"
+        )),
+        ~ round(.x, 1)
+      )
+    ) %>%
+    dplyr::select(dplyr::all_of(c(
+      "Content Type",
+      "Videos / Streams",
+      "Average Views",
+      "Median Views",
+      "Watch Hours",
+      "Average View Duration (sec)",
+      "Views-weighted Average View %",
+      "Video-Page Subscriptions per Release"
+    ))) %>%
+    dashboard_datatable(page_length = 10)
+})
+
+output$topic_performance <- company_render_ui(function() {
+  company_topic_performance_reactive() %>%
+    dplyr::mutate(
+      dplyr::across(
+        dplyr::all_of(c(
+          "Average Views",
+          "Median Views",
+          "Watch Hours",
+          "Video-Page Subscriptions per Release"
+        )),
+        ~ round(.x, 1)
+      )
+    ) %>%
+    dplyr::select(dplyr::all_of(c(
+      "topic",
+      "Videos / Streams",
+      "Average Views",
+      "Median Views",
+      "Watch Hours",
+      "Video-Page Subscriptions per Release"
+    ))) %>%
+    dplyr::rename(Topic = "topic") %>%
+    dashboard_datatable(page_length = 15)
+})
+
+output$portfolio_share_plot <- company_render_ui(function() {
+  company_portfolio_share_plot(company_portfolio_reactive())
+})
+
+output$portfolio_table <- company_render_ui(function() {
+  company_portfolio_reactive() %>%
+    dplyr::mutate(
+      Talent = company_display_name(.data$talent_name),
+      dplyr::across(
+        dplyr::all_of(c(
+          "Release Share",
+          "View Share",
+          "Watch-time Share",
+          "Video-Page Subscription Share",
+          "Collaboration-Tagged Share"
+        )),
+        ~ scales::percent(.x, accuracy = 0.1)
+      ),
+      `Median Views` = round(.data$`Median Views`),
+      `Watch Hours` = round(.data$`Watch Hours`, 1)
+    ) %>%
+    dplyr::select(dplyr::all_of(c(
+      "Talent",
+      "Videos / Streams",
+      "Release Share",
+      "View Share",
+      "Watch-time Share",
+      "Video-Page Subscription Share",
+      "Median Views",
+      "Collaboration-Tagged Share",
+      "Topic Breadth"
+    ))) %>%
+    dashboard_datatable(page_length = 10)
+})
+
+output$content_type_mix <- company_render_ui(function() {
+  company_content_type_reactive() %>%
+    dplyr::mutate(
+      Talent = company_display_name(.data$talent_name),
+      `Content Type` = stringr::str_to_title(.data$`Content Type`),
+      `Talent Release Share` = scales::percent(
+        .data$`Talent Release Share`,
+        accuracy = 0.1
+      ),
+      `Median Views` = round(.data$`Median Views`),
+      `Watch Hours` = round(.data$`Watch Hours`, 1),
+      `Collaboration-Tagged Share` = scales::percent(
+        .data$`Collaboration-Tagged Share`,
+        accuracy = 0.1
+      )
+    ) %>%
+    dplyr::select(dplyr::all_of(c(
+      "Talent",
+      "Content Type",
+      "Videos / Streams",
+      "Talent Release Share",
+      "Median Views",
+      "Watch Hours",
+      "Collaboration-Tagged Share",
+      "Topic Breadth"
+    ))) %>%
+    dashboard_datatable(page_length = 15)
 })
 
 output$content_month_plot <- company_render_ui(function() {
@@ -712,40 +1361,89 @@ output$weekday_table <- company_render_ui(function() {
 
 output$topic_plot <- company_render_ui(function() {
   company_topic_reactive() %>%
-    dplyr::slice_max(.data$`Streamed Hours`, n = 12, with_ties = FALSE) %>%
-    dplyr::mutate(topic = stats::reorder(.data$topic, .data$`Streamed Hours`)) %>%
+    dplyr::slice_max(.data$`Content Hours`, n = 12, with_ties = FALSE) %>%
+    dplyr::mutate(topic = stats::reorder(.data$topic, .data$`Content Hours`)) %>%
     ggplot2::ggplot(
       ggplot2::aes(
         x = .data$topic,
-        y = .data$`Streamed Hours`,
+        y = .data$`Content Hours`,
         text = paste0(
           .data$topic,
-          "<br>Streamed hours: ",
-          scales::comma(.data$`Streamed Hours`, accuracy = 0.1)
+          "<br>Content hours: ",
+          scales::comma(.data$`Content Hours`, accuracy = 0.1)
         )
       )
     ) +
     ggplot2::geom_col(fill = "#2c7fb8") +
     ggplot2::coord_flip() +
-    ggplot2::labs(x = NULL, y = "Streamed hours") +
+    ggplot2::labs(x = NULL, y = "Content hours") +
     ggplot2::theme_minimal(base_size = 11)
 })
 
 output$topic_table <- company_render_ui(function() {
   company_topic_reactive() %>%
-    dplyr::mutate(`Streamed Hours` = round(.data$`Streamed Hours`, 1)) %>%
+    dplyr::mutate(`Content Hours` = round(.data$`Content Hours`, 1)) %>%
     dplyr::rename(Topic = "topic") %>%
     dashboard_datatable(page_length = 12)
 })
 
 output$reference_table <- company_render_ui(function() {
   dashboard_company_reference_summary(company_analytics_reactive()) %>%
-    dplyr::mutate(`Streamed Hours` = round(.data$`Streamed Hours`, 1)) %>%
+    dplyr::mutate(`Content Hours` = round(.data$`Content Hours`, 1)) %>%
     dplyr::rename(
       Topic = "topic",
       `Reference / Tags` = "content_reference"
     ) %>%
     dashboard_datatable(page_length = 15)
+})
+
+output$collaboration_performance <- company_render_ui(function() {
+  company_collaboration_performance_reactive() %>%
+    dplyr::mutate(
+      `Average Views` = round(.data$`Average Views`),
+      `Median Views` = round(.data$`Median Views`),
+      `Watch Hours` = round(.data$`Watch Hours`, 1),
+      `Video-Page Subscriptions per Release` = round(
+        .data$`Video-Page Subscriptions per Release`,
+        2
+      )
+    ) %>%
+    dplyr::select(dplyr::all_of(c(
+      "Collaboration",
+      "Videos / Streams",
+      "Average Views",
+      "Median Views",
+      "Watch Hours",
+      "Video-Page Subscriptions per Release"
+    ))) %>%
+    dashboard_datatable(page_length = 10)
+})
+
+output$representative_content <- company_render_ui(function() {
+  company_representative_reactive() %>%
+    dplyr::mutate(
+      Talent = company_display_name(.data$Talent),
+      `Watch Hours` = round(.data$`Watch Hours`, 1)
+    ) %>%
+    dashboard_datatable(page_length = 10)
+})
+
+output$video_explorer <- company_render_ui(function() {
+  company_video_reactive() %>%
+    dplyr::mutate(
+      Talent = company_display_name(.data$Talent),
+      `Watch Hours` = round(.data$`Watch Hours`, 1),
+      `Average View Duration (sec)` = round(
+        .data$`Average View Duration (sec)`,
+        1
+      ),
+      `Average View %` = round(.data$`Average View %`, 1)
+    ) %>%
+    company_searchable_datatable(page_length = 25)
+})
+
+output$fun_statistics <- company_render_ui(function() {
+  company_fun_stat_cards(company_fun_statistics_reactive())
 })
 
 output$method_filters <- company_render_ui(function() {
@@ -791,4 +1489,104 @@ output$snapshot_coverage <- company_render_ui(function() {
     ) %>%
     dashboard_datatable(page_length = 10)
 })
+
+output$metric_coverage <- company_render_ui(function() {
+  company_metric_coverage_reactive() %>%
+    dplyr::mutate(`Coverage %` = round(.data$`Coverage %`, 1)) %>%
+    dashboard_datatable(page_length = 12)
+})
+
+output$audience_availability <- company_render_ui(function() {
+  htmltools::div(
+    class = "alert alert-info",
+    htmltools::tags$strong("Available in this iteration"),
+    htmltools::tags$ul(
+      htmltools::tags$li("Total views and cumulative watch hours"),
+      htmltools::tags$li("Average view duration and average view percentage"),
+      htmltools::tags$li("Video-page subscription events and release-level performance")
+    ),
+    htmltools::tags$strong("Not available in the current source"),
+    htmltools::tags$ul(
+      htmltools::tags$li("Unique viewers or unique reach"),
+      htmltools::tags$li("Geography, age, and gender"),
+      htmltools::tags$li("Average concurrent livestream viewers")
+    ),
+    htmltools::tags$small(
+      "Total views must not be described as unique audience reach. Missing ",
+      "audience fields are not estimated."
+    )
+  )
+})
+
+output$metric_definitions <- company_render_ui(function() {
+  tibble::tribble(
+    ~Metric, ~Definition,
+    "Latest selected snapshot",
+    "Maximum available analytics snapshot date per selected talent inside the sidebar window.",
+    "Total views",
+    "Sum of cumulative video views at each talent's latest selected snapshot.",
+    "Average / median views",
+    "Unweighted distribution of cumulative views across distinct selected releases.",
+    "Total content hours",
+    "Sum of catalogued video or stream durations; this is content duration, not elapsed days or watch time.",
+    "Watch hours",
+    "Sum of cumulative estimated minutes watched divided by 60.",
+    "Average view duration",
+    "Total cumulative watch seconds divided by total cumulative views.",
+    "Views-weighted average view %",
+    "Average video view percentage weighted by cumulative views.",
+    "Views per content hour",
+    "Total cumulative views divided by catalogued content hours.",
+    "Video-page subscriptions",
+    "Cumulative subscription events attributed by YouTube Analytics to the selected videos' watch pages; not current or net channel subscribers.",
+    "Average video-page subscriptions",
+    "Video-page subscription events divided by distinct selected releases.",
+    "Collaboration-tagged releases",
+    "Count and share of distinct releases whose latest title classification has collaborative energy.",
+    "Representative content",
+    "Top three releases by cumulative views for each selected talent."
+  ) %>%
+    dashboard_datatable(page_length = 12)
+})
+
+company_export_filename <- function(suffix) {
+  company_code <- dashboard_filters()$company_code
+  safe_company_code <- gsub("[^A-Za-z0-9_-]", "_", company_code)
+  paste0(
+    tolower(safe_company_code),
+    "_",
+    suffix,
+    "_",
+    format(Sys.Date(), "%Y-%m-%d"),
+    ".csv"
+  )
+}
+
+output$download_company_summary <- downloadHandler(
+  filename = function() company_export_filename("company_summary"),
+  content = function(file) {
+    utils::write.csv(company_performance_reactive(), file, row.names = FALSE)
+  }
+)
+
+output$download_talent_portfolio <- downloadHandler(
+  filename = function() company_export_filename("talent_portfolio"),
+  content = function(file) {
+    utils::write.csv(company_portfolio_reactive(), file, row.names = FALSE)
+  }
+)
+
+output$download_content_summary <- downloadHandler(
+  filename = function() company_export_filename("content_summary"),
+  content = function(file) {
+    utils::write.csv(company_topic_performance_reactive(), file, row.names = FALSE)
+  }
+)
+
+output$download_video_data <- downloadHandler(
+  filename = function() company_export_filename("video_data"),
+  content = function(file) {
+    utils::write.csv(company_video_reactive(), file, row.names = FALSE)
+  }
+)
 ```

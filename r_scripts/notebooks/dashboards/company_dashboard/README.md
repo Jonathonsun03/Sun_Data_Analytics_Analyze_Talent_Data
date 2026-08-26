@@ -27,12 +27,22 @@ or event proposals. Those downstream materials remain separate deliverables.
   dashboard.
 - Aggregate each selected talent at its latest available snapshot inside that
   window, preventing cumulative daily snapshots from being double-counted.
-- Report company totals for views, releases, streamed time, and subscribers
-  gained.
+- Report company totals for views, releases, total content duration, and
+  video-page subscription events.
 - Reconcile company totals through a per-talent breakdown and snapshot-coverage
   table.
 - Analyze monthly publishing, talent-level weekday publishing, collaborations,
   classified topics, and included references.
+- Compare average, median, watch-time, retention, and video-page subscription
+  performance by content type and topic.
+- Show talent contribution shares, content mix, collaboration-tagged share, and
+  topic breadth.
+- Explore searchable video-level evidence and reproducibly selected
+  representative content.
+- Download company, talent, content, and video-level tables for downstream
+  analysis or design.
+- Report fun statistics, metric definitions, source coverage, and unsupported
+  audience fields without estimating missing values.
 
 Company membership is maintained in
 `config/dashboard/company_talents.csv`. Add one row per company/talent pair when
@@ -40,41 +50,33 @@ another company should become available.
 
 ## Analytical roadmap note
 
-Future development should expand the dashboard as a broad analytical platform,
-not turn it into a bid packet. Candidate additions are:
+This iteration implements the roadmap as a broad analytical platform without
+turning the dashboard into a bid packet:
 
-1. **Typical performance**
-   - Average, median, and quartile views per release.
-   - Subscriber performance per release.
-   - Comparisons by talent, content type, and topic.
-2. **Audience attention**
-   - Watch hours, average view duration, and views-weighted average view
-     percentage.
-   - Views per streamed hour and subscribers gained per 1,000 views.
-   - Average concurrent livestream viewers only when that exact source metric
-     is available.
-3. **Audience profile**
-   - Geography, age, gender, and format differences where source coverage is
-     sufficient.
-   - Clear distinctions among total views, unique viewers, and unique reach.
-4. **Talent portfolio**
-   - Each talent's share of views, watch time, releases, and subscriber gains.
-   - Content mix, collaboration rate, engagement, and topic breadth by talent.
-5. **Content relevance**
-   - Topic, reference, franchise, format, and collaboration performance.
-   - Representative content selected with visible, reproducible criteria.
-6. **Representative-content explorer**
-   - Searchable video details, classifications, performance, engagement, and
-     source links.
-7. **Fun statistics**
-   - Graphic-friendly but factual observations such as continuous content days,
-     common release days, publishing peaks, topic breadth, and milestone counts.
-8. **Data extraction**
-   - Company, talent, content, audience, and representative-video tables that
-     can be exported for downstream analysis or design work.
-9. **Methodology and quality**
-   - Definitions, contributing-row counts, included talents, snapshot dates,
-     missing-data indicators, and interpretation limits for reusable metrics.
+1. **Typical performance:** average and median views, video-page subscription
+   events per release, and comparisons by content type and topic.
+2. **Audience attention:** watch hours, aggregate average view duration,
+   views-weighted average view percentage, views per content hour,
+   and video-page subscription events per 1,000 views.
+3. **Talent portfolio:** each talent's share of releases, views, watch time, and
+   video-page subscription events, plus content mix, collaboration-tagged
+   share, and topic breadth.
+4. **Content relevance:** topic, reference, format, and collaboration
+   performance with top-three-per-talent representative content selected by a
+   visible cumulative-view criterion.
+5. **Representative-content explorer:** searchable video details,
+   classifications, observed performance, engagement measures, and source URLs.
+6. **Fun statistics:** continuous release days, common release day, busiest
+   publishing month, topic breadth, and view milestones.
+7. **Data extraction:** downloadable company, talent, topic, and video-level CSV
+   tables that retain the active filters.
+8. **Methodology and quality:** definitions, contributing-row counts, included
+   talents, snapshot dates, missing-data indicators, and interpretation limits.
+
+Audience geography, age, gender, unique viewers, unique reach, and average
+concurrent livestream viewers remain explicitly unavailable because the current
+source does not provide those fields. They should be added only when exact
+source metrics become available, never inferred from total views.
 
 The roadmap deliberately excludes sponsorship rates, partnership packages,
 contact details, sales language, predicted campaign results, and bid-packet or
