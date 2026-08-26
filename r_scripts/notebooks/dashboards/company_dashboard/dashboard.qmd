@@ -1,403 +1,794 @@
 ---
-title: "Variance Wrapped 2025 Talent Report"
-author: "Jonathon Sun"
-date: today
+title: "Company Performance Dashboard"
 format:
-  html:
-    toc: true
-    toc-depth: 3
-    theme: united
-    embed-resources: true
-  pdf:
-    toc: true
-    number-sections: true
-    pdf-engine: xelatex
-params:
-  talent: "Leia Memoria【Variance Project】"
-  data_source: "datalake"
-  data_root: null
-  title_classifications_path: null
+  dashboard:
+    orientation: rows
+server: shiny
 execute:
   echo: false
   warning: false
   message: false
 ---
 
-# Executive Summary
+<style>
+@media (min-width: 769px) {
+  body.dashboard-sidebar .bslib-sidebar-layout {
+    --bslib-sidebar-width: 330px;
+  }
+}
 
-# Introduction
+#snapshot_dates .input-daterange {
+  flex-wrap: nowrap;
+}
 
-This report summarizes publishing activity and performance for **`r params$talent`**.
+#snapshot_dates .input-daterange .form-control {
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.card-body:has(.company-dashboard-plot) {
+  overflow: hidden;
+}
+
+.company-dashboard-plot {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.company-dashboard-plot > .html-widget {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+@media (max-width: 768px) {
+  .card:not(.bslib-value-box) {
+    min-height: 24rem;
+  }
+
+  .js-plotly-plot {
+    min-height: 20rem;
+  }
+
+  .dataTables_wrapper {
+    font-size: 0.78rem;
+  }
+}
+</style>
 
 ```{r}
 #| label: setup
+#| context: setup
 #| include: false
 
-find_variance_repo_root <- function(start = getwd()) {
-  env_root <- trimws(Sys.getenv("TALENT_REPO_ROOT", unset = ""))
-  if (nzchar(env_root)) {
-    return(normalizePath(env_root, winslash = "/", mustWork = TRUE))
-  }
-
-  candidate <- normalizePath(start, winslash = "/", mustWork = TRUE)
-  repeat {
-    if (file.exists(file.path(candidate, "AGENTS.md")) &&
-        dir.exists(file.path(candidate, "r_scripts"))) {
-      return(candidate)
-    }
-    parent <- dirname(candidate)
-    if (identical(parent, candidate)) {
-      break
-    }
-    candidate <- parent
-  }
-
-  stop("Could not locate the repository root. Set TALENT_REPO_ROOT.")
-}
-
-repo_root <- find_variance_repo_root()
-
-knitr::opts_chunk$set(fig.align = "center")
-knitr::opts_knit$set(root.dir = repo_root)
-
-if (knitr::is_latex_output()) {
-  knitr::opts_chunk$set(
-    fig.width = 14,
-    fig.height = 7,
-    out.width = "0.8\\linewidth"
-  )
-} else {
-  knitr::opts_chunk$set(
-    fig.width = 10,
-    fig.height = 5
-  )
-}
-
-required_packages <- c(
-  "dplyr",
-  "kableExtra",
-  "lubridate",
-  "purrr",
-  "readr",
-  "stringr"
+knitr::opts_knit$set(
+  root.dir = normalizePath(getwd(), winslash = "/", mustWork = TRUE)
 )
-missing_packages <- required_packages[
-  !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
-]
-if (length(missing_packages) > 0) {
-  stop(
-    "Missing required R packages: ",
-    paste(missing_packages, collapse = ", "),
-    ". Install them in the project renv library before rendering."
-  )
+
+dashboard_machine_library <- file.path(
+  path.expand("~/R"),
+  paste0(R.version$platform, "-library"),
+  paste(R.version$major, sub("\\..*$", "", R.version$minor), sep = ".")
+)
+if (dir.exists(dashboard_machine_library)) {
+  .libPaths(unique(c(.libPaths(), dashboard_machine_library)))
 }
 
-suppressPackageStartupMessages({
-  library(dplyr)
-  library(kableExtra)
-  library(lubridate)
-  library(stringr)
-})
+library(here)
+library(shiny)
 
-source(file.path(repo_root, "r_scripts", "lib", "utils", "repo_env.R"))
-load_repo_env(repo_root)
-source(file.path(repo_root, "r_scripts", "lib", "utils", "datalake_root.r"))
-source(file.path(repo_root, "r_scripts", "lib", "utils", "staging_root.R"))
-source(file.path(repo_root, "r_scripts", "lib", "utils", "talent_select.R"))
-source(file.path(repo_root, "r_scripts", "lib", "import_data", "talent_files.R"))
-source(file.path(repo_root, "r_scripts", "lib", "clean_data", "CleanData.R"))
+source(here::here("r_scripts", "lib", "dashboard", "load.R"))
 
-resolve_variance_data_root <- function(data_source, data_root = NULL) {
-  if (!is.null(data_root) && length(data_root) > 0 &&
-      !is.na(data_root[[1]]) && nzchar(trimws(as.character(data_root[[1]])))) {
-    return(normalizePath(data_root[[1]], winslash = "/", mustWork = TRUE))
-  }
+dashboard_database_path <- dashboard_resolve_database_path()
+dashboard_startup_talents <- dashboard_unified_talent_catalog(
+  dashboard_database_path
+)
+dashboard_startup_companies <- dashboard_company_memberships(
+  dashboard_startup_talents
+)
 
-  data_source <- match.arg(tolower(data_source), c("datalake", "staging"))
-  root <- if (identical(data_source, "datalake")) {
-    get_datalake_root()
-  } else {
-    get_staging_root()
-  }
-  normalizePath(root, winslash = "/", mustWork = TRUE)
+dashboard_global_min_date <- min(
+  dashboard_startup_companies$earliest_analytics_snapshot_date,
+  na.rm = TRUE
+)
+dashboard_global_max_date <- max(
+  dashboard_startup_companies$latest_analytics_snapshot_date,
+  na.rm = TRUE
+)
+if (!is.finite(dashboard_global_min_date)) {
+  dashboard_global_min_date <- Sys.Date()
+}
+if (!is.finite(dashboard_global_max_date)) {
+  dashboard_global_max_date <- Sys.Date()
 }
 
-optional_param_path <- function(x) {
-  if (is.null(x) || length(x) == 0 || is.na(x[[1]]) ||
-      !nzchar(trimws(as.character(x[[1]])))) {
+company_display_name <- function(x) {
+  gsub("_", " ", as.character(x), fixed = TRUE)
+}
+
+company_optional_input_date <- function(date_range, index) {
+  if (is.null(date_range) || length(date_range) < index ||
+      is.na(date_range[[index]])) {
     return(NULL)
   }
-  normalizePath(x[[1]], winslash = "/", mustWork = TRUE)
+  as.Date(date_range[[index]])
 }
 
-latest_talent_snapshot_path <- function(talent_path, snapshot_type) {
-  snapshot_paths <- list_talent_snapshot_files(talent_path)
-  if (length(snapshot_paths) == 0) {
-    stop("No CSV snapshots found for talent: ", basename(talent_path))
+company_render_ui <- function(
+  value_fn,
+  empty_message = "No data are available for the active filters."
+) {
+  shiny::renderUI({
+    value <- value_fn()
+    if (is.null(value)) {
+      return(dashboard_empty_state(empty_message))
+    }
+    if (inherits(value, "ggplot")) {
+      value <- dashboard_ggplotly(value)
+    }
+    if (inherits(value, "plotly")) {
+      return(
+        htmltools::div(
+          class = "company-dashboard-plot",
+          htmltools::as.tags(value)
+        )
+      )
+    }
+    htmltools::as.tags(value)
+  })
+}
+
+company_value_box <- function(title, value) {
+  if (requireNamespace("bslib", quietly = TRUE)) {
+    return(bslib::value_box(title = title, value = value))
+  }
+  htmltools::div(
+    class = "dashboard-metric-card",
+    htmltools::tags$div(class = "dashboard-metric-label", title),
+    htmltools::tags$div(class = "dashboard-metric-value", value)
+  )
+}
+
+company_month_plot <- function(data, value_col, y_label) {
+  if (is.null(data) || nrow(data) == 0) {
+    return(NULL)
+  }
+  ggplot2::ggplot(
+    data,
+    ggplot2::aes(
+      x = .data$publish_month,
+      y = .data[[value_col]],
+      text = paste0(
+        format(.data$publish_month, "%Y-%m"),
+        "<br>", y_label, ": ", scales::comma(.data[[value_col]])
+      )
+    )
+  ) +
+    ggplot2::geom_col(fill = "#2c7fb8") +
+    ggplot2::scale_x_date(date_labels = "%Y-%m", date_breaks = "3 months") +
+    ggplot2::labs(x = "Publication month", y = y_label) +
+    ggplot2::theme_minimal(base_size = 11)
+}
+
+company_talent_weekday_plot <- function(data) {
+  if (is.null(data) || nrow(data) == 0) {
+    return(NULL)
+  }
+  data <- data %>%
+    dplyr::mutate(talent_label = company_display_name(.data$talent_name))
+  weekday_totals <- data %>%
+    dplyr::group_by(.data$publish_wday) %>%
+    dplyr::summarise(
+      total_releases = sum(.data$`Content Releases`),
+      .groups = "drop"
+    )
+  ggplot2::ggplot(
+    data,
+    ggplot2::aes(
+      x = .data$publish_wday,
+      y = .data$`Content Releases`,
+      fill = .data$talent_label,
+      text = paste0(
+        .data$talent_label,
+        "<br>Day: ", .data$publish_wday,
+        "<br>Content releases: ", scales::comma(.data$`Content Releases`)
+      )
+    )
+  ) +
+    ggplot2::geom_col(position = "stack", width = 0.75) +
+    ggplot2::geom_text(
+      data = weekday_totals,
+      ggplot2::aes(
+        x = .data$publish_wday,
+        y = .data$total_releases,
+        label = scales::comma(.data$total_releases)
+      ),
+      inherit.aes = FALSE,
+      vjust = -0.4,
+      fontface = "bold",
+      size = 3.5
+    ) +
+    ggplot2::scale_y_continuous(
+      expand = ggplot2::expansion(mult = c(0, 0.12))
+    ) +
+    ggplot2::labs(x = NULL, y = "Content releases", fill = "Talent") +
+    ggplot2::theme_minimal(base_size = 11) +
+    ggplot2::theme(legend.position = "bottom")
+}
+```
+
+# {.sidebar}
+
+```{r}
+uiOutput("dashboard_identity")
+uiOutput("company_selector")
+uiOutput("talent_selector")
+uiOutput("dashboard_data_freshness")
+
+dateRangeInput(
+  inputId = "snapshot_dates",
+  label = "Analytics snapshots between",
+  start = dashboard_global_min_date,
+  end = dashboard_global_max_date,
+  min = dashboard_global_min_date,
+  max = dashboard_global_max_date,
+  format = "yyyy-mm-dd",
+  separator = " to "
+)
+
+helpText(
+  "All authorized company talents are selected by default. Remove talents to compare a subset. ",
+  "The date range selects daily analytics snapshots, matching the creator dashboard; ",
+  "each talent contributes its latest available snapshot inside the window."
+)
+```
+
+# Overview
+
+Company totals aggregate the latest selected snapshot for each selected talent.
+Each video is counted once, so cumulative analytics are not summed across days.
+
+## Row {height=22%}
+
+```{r}
+#| title: "Total Views"
+uiOutput("total_views")
+```
+
+```{r}
+#| title: "Videos / Streams"
+uiOutput("video_count")
+```
+
+```{r}
+#| title: "Streamed Hours"
+uiOutput("streamed_hours")
+```
+
+```{r}
+#| title: "Streamed Days"
+uiOutput("streamed_days")
+```
+
+```{r}
+#| title: "Subscribers Gained"
+uiOutput("subscribers_gained")
+```
+
+## Row {height=58%}
+
+```{r}
+#| title: "Talent Breakdown"
+uiOutput("talent_summary")
+```
+
+```{r}
+#| title: "Content Releases by Month"
+uiOutput("content_month_plot")
+```
+
+# Publishing Activity
+
+These panels group the selected videos by publication timing. The sidebar dates
+still select analytics snapshots, not video publication dates.
+
+## Row {height=48%}
+
+```{r}
+#| title: "Release Day Frequency"
+uiOutput("weekday_plot")
+```
+
+```{r}
+#| title: "Collaborations by Month"
+uiOutput("collaboration_plot")
+```
+
+## Row {height=44%}
+
+```{r}
+#| title: "Monthly Release Table"
+uiOutput("month_table")
+```
+
+```{r}
+#| title: "Weekday Release Table"
+uiOutput("weekday_table")
+```
+
+# Content Mix
+
+Topic and reference values come from the same latest title-classification rows
+used by the creator dashboard.
+
+## Row {height=46%}
+
+```{r}
+#| title: "Streamed Hours by Topic"
+uiOutput("topic_plot")
+```
+
+```{r}
+#| title: "Topic Summary"
+uiOutput("topic_table")
+```
+
+## Row {height=48%}
+
+```{r}
+#| title: "Topic and Included Reference"
+uiOutput("reference_table")
+```
+
+# Method Notes
+
+## Row {height=45%}
+
+```{r}
+#| title: "Active Filters"
+uiOutput("method_filters")
+```
+
+```{r}
+#| title: "Snapshot Coverage"
+uiOutput("snapshot_coverage")
+```
+
+## Row {height=35%}
+
+```{r}
+#| title: "Calculation Notes"
+#| results: asis
+
+cat(
+  "- Date filters apply to analytics snapshot dates, matching the creator dashboard.\n",
+  "- Each talent contributes only its latest snapshot within the selected range.\n",
+  "- Total views and subscriber gains are cumulative values at those snapshots.\n",
+  "- Streamed hours use the catalogued duration of each distinct video or stream.\n",
+  "- Monthly and weekday panels group those distinct videos by publication date.\n",
+  "- Company membership is maintained in `config/dashboard/company_talents.csv`.\n",
+  sep = ""
+)
+```
+
+```{r}
+#| label: server
+#| context: server
+#| include: false
+
+dashboard_talents <- dashboard_unified_talent_catalog(dashboard_database_path)
+dashboard_companies <- dashboard_company_memberships(dashboard_talents)
+dashboard_session_access <- dashboard_access_context(
+  session$request,
+  dashboard_talents$talent_code
+)
+dashboard_allowed_companies <- dashboard_companies %>%
+  dplyr::filter(
+    .data$talent_code %in% dashboard_session_access$allowed_talent_codes
+  )
+
+dashboard_live_talents <- reactive({
+  invalidateLater(60 * 1000, session)
+  tryCatch(
+    dashboard_unified_talent_catalog(dashboard_database_path),
+    error = function(e) dashboard_talents
+  )
+})
+
+output$dashboard_identity <- renderUI({
+  if (!dashboard_session_access$authorized ||
+      nrow(dashboard_allowed_companies) == 0) {
+    return(
+      htmltools::div(
+        class = "alert alert-danger",
+        "No company dashboard permissions were found for this account."
+      )
+    )
   }
 
-  snapshot_types <- vapply(
-    snapshot_paths,
-    infer_snapshot_type_key,
-    character(1)
+  htmltools::tags$small(
+    class = "text-muted",
+    paste("Signed in as", dashboard_session_access$verified_email)
   )
-  candidates <- snapshot_paths[snapshot_types == snapshot_type]
-  if (length(candidates) == 0) {
-    stop(
-      "No `", snapshot_type, "` snapshots found for talent: ",
-      basename(talent_path)
-    )
+})
+
+output$company_selector <- renderUI({
+  if (!dashboard_session_access$authorized ||
+      nrow(dashboard_allowed_companies) == 0) {
+    return(NULL)
   }
 
-  snapshot_dates <- suppressWarnings(as.Date(
-    stringr::str_extract(basename(candidates), "\\d{4}-\\d{2}-\\d{2}")
-  ))
-  modification_times <- file.info(candidates)$mtime
-  newest_first <- order(
-    snapshot_dates,
-    modification_times,
-    basename(candidates),
-    decreasing = TRUE,
-    na.last = TRUE
+  choices <- dashboard_allowed_companies %>%
+    dplyr::distinct(.data$company_code, .data$company_name) %>%
+    dplyr::arrange(.data$company_name)
+  selectInput(
+    inputId = "company",
+    label = "Company",
+    choices = stats::setNames(choices$company_code, choices$company_name),
+    selected = choices$company_code[[1]]
   )
+})
 
-  candidates[[newest_first[[1]]]]
-}
+output$talent_selector <- renderUI({
+  req(input$company)
+  choices <- dashboard_allowed_companies %>%
+    dplyr::filter(.data$company_code == input$company) %>%
+    dplyr::arrange(.data$talent_name)
+  if (nrow(choices) == 0) {
+    return(NULL)
+  }
 
-talent <- params$talent
-data_root <- resolve_variance_data_root(params$data_source, params$data_root)
-talent_path <- select_talent(talent, root = data_root)
-talent_folder <- basename(talent_path)
-analytics_snapshot_path <- latest_talent_snapshot_path(
-  talent_path,
-  snapshot_type = "video_analytics"
-)
-
-# This report needs one current, video-level snapshot. Loading the entire talent
-# directory would bind hundreds of historical files across unrelated data types.
-talent_files <- TalentFiles(list(analytics_snapshot_path))
-
-title_classifications <- load_title_classifications(
-  path = optional_param_path(params$title_classifications_path),
-  talent = talent_folder
-)
-
-df <- video_analytics_prep_with_titles(
-  files = talent_files,
-  titles = title_classifications,
-  talent = talent_folder
-) %>%
-  dedupe_latest_rows(key_cols = "Video ID")
-
-# Compatibility mappings from the current title-classification schema to the
-# concepts used in the original Variance Wrapped report.
-if (!("topic" %in% names(df))) {
-  df$topic <- "Unclassified"
-}
-df$topic <- dplyr::coalesce(na_if(trimws(as.character(df$topic)), ""), "Unclassified")
-
-if (!("primary_reference" %in% names(df))) {
-  df$primary_reference <- NA_character_
-}
-if (!("tags" %in% names(df))) {
-  df$tags <- NA_character_
-}
-df$content_reference <- dplyr::coalesce(
-  na_if(trimws(as.character(df$primary_reference)), ""),
-  na_if(trimws(as.character(df$tags)), ""),
-  "No reference"
-)
-
-if (!("collaborative_energy" %in% names(df))) {
-  df$collaborative_energy <- FALSE
-}
-df$is_collab <- !is.na(df$collaborative_energy) & df$collaborative_energy
-
-summarize_analytics <- function(analytics_df, fallback_talent) {
-  channel_names <- analytics_df$`Channel Name`
-  channel_names <- channel_names[!is.na(channel_names) & nzchar(channel_names)]
-  talent_name <- if (length(channel_names) > 0) channel_names[[1]] else fallback_talent
-  total_hours <- sum(analytics_df$duration_seconds, na.rm = TRUE) / 3600
-
-  tibble::tibble(
-    Talent = talent_name,
-    Statistic = c("Total Streamed Hours", "Total Streamed Days", "Total Views"),
-    Value = c(
-      total_hours,
-      total_hours / 24,
-      sum(analytics_df$views, na.rm = TRUE)
+  htmltools::tagList(
+    selectizeInput(
+      inputId = "talents",
+      label = "Talents",
+      choices = stats::setNames(
+        choices$talent_code,
+        company_display_name(choices$talent_name)
+      ),
+      selected = choices$talent_code,
+      multiple = TRUE,
+      options = list(plugins = list("remove_button"))
+    ),
+    actionLink(
+      inputId = "select_all_talents",
+      label = "Select all company talents"
     )
   )
-}
-```
+})
 
+selected_company_memberships <- reactive({
+  req(input$company)
+  dashboard_allowed_companies %>%
+    dplyr::filter(.data$company_code == input$company)
+})
 
-# Summary Analytics
-
-```{r}
-#| label: summary-analytics
-
-summary_df <- summarize_analytics(df, talent_folder)
-
-summary_df %>%
-  kableExtra::kbl(
-    format = "html",
-    caption = "Summary Analytics",
-    col.names = c("Talent", "Metric", "Value"),
-    digits = 1
-  ) %>%
-  kableExtra::kable_styling(
-    bootstrap_options = c("striped", "hover", "condensed"),
-    full_width = FALSE
+observeEvent(input$select_all_talents, {
+  choices <- selected_company_memberships() %>%
+    dplyr::arrange(.data$talent_name)
+  updateSelectizeInput(
+    session,
+    inputId = "talents",
+    choices = stats::setNames(
+      choices$talent_code,
+      company_display_name(choices$talent_name)
+    ),
+    selected = choices$talent_code,
+    server = FALSE
   )
-```
+})
 
+selected_talent_codes <- reactive({
+  req(length(input$talents) > 0)
+  allowed <- selected_company_memberships()$talent_code
+  selected <- intersect(as.character(input$talents), allowed)
+  req(length(selected) > 0)
+  selected
+})
 
-# Content Frequency by Month
+dashboard_snapshot_bounds <- reactiveVal(NULL)
 
-```{r}
-#| label: content-frequency-month
+observe({
+  selected_codes <- selected_talent_codes()
+  selected <- dashboard_live_talents() %>%
+    dplyr::filter(.data$talent_code %in% selected_codes)
+  req(nrow(selected) > 0)
 
-month_summary <- df %>%
-  dplyr::count(.data$publish_month, name = "ContentReleases") %>%
-  dplyr::arrange(dplyr::desc(.data$ContentReleases))
+  min_date <- min(selected$earliest_analytics_snapshot_date, na.rm = TRUE)
+  max_date <- max(selected$latest_analytics_snapshot_date, na.rm = TRUE)
+  req(is.finite(min_date), is.finite(max_date))
 
-month_summary %>%
-  kableExtra::kbl(
-    format = "html",
-    caption = "Content Frequency by Month",
-    col.names = c("Month", "Content Releases")
-  ) %>%
-  kableExtra::kable_styling(
-    bootstrap_options = c("striped", "hover", "condensed"),
-    full_width = FALSE
+  new_bounds <- list(
+    talent_codes = sort(selected_codes),
+    min = min_date,
+    max = max_date
   )
-```
+  old_bounds <- isolate(dashboard_snapshot_bounds())
+  if (!is.null(old_bounds) && identical(old_bounds, new_bounds)) {
+    return()
+  }
 
+  current_dates <- isolate(input$snapshot_dates)
+  talents_changed <- is.null(old_bounds) ||
+    !identical(old_bounds$talent_codes, new_bounds$talent_codes)
+  if (talents_changed || is.null(current_dates) || length(current_dates) < 2) {
+    selected_start <- new_bounds$min
+    selected_end <- new_bounds$max
+  } else {
+    selected_start <- max(as.Date(current_dates[[1]]), new_bounds$min, na.rm = TRUE)
+    current_end <- as.Date(current_dates[[2]])
+    selected_end <- if (is.na(current_end) || identical(current_end, old_bounds$max)) {
+      new_bounds$max
+    } else {
+      min(current_end, new_bounds$max)
+    }
+  }
 
-# Content Release Day Frequency
-
-```{r}
-#| label: content-frequency-weekday
-
-weekday_summary <- df %>%
-  dplyr::count(.data$publish_wday, name = "ContentReleases") %>%
-  dplyr::arrange(dplyr::desc(.data$ContentReleases))
-
-weekday_summary %>%
-  kableExtra::kbl(
-    format = "html",
-    caption = "Content Frequency by Day of Week",
-    col.names = c("Day of Week", "Content Releases")
-  ) %>%
-  kableExtra::kable_styling(
-    bootstrap_options = c("striped", "hover", "condensed"),
-    full_width = FALSE
+  updateDateRangeInput(
+    session,
+    inputId = "snapshot_dates",
+    start = selected_start,
+    end = selected_end,
+    min = new_bounds$min,
+    max = new_bounds$max
   )
-```
+  dashboard_snapshot_bounds(new_bounds)
+})
 
+output$dashboard_data_freshness <- renderUI({
+  selected_codes <- selected_talent_codes()
+  selected <- dashboard_live_talents() %>%
+    dplyr::filter(.data$talent_code %in% selected_codes)
+  req(nrow(selected) > 0)
 
-# Content by Topic
+  latest_dates <- selected$latest_analytics_snapshot_date
+  latest_dates <- latest_dates[!is.na(latest_dates)]
+  if (length(latest_dates) == 0) {
+    return(NULL)
+  }
 
-```{r}
-#| label: content-frequency-topic
+  htmltools::div(
+    class = "alert alert-info py-2 px-3",
+    htmltools::tags$strong(
+      paste(
+        "Latest talent snapshots:",
+        format(min(latest_dates), "%Y-%m-%d"),
+        "to",
+        format(max(latest_dates), "%Y-%m-%d")
+      )
+    ),
+    htmltools::tags$br(),
+    htmltools::tags$small(
+      paste(length(selected_codes), "talent(s) selected")
+    )
+  )
+})
 
-topic_summary <- df %>%
-  dplyr::group_by(.data$topic) %>%
-  dplyr::summarise(
-    TotalCounts = dplyr::n(),
-    TotalSecondsStreamed = sum(.data$duration_seconds, na.rm = TRUE),
-    TotalSubsGained = sum(.data$subscribersGained, na.rm = TRUE),
-    .groups = "drop"
-  ) %>%
-  dplyr::mutate(
-    TotalMinutesStreamed = .data$TotalSecondsStreamed / 60,
-    TotalHoursStreamed = .data$TotalMinutesStreamed / 60
-  ) %>%
-  dplyr::arrange(dplyr::desc(.data$TotalHoursStreamed))
+dashboard_filters <- shiny::debounce(
+  reactive({
+    req(dashboard_session_access$authorized)
+    company <- selected_company_memberships() %>% dplyr::slice_head(n = 1)
+    list(
+      company_code = company$company_code[[1]],
+      company_name = company$company_name[[1]],
+      talent_codes = selected_talent_codes(),
+      start_date = company_optional_input_date(input$snapshot_dates, 1),
+      end_date = company_optional_input_date(input$snapshot_dates, 2)
+    )
+  }),
+  millis = 400
+)
 
-topic_summary %>%
-  dplyr::mutate(TotalHoursStreamed = round(.data$TotalHoursStreamed, 1)) %>%
-  kableExtra::kbl(
-    format = "html",
-    caption = "Content by Classified Topic",
-    col.names = c(
-      "Topic",
+company_data_reactive <- reactive({
+  filters <- dashboard_filters()
+  withProgress(message = "Building company dashboard", value = 0, {
+    incProgress(0.2, detail = "Loading latest selected snapshots")
+    data <- dashboard_load_company_analytics(
+      database_path = dashboard_database_path,
+      talent_codes = filters$talent_codes,
+      start_date = filters$start_date,
+      end_date = filters$end_date
+    )
+    incProgress(0.8, detail = "Preparing company summaries")
+    data
+  })
+})
+
+company_analytics_reactive <- reactive({
+  company_data_reactive()$analytics
+})
+
+company_totals_reactive <- reactive({
+  dashboard_company_totals(company_analytics_reactive())
+})
+
+company_month_reactive <- reactive({
+  dashboard_company_month_summary(company_analytics_reactive())
+})
+
+company_weekday_reactive <- reactive({
+  dashboard_company_weekday_summary(company_analytics_reactive())
+})
+
+company_topic_reactive <- reactive({
+  dashboard_company_topic_summary(company_analytics_reactive())
+})
+
+output$total_views <- company_render_ui(function() {
+  company_value_box(
+    "Total Views",
+    scales::comma(round(company_totals_reactive()$total_views[[1]]))
+  )
+})
+
+output$video_count <- company_render_ui(function() {
+  company_value_box(
+    "Videos / Streams",
+    scales::comma(company_totals_reactive()$video_count[[1]])
+  )
+})
+
+output$streamed_hours <- company_render_ui(function() {
+  company_value_box(
+    "Streamed Hours",
+    scales::comma(company_totals_reactive()$total_hours[[1]], accuracy = 0.1)
+  )
+})
+
+output$streamed_days <- company_render_ui(function() {
+  company_value_box(
+    "Streamed Days",
+    scales::comma(company_totals_reactive()$total_days[[1]], accuracy = 0.1)
+  )
+})
+
+output$subscribers_gained <- company_render_ui(function() {
+  company_value_box(
+    "Subscribers Gained",
+    scales::comma(round(company_totals_reactive()$subscribers_gained[[1]]))
+  )
+})
+
+output$talent_summary <- company_render_ui(function() {
+  dashboard_company_talent_summary(company_analytics_reactive()) %>%
+    dplyr::mutate(
+      Talent = company_display_name(.data$talent_name),
+      `Streamed Hours` = round(.data$`Streamed Hours`, 1)
+    ) %>%
+    dplyr::select(dplyr::all_of(c(
+      "Talent",
       "Videos / Streams",
-      "Seconds Streamed",
+      "Streamed Hours",
+      "Total Views",
       "Subscribers Gained",
-      "Minutes Streamed",
-      "Hours Streamed"
+      "Snapshot Date"
+    ))) %>%
+    dashboard_datatable(page_length = 10)
+})
+
+output$content_month_plot <- company_render_ui(function() {
+  company_month_plot(
+    company_month_reactive(),
+    "Content Releases",
+    "Content releases"
+  )
+})
+
+output$weekday_plot <- company_render_ui(function() {
+  company_talent_weekday_plot(company_weekday_reactive())
+})
+
+output$collaboration_plot <- company_render_ui(function() {
+  company_month_plot(
+    dashboard_company_collaboration_summary(company_analytics_reactive()),
+    "Collaborations",
+    "Collaborations"
+  )
+})
+
+output$month_table <- company_render_ui(function() {
+  company_month_reactive() %>%
+    dplyr::mutate(Month = format(.data$publish_month, "%Y-%m")) %>%
+    dplyr::select(dplyr::all_of(c("Month", "Content Releases"))) %>%
+    dplyr::arrange(dplyr::desc(.data$Month)) %>%
+    dashboard_datatable(page_length = 12)
+})
+
+output$weekday_table <- company_render_ui(function() {
+  company_weekday_reactive() %>%
+    dplyr::mutate(Talent = company_display_name(.data$talent_name)) %>%
+    dplyr::rename(`Day of Week` = "publish_wday") %>%
+    dplyr::select(dplyr::all_of(c(
+      "Talent",
+      "Day of Week",
+      "Content Releases"
+    ))) %>%
+    dashboard_datatable(page_length = 25)
+})
+
+output$topic_plot <- company_render_ui(function() {
+  company_topic_reactive() %>%
+    dplyr::slice_max(.data$`Streamed Hours`, n = 12, with_ties = FALSE) %>%
+    dplyr::mutate(topic = stats::reorder(.data$topic, .data$`Streamed Hours`)) %>%
+    ggplot2::ggplot(
+      ggplot2::aes(
+        x = .data$topic,
+        y = .data$`Streamed Hours`,
+        text = paste0(
+          .data$topic,
+          "<br>Streamed hours: ",
+          scales::comma(.data$`Streamed Hours`, accuracy = 0.1)
+        )
+      )
+    ) +
+    ggplot2::geom_col(fill = "#2c7fb8") +
+    ggplot2::coord_flip() +
+    ggplot2::labs(x = NULL, y = "Streamed hours") +
+    ggplot2::theme_minimal(base_size = 11)
+})
+
+output$topic_table <- company_render_ui(function() {
+  company_topic_reactive() %>%
+    dplyr::mutate(`Streamed Hours` = round(.data$`Streamed Hours`, 1)) %>%
+    dplyr::rename(Topic = "topic") %>%
+    dashboard_datatable(page_length = 12)
+})
+
+output$reference_table <- company_render_ui(function() {
+  dashboard_company_reference_summary(company_analytics_reactive()) %>%
+    dplyr::mutate(`Streamed Hours` = round(.data$`Streamed Hours`, 1)) %>%
+    dplyr::rename(
+      Topic = "topic",
+      `Reference / Tags` = "content_reference"
+    ) %>%
+    dashboard_datatable(page_length = 15)
+})
+
+output$method_filters <- company_render_ui(function() {
+  filters <- dashboard_filters()
+  selected_names <- selected_company_memberships() %>%
+    dplyr::filter(.data$talent_code %in% filters$talent_codes) %>%
+    dplyr::pull("talent_name") %>%
+    company_display_name()
+  dashboard_filter_context_card(
+    tibble::tibble(
+      setting = c(
+        "Company",
+        "Talents",
+        "Data source",
+        "Snapshots from",
+        "Snapshots through"
+      ),
+      value = c(
+        filters$company_name,
+        paste(selected_names, collapse = ", "),
+        "Unified DuckDB",
+        if (is.null(filters$start_date)) {
+          "All available"
+        } else {
+          as.character(filters$start_date)
+        },
+        if (is.null(filters$end_date)) {
+          "All available"
+        } else {
+          as.character(filters$end_date)
+        }
+      )
     )
-  ) %>%
-  kableExtra::kable_styling(
-    bootstrap_options = c("striped", "hover", "condensed"),
-    full_width = FALSE
   )
-```
+})
 
-
-## With Included Reference
-
-```{r}
-#| label: content-frequency-reference
-
-reference_summary <- df %>%
-  dplyr::mutate(
-    content_reference = stringr::str_remove(.data$content_reference, "\\s*pt\\.\\d+$")
-  ) %>%
-  dplyr::group_by(.data$topic, .data$content_reference) %>%
-  dplyr::summarise(
-    TotalCounts = dplyr::n(),
-    TotalSecondsStreamed = sum(.data$duration_seconds, na.rm = TRUE),
-    TotalSubsGained = sum(.data$subscribersGained, na.rm = TRUE),
-    .groups = "drop"
-  ) %>%
-  dplyr::mutate(
-    TotalMinutesStreamed = .data$TotalSecondsStreamed / 60,
-    TotalHoursStreamed = .data$TotalMinutesStreamed / 60
-  ) %>%
-  dplyr::arrange(dplyr::desc(.data$TotalHoursStreamed))
-
-reference_summary %>%
-  dplyr::mutate(TotalHoursStreamed = round(.data$TotalHoursStreamed, 1)) %>%
-  kableExtra::kbl(
-    format = "html",
-    caption = "Content Summary by Topic and Reference",
-    col.names = c(
-      "Topic",
-      "Reference / Tags",
-      "Videos / Streams",
-      "Seconds Streamed",
-      "Subscribers Gained",
-      "Minutes Streamed",
-      "Hours Streamed"
-    )
-  ) %>%
-  kableExtra::kable_styling(
-    bootstrap_options = c("striped", "hover", "condensed"),
-    full_width = FALSE
-  )
-```
-
-
-# Total Collaborations
-
-```{r}
-#| label: content-frequency-collaborations
-
-collaboration_summary <- df %>%
-  dplyr::count(.data$publish_month, .data$is_collab, name = "Count") %>%
-  dplyr::filter(.data$is_collab)
-
-collaboration_summary %>%
-  kableExtra::kbl(
-    format = "html",
-    caption = "Total Collaborations by Month",
-    col.names = c("Month", "Is Collaboration", "Count")
-  ) %>%
-  kableExtra::kable_styling(
-    bootstrap_options = c("striped", "hover", "condensed"),
-    full_width = FALSE
-  )
+output$snapshot_coverage <- company_render_ui(function() {
+  company_data_reactive()$coverage %>%
+    dplyr::transmute(
+      Talent = company_display_name(.data$talent_name),
+      `Talent Code` = .data$talent_code,
+      `Snapshot Used` = .data$snapshot_date
+    ) %>%
+    dashboard_datatable(page_length = 10)
+})
 ```

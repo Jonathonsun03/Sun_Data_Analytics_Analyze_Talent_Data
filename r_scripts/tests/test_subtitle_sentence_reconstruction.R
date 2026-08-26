@@ -126,6 +126,69 @@ assert_equal(
   "you're ready aren't you",
   "Block model input retained speaker markers or existing punctuation"
 )
+assert_equal(marker_block$speaker_turn_id, 1L, "A leading marker should start turn one")
+assert_true(marker_block$speaker_turn_marked, "A leading marker should mark a new turn")
+
+turn_captions <- tibble::tibble(
+  VideoID = "turn-video",
+  start_sec = 0:4,
+  stop_sec = 1:5,
+  Text = c(
+    "intro words",
+    "words continue",
+    ">> words continue",
+    "continue now",
+    ">> final words"
+  ),
+  subtitle_language = "en"
+)
+turn_blocks <- build_punctuation_blocks(
+  turn_captions,
+  target_words = 100,
+  max_words = 120
+)
+assert_equal(nrow(turn_blocks), 3L, "Each speaker turn should have its own block")
+assert_equal(
+  turn_blocks$speaker_turn_id,
+  1:3,
+  "Speaker turn IDs should be sequential within a video"
+)
+assert_equal(
+  turn_blocks$speaker_turn_marked,
+  c(FALSE, TRUE, TRUE),
+  "Only turns introduced by literal markers should be marked"
+)
+assert_equal(
+  turn_blocks$model_input_text,
+  c("intro words continue", "words continue now", "final words"),
+  "Overlap cleanup crossed a speaker boundary or failed within a turn"
+)
+assert_true(
+  all(!duplicated(turn_blocks[, c("video_id", "speaker_turn_id", "block_number")])),
+  "A punctuation block represented more than one speaker turn"
+)
+
+turn_call_count <- 0L
+turn_punctuate <- function(text, ...) {
+  turn_call_count <<- turn_call_count + 1L
+  list(text = paste0(text, ". another sentence."), model = "fullstop-test")
+}
+turn_units <- reconstruct_sentence_units(
+  turn_blocks,
+  allow_unknown_language = FALSE,
+  punctuate_fn = turn_punctuate
+)
+assert_equal(turn_call_count, 3L, "Punctuation input was not submitted separately by turn")
+assert_equal(
+  turn_units$speaker_change,
+  c(FALSE, FALSE, TRUE, FALSE, TRUE, FALSE),
+  "Speaker-change metadata should mark only the first sentence of a marked turn"
+)
+assert_equal(
+  turn_units$speaker_turn_id,
+  c(1L, 1L, 2L, 2L, 3L, 3L),
+  "Sentence units did not retain their speaker turn IDs"
+)
 
 sentences <- split_punctuated_sentences(
   "This is one. Is this two? This is three! A final fragment"
@@ -205,7 +268,9 @@ quoted_output <- as.character(DBI::dbQuoteString(con, output_path))
 written <- DBI::dbGetQuery(con, paste0("SELECT * FROM read_parquet(", quoted_output, ")"))
 assert_equal(nrow(written), nrow(timestamp_units), "Parquet row count changed")
 assert_true(
-  all(c("video_id", "sentence_number", "text") %in% names(written)),
+  all(c(
+    "video_id", "speaker_turn_id", "speaker_change", "sentence_number", "text"
+  ) %in% names(written)),
   "Sentence Parquet is missing required fields"
 )
 

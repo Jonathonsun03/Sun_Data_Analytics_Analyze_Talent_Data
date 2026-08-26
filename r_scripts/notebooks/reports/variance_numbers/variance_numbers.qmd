@@ -1,0 +1,259 @@
+---
+title: "Variance Wrapped 2025 Talent Report"
+author: "Jonathon Sun"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    theme: united
+    embed-resources: true
+  pdf:
+    toc: true
+    number-sections: true
+    pdf-engine: xelatex
+params:
+  talent: "Leia Memoria【Variance Project】"
+  database_path: null
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+dashboard_machine_library <- file.path(
+  path.expand("~/R"),
+  paste0(R.version$platform, "-library"),
+  paste(R.version$major, sub("\\..*$", "", R.version$minor), sep = ".")
+)
+if (dir.exists(dashboard_machine_library)) {
+  .libPaths(unique(c(.libPaths(), dashboard_machine_library)))
+}
+
+required_packages <- c("DBI", "duckdb", "here", "kableExtra")
+missing_packages <- required_packages[
+  !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
+]
+if (length(missing_packages) > 0) {
+  stop(
+    "Missing required R packages: ",
+    paste(missing_packages, collapse = ", "),
+    ". Install them in the project renv library before rendering."
+  )
+}
+
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(here)
+  library(kableExtra)
+})
+
+source(here::here("r_scripts", "lib", "dashboard", "load.R"))
+
+database_path <- dashboard_resolve_database_path(params$database_path)
+con <- DBI::dbConnect(
+  duckdb::duckdb(),
+  dbdir = database_path,
+  read_only = TRUE
+)
+talent_row <- tryCatch(
+  dashboard_select_unified_talent(con, params$talent),
+  finally = DBI::dbDisconnect(con, shutdown = TRUE)
+)
+
+report_data <- dashboard_load_company_analytics(
+  database_path = database_path,
+  talent_codes = talent_row$talent_code[[1]]
+)
+df <- report_data$analytics
+report_talent_name <- gsub("_", " ", talent_row$talent_name[[1]], fixed = TRUE)
+
+summarize_analytics <- function(analytics_df, talent_name) {
+  total_hours <- sum(analytics_df$duration_seconds, na.rm = TRUE) / 3600
+
+  tibble::tibble(
+    Talent = talent_name,
+    Statistic = c("Total Streamed Hours", "Total Streamed Days", "Total Views"),
+    Value = c(
+      total_hours,
+      total_hours / 24,
+      sum(analytics_df$views, na.rm = TRUE)
+    )
+  )
+}
+```
+
+# Executive Summary
+
+# Introduction
+
+This report summarizes publishing activity and performance for **`r report_talent_name`** using the latest available unified-DuckDB analytics snapshot.
+
+# Summary Analytics
+
+```{r}
+#| label: summary-analytics
+
+summary_df <- summarize_analytics(df, report_talent_name)
+
+summary_df %>%
+  kableExtra::kbl(
+    format = "html",
+    caption = "Summary Analytics",
+    col.names = c("Talent", "Metric", "Value"),
+    digits = 1
+  ) %>%
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width = FALSE
+  )
+```
+
+# Content Frequency by Month
+
+```{r}
+#| label: content-frequency-month
+
+month_summary <- df %>%
+  dplyr::count(.data$publish_month, name = "ContentReleases") %>%
+  dplyr::arrange(dplyr::desc(.data$ContentReleases))
+
+month_summary %>%
+  kableExtra::kbl(
+    format = "html",
+    caption = "Content Frequency by Month",
+    col.names = c("Month", "Content Releases")
+  ) %>%
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width = FALSE
+  )
+```
+
+# Content Release Day Frequency
+
+```{r}
+#| label: content-frequency-weekday
+
+weekday_summary <- df %>%
+  dplyr::count(.data$publish_wday, name = "ContentReleases") %>%
+  dplyr::arrange(dplyr::desc(.data$ContentReleases))
+
+weekday_summary %>%
+  kableExtra::kbl(
+    format = "html",
+    caption = "Content Frequency by Day of Week",
+    col.names = c("Day of Week", "Content Releases")
+  ) %>%
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width = FALSE
+  )
+```
+
+# Content by Topic
+
+```{r}
+#| label: content-frequency-topic
+
+topic_summary <- df %>%
+  dplyr::group_by(.data$topic) %>%
+  dplyr::summarise(
+    TotalCounts = dplyr::n_distinct(.data$`Video ID`),
+    TotalSecondsStreamed = sum(.data$duration_seconds, na.rm = TRUE),
+    TotalSubsGained = sum(.data$subscribersGained, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  dplyr::mutate(
+    TotalMinutesStreamed = .data$TotalSecondsStreamed / 60,
+    TotalHoursStreamed = .data$TotalMinutesStreamed / 60
+  ) %>%
+  dplyr::arrange(dplyr::desc(.data$TotalHoursStreamed))
+
+topic_summary %>%
+  dplyr::mutate(TotalHoursStreamed = round(.data$TotalHoursStreamed, 1)) %>%
+  kableExtra::kbl(
+    format = "html",
+    caption = "Content by Classified Topic",
+    col.names = c(
+      "Topic",
+      "Videos / Streams",
+      "Seconds Streamed",
+      "Subscribers Gained",
+      "Minutes Streamed",
+      "Hours Streamed"
+    )
+  ) %>%
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width = FALSE
+  )
+```
+
+## With Included Reference
+
+```{r}
+#| label: content-frequency-reference
+
+reference_summary <- df %>%
+  dplyr::mutate(
+    content_reference = stringr::str_remove(.data$content_reference, "\\s*pt\\.\\d+$")
+  ) %>%
+  dplyr::group_by(.data$topic, .data$content_reference) %>%
+  dplyr::summarise(
+    TotalCounts = dplyr::n_distinct(.data$`Video ID`),
+    TotalSecondsStreamed = sum(.data$duration_seconds, na.rm = TRUE),
+    TotalSubsGained = sum(.data$subscribersGained, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  dplyr::mutate(
+    TotalMinutesStreamed = .data$TotalSecondsStreamed / 60,
+    TotalHoursStreamed = .data$TotalMinutesStreamed / 60
+  ) %>%
+  dplyr::arrange(dplyr::desc(.data$TotalHoursStreamed))
+
+reference_summary %>%
+  dplyr::mutate(TotalHoursStreamed = round(.data$TotalHoursStreamed, 1)) %>%
+  kableExtra::kbl(
+    format = "html",
+    caption = "Content Summary by Topic and Reference",
+    col.names = c(
+      "Topic",
+      "Reference / Tags",
+      "Videos / Streams",
+      "Seconds Streamed",
+      "Subscribers Gained",
+      "Minutes Streamed",
+      "Hours Streamed"
+    )
+  ) %>%
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width = FALSE
+  )
+```
+
+# Total Collaborations
+
+```{r}
+#| label: content-frequency-collaborations
+
+collaboration_summary <- df %>%
+  dplyr::count(.data$publish_month, .data$is_collab, name = "Count") %>%
+  dplyr::filter(.data$is_collab)
+
+collaboration_summary %>%
+  kableExtra::kbl(
+    format = "html",
+    caption = "Total Collaborations by Month",
+    col.names = c("Month", "Is Collaboration", "Count")
+  ) %>%
+  kableExtra::kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width = FALSE
+  )
+```
