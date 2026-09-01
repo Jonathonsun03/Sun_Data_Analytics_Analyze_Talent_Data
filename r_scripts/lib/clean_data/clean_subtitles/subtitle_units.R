@@ -329,6 +329,61 @@ capitalize_first_alphabetic <- function(text) {
   )
 }
 
+expand_speaker_turn_segments <- function(work) {
+  if (nrow(work) == 0L) {
+    work$speaker_turn_id <- integer()
+    work$speaker_turn_marked <- logical()
+    return(work)
+  }
+
+  segments <- list()
+  for (video_id in unique(work$video_id)) {
+    video_rows <- which(work$video_id == video_id)
+    current_turn <- 0L
+    pending_boundary <- FALSE
+
+    add_segment <- function(row_index, value, starts_marked = FALSE) {
+      value <- stringr::str_squish(value)
+      if (!nzchar(value)) return(invisible(NULL))
+
+      effective_marker <- isTRUE(starts_marked) || pending_boundary
+      if (effective_marker) {
+        current_turn <<- if (current_turn == 0L) 1L else current_turn + 1L
+      } else if (current_turn == 0L) {
+        current_turn <<- 1L
+      }
+
+      row <- work[row_index, , drop = FALSE]
+      row$text <- value
+      row$speaker_turn_id <- current_turn
+      row$speaker_turn_marked <- effective_marker
+      segments[[length(segments) + 1L]] <<- row
+      pending_boundary <<- FALSE
+      invisible(NULL)
+    }
+
+    for (row_index in video_rows) {
+      text <- work$text[[row_index]]
+      marker_count <- stringr::str_count(text, stringr::fixed(">>"))
+      parts <- strsplit(text, ">>", fixed = TRUE)[[1]]
+      expected_parts <- marker_count + 1L
+      if (length(parts) < expected_parts) {
+        parts <- c(parts, rep("", expected_parts - length(parts)))
+      }
+
+      add_segment(row_index, parts[[1]], starts_marked = FALSE)
+      if (marker_count == 0L) next
+
+      for (part_index in seq_len(marker_count) + 1L) {
+        pending_boundary <- TRUE
+        add_segment(row_index, parts[[part_index]], starts_marked = TRUE)
+      }
+    }
+  }
+
+  dplyr::bind_rows(segments)
+}
+
 build_punctuation_blocks <- function(
     df,
     target_words = 175L,
@@ -371,9 +426,14 @@ build_punctuation_blocks <- function(
       !is.na(.data$text),
       .data$text != ""
     ) |>
-    dplyr::arrange(.data$video_id, .data$start_sec, .data$end_sec, .data$source_order) |>
-    dplyr::group_by(.data$video_id) |>
-    dplyr::mutate(deduplicated_text = deduplicate_caption_overlaps(.data$text)) |>
+    dplyr::arrange(.data$video_id, .data$start_sec, .data$end_sec, .data$source_order)
+
+  work <- expand_speaker_turn_segments(work) |>
+    dplyr::group_by(.data$video_id, .data$speaker_turn_id) |>
+    dplyr::mutate(
+      speaker_turn_marked = any(.data$speaker_turn_marked),
+      deduplicated_text = deduplicate_caption_overlaps(.data$text)
+    ) |>
     dplyr::ungroup() |>
     dplyr::mutate(
       model_input_text = normalize_punctuation_model_input(.data$deduplicated_text),
@@ -384,6 +444,9 @@ build_punctuation_blocks <- function(
   empty_blocks <- tibble::tibble(
     video_id = character(),
     talent_name = character(),
+    speaker_turn_id = integer(),
+    speaker_turn_marked = logical(),
+    speaker_turn_block_number = integer(),
     block_number = integer(),
     start_sec = numeric(),
     end_sec = numeric(),
@@ -394,7 +457,7 @@ build_punctuation_blocks <- function(
   )
   if (nrow(work) == 0L) return(empty_blocks)
 
-  make_block <- function(indices, block_number) {
+  make_block <- function(indices, block_number, turn_block_number) {
     block_rows <- work[indices, , drop = FALSE]
     start_sec <- suppressWarnings(min(block_rows$start_sec, na.rm = TRUE))
     end_sec <- suppressWarnings(max(block_rows$end_sec, na.rm = TRUE))
@@ -410,6 +473,9 @@ build_punctuation_blocks <- function(
     tibble::tibble(
       video_id = block_rows$video_id[[1]],
       talent_name = if (is.null(talent_name)) NA_character_ else as.character(talent_name[[1]]),
+      speaker_turn_id = as.integer(block_rows$speaker_turn_id[[1]]),
+      speaker_turn_marked = isTRUE(block_rows$speaker_turn_marked[[1]]),
+      speaker_turn_block_number = as.integer(turn_block_number),
       block_number = as.integer(block_number),
       start_sec = start_sec,
       end_sec = end_sec,
@@ -423,30 +489,40 @@ build_punctuation_blocks <- function(
   blocks <- list()
   for (video_id in unique(work$video_id)) {
     video_indices <- which(work$video_id == video_id)
-    current_indices <- integer()
-    current_words <- 0L
     block_number <- 0L
 
-    emit_current <- function() {
-      if (length(current_indices) == 0L) return(invisible(NULL))
-      block_number <<- block_number + 1L
-      blocks[[length(blocks) + 1L]] <<- make_block(current_indices, block_number)
-      current_indices <<- integer()
-      current_words <<- 0L
-      invisible(NULL)
-    }
+    for (turn_id in unique(work$speaker_turn_id[video_indices])) {
+      turn_indices <- video_indices[work$speaker_turn_id[video_indices] == turn_id]
+      current_indices <- integer()
+      current_words <- 0L
+      turn_block_number <- 0L
 
-    for (row_index in video_indices) {
-      next_words <- work$word_count[[row_index]]
-      if (length(current_indices) > 0L && current_words + next_words > max_words) {
-        emit_current()
+      emit_current <- function() {
+        if (length(current_indices) == 0L) return(invisible(NULL))
+        block_number <<- block_number + 1L
+        turn_block_number <<- turn_block_number + 1L
+        blocks[[length(blocks) + 1L]] <<- make_block(
+          current_indices,
+          block_number,
+          turn_block_number
+        )
+        current_indices <<- integer()
+        current_words <<- 0L
+        invisible(NULL)
       }
 
-      current_indices <- c(current_indices, row_index)
-      current_words <- current_words + next_words
-      if (current_words >= target_words) emit_current()
+      for (row_index in turn_indices) {
+        next_words <- work$word_count[[row_index]]
+        if (length(current_indices) > 0L && current_words + next_words > max_words) {
+          emit_current()
+        }
+
+        current_indices <- c(current_indices, row_index)
+        current_words <- current_words + next_words
+        if (current_words >= target_words) emit_current()
+      }
+      emit_current()
     }
-    emit_current()
   }
 
   dplyr::bind_rows(blocks)
@@ -471,6 +547,8 @@ empty_sentence_units <- function() {
   tibble::tibble(
     video_id = character(),
     talent_name = character(),
+    speaker_turn_id = integer(),
+    speaker_change = logical(),
     block_number = integer(),
     sentence_number = integer(),
     start_sec = numeric(),
@@ -501,9 +579,29 @@ sentence_units_from_block <- function(block, punctuated_text, punctuation_model 
   end_sec <- block_start + duration * cumulative_fraction
   start_sec <- c(block_start, utils::head(end_sec, -1L))
 
+  speaker_turn_id <- if ("speaker_turn_id" %in% names(block)) {
+    as.integer(block$speaker_turn_id[[1]])
+  } else {
+    1L
+  }
+  speaker_turn_marked <- if ("speaker_turn_marked" %in% names(block)) {
+    isTRUE(block$speaker_turn_marked[[1]])
+  } else {
+    FALSE
+  }
+  turn_block_number <- if ("speaker_turn_block_number" %in% names(block)) {
+    as.integer(block$speaker_turn_block_number[[1]])
+  } else {
+    1L
+  }
+  speaker_change <- rep(FALSE, length(sentences))
+  speaker_change[[1]] <- speaker_turn_marked && turn_block_number == 1L
+
   tibble::tibble(
     video_id = as.character(block$video_id[[1]]),
     talent_name = as.character(block$talent_name[[1]]),
+    speaker_turn_id = speaker_turn_id,
+    speaker_change = speaker_change,
     block_number = as.integer(block$block_number[[1]]),
     sentence_number = seq_along(sentences),
     start_sec = start_sec,
@@ -567,8 +665,8 @@ reconstruct_sentence_units <- function(
 
 write_sentence_units_parquet <- function(sentence_units, output_path) {
   required <- c(
-    "video_id", "block_number", "sentence_number", "start_sec", "end_sec",
-    "text", "punctuation_model"
+    "video_id", "speaker_turn_id", "speaker_change", "block_number",
+    "sentence_number", "start_sec", "end_sec", "text", "punctuation_model"
   )
   missing <- setdiff(required, names(sentence_units))
   if (length(missing) > 0L) {

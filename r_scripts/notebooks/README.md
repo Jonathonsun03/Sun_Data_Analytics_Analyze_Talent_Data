@@ -7,6 +7,8 @@ notebook sources.
 
 - `dashboards/`
   - interactive and published dashboard notebooks
+  - `dashboards/company_dashboard/dashboard.qmd` is the company-level Shiny
+    dashboard for selecting a company, its talents, and an analytics date range
   - `dashboards/data_admin/classification_dashboard/dashboard.qmd` is the
     read-only Shiny operations view for title-classification runs, artifacts,
     tags, and coverage

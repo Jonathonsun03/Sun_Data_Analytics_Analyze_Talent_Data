@@ -57,6 +57,20 @@ selected daily snapshot, and the overview performance chart retains its
 original monthly aggregation. Video publication dates do not control the
 dashboard date window.
 
+## Company dashboards
+
+Company-level dashboards reuse the creator dashboard's unified-DuckDB snapshot
+semantics. `data/company.R` selects the latest available snapshot inside the
+requested window separately for each selected talent, ensuring that cumulative
+video metrics are never summed across daily snapshots. `metrics/company.R`
+prepares company totals and the publication, topic, reference, and
+collaboration summaries used by
+`r_scripts/notebooks/dashboards/company_dashboard/dashboard.qmd`.
+
+Company membership is explicit rather than inferred from talent names. Update
+`config/dashboard/company_talents.csv` with one row per company/talent pair;
+the loader validates every code against active `catalog.talents` rows.
+
 For an explicit local-only preview, set both development mode and a narrow list
 of test codes:
 

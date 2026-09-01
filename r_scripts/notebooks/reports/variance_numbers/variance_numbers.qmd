@@ -14,73 +14,27 @@ format:
     pdf-engine: xelatex
 params:
   talent: "Leia Memoria【Variance Project】"
-  data_source: "datalake"
-  data_root: null
-  title_classifications_path: null
+  database_path: null
 execute:
   echo: false
   warning: false
   message: false
 ---
 
-# Executive Summary
-
-# Introduction
-
-This report summarizes publishing activity and performance for **`r params$talent`**.
-
 ```{r}
 #| label: setup
 #| include: false
 
-find_variance_repo_root <- function(start = getwd()) {
-  env_root <- trimws(Sys.getenv("TALENT_REPO_ROOT", unset = ""))
-  if (nzchar(env_root)) {
-    return(normalizePath(env_root, winslash = "/", mustWork = TRUE))
-  }
-
-  candidate <- normalizePath(start, winslash = "/", mustWork = TRUE)
-  repeat {
-    if (file.exists(file.path(candidate, "AGENTS.md")) &&
-        dir.exists(file.path(candidate, "r_scripts"))) {
-      return(candidate)
-    }
-    parent <- dirname(candidate)
-    if (identical(parent, candidate)) {
-      break
-    }
-    candidate <- parent
-  }
-
-  stop("Could not locate the repository root. Set TALENT_REPO_ROOT.")
-}
-
-repo_root <- find_variance_repo_root()
-
-knitr::opts_chunk$set(fig.align = "center")
-knitr::opts_knit$set(root.dir = repo_root)
-
-if (knitr::is_latex_output()) {
-  knitr::opts_chunk$set(
-    fig.width = 14,
-    fig.height = 7,
-    out.width = "0.8\\linewidth"
-  )
-} else {
-  knitr::opts_chunk$set(
-    fig.width = 10,
-    fig.height = 5
-  )
-}
-
-required_packages <- c(
-  "dplyr",
-  "kableExtra",
-  "lubridate",
-  "purrr",
-  "readr",
-  "stringr"
+dashboard_machine_library <- file.path(
+  path.expand("~/R"),
+  paste0(R.version$platform, "-library"),
+  paste(R.version$major, sub("\\..*$", "", R.version$minor), sep = ".")
 )
+if (dir.exists(dashboard_machine_library)) {
+  .libPaths(unique(c(.libPaths(), dashboard_machine_library)))
+}
+
+required_packages <- c("DBI", "duckdb", "here", "kableExtra")
 missing_packages <- required_packages[
   !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
 ]
@@ -94,129 +48,31 @@ if (length(missing_packages) > 0) {
 
 suppressPackageStartupMessages({
   library(dplyr)
+  library(here)
   library(kableExtra)
-  library(lubridate)
-  library(stringr)
 })
 
-source(file.path(repo_root, "r_scripts", "lib", "utils", "repo_env.R"))
-load_repo_env(repo_root)
-source(file.path(repo_root, "r_scripts", "lib", "utils", "datalake_root.r"))
-source(file.path(repo_root, "r_scripts", "lib", "utils", "staging_root.R"))
-source(file.path(repo_root, "r_scripts", "lib", "utils", "talent_select.R"))
-source(file.path(repo_root, "r_scripts", "lib", "import_data", "talent_files.R"))
-source(file.path(repo_root, "r_scripts", "lib", "clean_data", "CleanData.R"))
+source(here::here("r_scripts", "lib", "dashboard", "load.R"))
 
-resolve_variance_data_root <- function(data_source, data_root = NULL) {
-  if (!is.null(data_root) && length(data_root) > 0 &&
-      !is.na(data_root[[1]]) && nzchar(trimws(as.character(data_root[[1]])))) {
-    return(normalizePath(data_root[[1]], winslash = "/", mustWork = TRUE))
-  }
-
-  data_source <- match.arg(tolower(data_source), c("datalake", "staging"))
-  root <- if (identical(data_source, "datalake")) {
-    get_datalake_root()
-  } else {
-    get_staging_root()
-  }
-  normalizePath(root, winslash = "/", mustWork = TRUE)
-}
-
-optional_param_path <- function(x) {
-  if (is.null(x) || length(x) == 0 || is.na(x[[1]]) ||
-      !nzchar(trimws(as.character(x[[1]])))) {
-    return(NULL)
-  }
-  normalizePath(x[[1]], winslash = "/", mustWork = TRUE)
-}
-
-latest_talent_snapshot_path <- function(talent_path, snapshot_type) {
-  snapshot_paths <- list_talent_snapshot_files(talent_path)
-  if (length(snapshot_paths) == 0) {
-    stop("No CSV snapshots found for talent: ", basename(talent_path))
-  }
-
-  snapshot_types <- vapply(
-    snapshot_paths,
-    infer_snapshot_type_key,
-    character(1)
-  )
-  candidates <- snapshot_paths[snapshot_types == snapshot_type]
-  if (length(candidates) == 0) {
-    stop(
-      "No `", snapshot_type, "` snapshots found for talent: ",
-      basename(talent_path)
-    )
-  }
-
-  snapshot_dates <- suppressWarnings(as.Date(
-    stringr::str_extract(basename(candidates), "\\d{4}-\\d{2}-\\d{2}")
-  ))
-  modification_times <- file.info(candidates)$mtime
-  newest_first <- order(
-    snapshot_dates,
-    modification_times,
-    basename(candidates),
-    decreasing = TRUE,
-    na.last = TRUE
-  )
-
-  candidates[[newest_first[[1]]]]
-}
-
-talent <- params$talent
-data_root <- resolve_variance_data_root(params$data_source, params$data_root)
-talent_path <- select_talent(talent, root = data_root)
-talent_folder <- basename(talent_path)
-analytics_snapshot_path <- latest_talent_snapshot_path(
-  talent_path,
-  snapshot_type = "video_analytics"
+database_path <- dashboard_resolve_database_path(params$database_path)
+con <- DBI::dbConnect(
+  duckdb::duckdb(),
+  dbdir = database_path,
+  read_only = TRUE
+)
+talent_row <- tryCatch(
+  dashboard_select_unified_talent(con, params$talent),
+  finally = DBI::dbDisconnect(con, shutdown = TRUE)
 )
 
-# This report needs one current, video-level snapshot. Loading the entire talent
-# directory would bind hundreds of historical files across unrelated data types.
-talent_files <- TalentFiles(list(analytics_snapshot_path))
-
-title_classifications <- load_title_classifications(
-  path = optional_param_path(params$title_classifications_path),
-  talent = talent_folder
+report_data <- dashboard_load_company_analytics(
+  database_path = database_path,
+  talent_codes = talent_row$talent_code[[1]]
 )
+df <- report_data$analytics
+report_talent_name <- gsub("_", " ", talent_row$talent_name[[1]], fixed = TRUE)
 
-df <- video_analytics_prep_with_titles(
-  files = talent_files,
-  titles = title_classifications,
-  talent = talent_folder
-) %>%
-  dedupe_latest_rows(key_cols = "Video ID")
-
-# Compatibility mappings from the current title-classification schema to the
-# concepts used in the original Variance Wrapped report.
-if (!("topic" %in% names(df))) {
-  df$topic <- "Unclassified"
-}
-df$topic <- dplyr::coalesce(na_if(trimws(as.character(df$topic)), ""), "Unclassified")
-
-if (!("primary_reference" %in% names(df))) {
-  df$primary_reference <- NA_character_
-}
-if (!("tags" %in% names(df))) {
-  df$tags <- NA_character_
-}
-df$content_reference <- dplyr::coalesce(
-  na_if(trimws(as.character(df$primary_reference)), ""),
-  na_if(trimws(as.character(df$tags)), ""),
-  "No reference"
-)
-
-if (!("collaborative_energy" %in% names(df))) {
-  df$collaborative_energy <- FALSE
-}
-df$is_collab <- !is.na(df$collaborative_energy) & df$collaborative_energy
-
-summarize_analytics <- function(analytics_df, fallback_talent) {
-  channel_names <- analytics_df$`Channel Name`
-  channel_names <- channel_names[!is.na(channel_names) & nzchar(channel_names)]
-  talent_name <- if (length(channel_names) > 0) channel_names[[1]] else fallback_talent
+summarize_analytics <- function(analytics_df, talent_name) {
   total_hours <- sum(analytics_df$duration_seconds, na.rm = TRUE) / 3600
 
   tibble::tibble(
@@ -231,13 +87,18 @@ summarize_analytics <- function(analytics_df, fallback_talent) {
 }
 ```
 
+# Executive Summary
+
+# Introduction
+
+This report summarizes publishing activity and performance for **`r report_talent_name`** using the latest available unified-DuckDB analytics snapshot.
 
 # Summary Analytics
 
 ```{r}
 #| label: summary-analytics
 
-summary_df <- summarize_analytics(df, talent_folder)
+summary_df <- summarize_analytics(df, report_talent_name)
 
 summary_df %>%
   kableExtra::kbl(
@@ -251,7 +112,6 @@ summary_df %>%
     full_width = FALSE
   )
 ```
-
 
 # Content Frequency by Month
 
@@ -274,7 +134,6 @@ month_summary %>%
   )
 ```
 
-
 # Content Release Day Frequency
 
 ```{r}
@@ -296,7 +155,6 @@ weekday_summary %>%
   )
 ```
 
-
 # Content by Topic
 
 ```{r}
@@ -305,7 +163,7 @@ weekday_summary %>%
 topic_summary <- df %>%
   dplyr::group_by(.data$topic) %>%
   dplyr::summarise(
-    TotalCounts = dplyr::n(),
+    TotalCounts = dplyr::n_distinct(.data$`Video ID`),
     TotalSecondsStreamed = sum(.data$duration_seconds, na.rm = TRUE),
     TotalSubsGained = sum(.data$subscribersGained, na.rm = TRUE),
     .groups = "drop"
@@ -336,7 +194,6 @@ topic_summary %>%
   )
 ```
 
-
 ## With Included Reference
 
 ```{r}
@@ -348,7 +205,7 @@ reference_summary <- df %>%
   ) %>%
   dplyr::group_by(.data$topic, .data$content_reference) %>%
   dplyr::summarise(
-    TotalCounts = dplyr::n(),
+    TotalCounts = dplyr::n_distinct(.data$`Video ID`),
     TotalSecondsStreamed = sum(.data$duration_seconds, na.rm = TRUE),
     TotalSubsGained = sum(.data$subscribersGained, na.rm = TRUE),
     .groups = "drop"
@@ -379,7 +236,6 @@ reference_summary %>%
     full_width = FALSE
   )
 ```
-
 
 # Total Collaborations
 
