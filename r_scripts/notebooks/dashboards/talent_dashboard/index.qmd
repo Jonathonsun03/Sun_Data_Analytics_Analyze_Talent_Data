@@ -3,6 +3,7 @@ title: "Creator Analytics Dashboard"
 format:
   dashboard:
     embed-resources: true
+    include-in-header: presentation-controls.html
     orientation: rows
 execute:
   echo: false

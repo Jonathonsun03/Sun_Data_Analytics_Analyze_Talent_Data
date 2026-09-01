@@ -1,0 +1,281 @@
+<style>
+.dashboard-card-visibility-toggle,
+.dashboard-global-visibility-toggle {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--bs-border-radius-sm, 0.25rem);
+  color: inherit;
+  display: inline-flex;
+  gap: 0.35rem;
+  justify-content: center;
+}
+
+.card[data-presentation-control-init] > .card-header {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.card[data-presentation-control-init] > .card-header > .card-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dashboard-card-visibility-toggle:hover,
+.dashboard-global-visibility-toggle:hover {
+  background: var(--bs-secondary-bg, rgba(108, 117, 125, 0.12));
+  border-color: var(--bs-border-color, rgba(0, 0, 0, 0.18));
+}
+
+.dashboard-card-visibility-toggle:focus-visible,
+.dashboard-global-visibility-toggle:focus-visible {
+  outline: 3px solid rgba(var(--bs-primary-rgb, 13, 110, 253), 0.35);
+  outline-offset: 2px;
+}
+
+.dashboard-card-visibility-toggle {
+  flex: 0 0 auto;
+  margin: -0.2rem -0.25rem -0.2rem auto;
+  padding: 0.2rem 0.35rem;
+}
+
+.dashboard-card-visibility-toggle svg,
+.dashboard-global-visibility-toggle svg {
+  height: 1rem;
+  width: 1rem;
+}
+
+.dashboard-global-visibility-control {
+  align-items: center;
+  display: flex;
+  margin-left: auto;
+  padding: 0.25rem 0 0.25rem 0.75rem;
+}
+
+.dashboard-global-visibility-toggle {
+  font-size: 0.85rem;
+  padding: 0.3rem 0.55rem;
+  white-space: nowrap;
+}
+
+.card.presentation-hidden > .card-body {
+  position: relative;
+}
+
+.card.presentation-hidden > .card-body > * {
+  visibility: hidden !important;
+}
+
+.card.presentation-hidden > .card-body::after {
+  align-items: center;
+  background: var(--bs-tertiary-bg, #f8f9fa);
+  color: var(--bs-secondary-color, #6c757d);
+  content: "Hidden for presentation";
+  display: flex;
+  font-size: 0.9rem;
+  inset: 0;
+  justify-content: center;
+  letter-spacing: 0.01em;
+  position: absolute;
+  text-align: center;
+}
+
+.card.presentation-hidden > bslib-tooltip {
+  display: none;
+}
+
+@media (max-width: 991.98px) {
+  .dashboard-global-visibility-control {
+    margin-left: 0;
+    padding: 0.5rem 0;
+  }
+}
+</style>
+
+<script>
+(function() {
+  "use strict";
+
+  const cardSelector = ".dashboard-page .card.cell[data-title]";
+  const hiddenClass = "presentation-hidden";
+  const storagePrefix = "talent-dashboard-card-hidden:";
+  const initializedAttribute = "data-presentation-control-init";
+
+  const icons = {
+    eye: [
+      '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">',
+      '<path fill="currentColor" d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8ZM1.7 8C2.7 6.5 5 3.5 8 3.5s5.3 3 6.3 4.5c-1 1.5-3.3 4.5-6.3 4.5S2.7 9.5 1.7 8Z"/>',
+      '<path fill="currentColor" d="M8 5.5A2.5 2.5 0 1 0 8 10.5 2.5 2.5 0 0 0 8 5.5Zm0 1A1.5 1.5 0 1 1 8 9.5 1.5 1.5 0 0 1 8 6.5Z"/>',
+      "</svg>"
+    ].join(""),
+    eyeSlash: [
+      '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">',
+      '<path fill="currentColor" d="M13.4 11.9 2.1.6l-.7.7 2.2 2.2C1.3 4.9 0 8 0 8s3 5.5 8 5.5c1.4 0 2.6-.4 3.7-1l2.9 2.9.7-.7-1.9-1.8ZM8 12.5C4.7 12.5 2.3 9.4 1.7 8c.5-1 1.4-2.3 2.6-3.3l1.3 1.3A2.5 2.5 0 0 0 10 10.4l1 1c-.9.7-1.9 1.1-3 1.1Z"/>',
+      '<path fill="currentColor" d="M8 3.5c3.3 0 5.7 3.1 6.3 4.5-.3.7-.9 1.6-1.7 2.4l.7.7C15.2 9.4 16 8 16 8s-3-5.5-8-5.5c-.9 0-1.8.2-2.6.5l.8.8c.6-.2 1.2-.3 1.8-.3Z"/>',
+      "</svg>"
+    ].join("")
+  };
+
+  function directChild(card, selector) {
+    return Array.from(card.children).find(function(child) {
+      return child.matches(selector);
+    });
+  }
+
+  function cards() {
+    return Array.from(document.querySelectorAll(cardSelector));
+  }
+
+  function cardStorageKey(card) {
+    const page = card.closest(".dashboard-page");
+    const pageId = page && page.id ? page.id : "dashboard";
+    const title = card.getAttribute("data-title") || "untitled";
+    return [storagePrefix, window.location.pathname, pageId, title].join(":");
+  }
+
+  function readStoredState(card) {
+    try {
+      return window.sessionStorage.getItem(cardStorageKey(card)) === "true";
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function storeState(card, hidden) {
+    try {
+      window.sessionStorage.setItem(cardStorageKey(card), String(hidden));
+    } catch (error) {
+      // The controls still work when browser storage is unavailable.
+    }
+  }
+
+  function resizeWidgets(card) {
+    window.requestAnimationFrame(function() {
+      if (window.Plotly && window.Plotly.Plots) {
+        card.querySelectorAll(".js-plotly-plot").forEach(function(plot) {
+          window.Plotly.Plots.resize(plot);
+        });
+      }
+      window.dispatchEvent(new Event("resize"));
+    });
+  }
+
+  function updateCardButton(card, hidden) {
+    const button = card.querySelector(":scope > .card-header .dashboard-card-visibility-toggle");
+    if (!button) {
+      return;
+    }
+
+    const title = card.getAttribute("data-title") || "box";
+    const action = hidden ? "Show" : "Hide";
+    button.innerHTML = hidden ? icons.eye : icons.eyeSlash;
+    button.setAttribute("aria-label", action + " " + title);
+    button.setAttribute("aria-pressed", String(hidden));
+    button.setAttribute("title", action + " this box");
+  }
+
+  function setCardHidden(card, hidden, persist) {
+    const body = directChild(card, ".card-body");
+    card.classList.toggle(hiddenClass, hidden);
+
+    if (body) {
+      body.inert = hidden;
+      body.setAttribute("aria-hidden", String(hidden));
+    }
+
+    updateCardButton(card, hidden);
+    if (persist !== false) {
+      storeState(card, hidden);
+    }
+    if (!hidden) {
+      resizeWidgets(card);
+    }
+  }
+
+  function updateGlobalControl() {
+    const button = document.querySelector(".dashboard-global-visibility-toggle");
+    if (!button) {
+      return;
+    }
+
+    const allCards = cards();
+    const anyHidden = allCards.some(function(card) {
+      return card.classList.contains(hiddenClass);
+    });
+    const label = anyHidden ? "Show all boxes" : "Hide all boxes";
+    button.innerHTML = (anyHidden ? icons.eye : icons.eyeSlash) + "<span>" + label + "</span>";
+    button.setAttribute("aria-pressed", String(anyHidden));
+    button.setAttribute("aria-label", label);
+    button.setAttribute("title", label);
+  }
+
+  function initializeCard(card) {
+    if (card.hasAttribute(initializedAttribute)) {
+      return;
+    }
+
+    const header = directChild(card, ".card-header");
+    const body = directChild(card, ".card-body");
+    if (!header || !body) {
+      return;
+    }
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "dashboard-card-visibility-toggle";
+    button.addEventListener("click", function() {
+      setCardHidden(card, !card.classList.contains(hiddenClass));
+      updateGlobalControl();
+    });
+
+    header.appendChild(button);
+    card.setAttribute(initializedAttribute, "true");
+    setCardHidden(card, readStoredState(card), false);
+  }
+
+  function initializeGlobalControl() {
+    if (document.querySelector(".dashboard-global-visibility-toggle")) {
+      return;
+    }
+
+    const target = document.querySelector("#dashboard-collapse") ||
+      document.querySelector(".navbar-container");
+    if (!target) {
+      return;
+    }
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "dashboard-global-visibility-control";
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "dashboard-global-visibility-toggle";
+    button.addEventListener("click", function() {
+      const allCards = cards();
+      const anyHidden = allCards.some(function(card) {
+        return card.classList.contains(hiddenClass);
+      });
+      allCards.forEach(function(card) {
+        setCardHidden(card, !anyHidden);
+      });
+      updateGlobalControl();
+    });
+
+    wrapper.appendChild(button);
+    target.appendChild(wrapper);
+  }
+
+  function initializePresentationControls() {
+    cards().forEach(initializeCard);
+    initializeGlobalControl();
+    updateGlobalControl();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializePresentationControls);
+  } else {
+    initializePresentationControls();
+  }
+})();
+</script>

@@ -2,6 +2,7 @@
 title: "Creator Analytics Dashboard"
 format:
   dashboard:
+    include-in-header: presentation-controls.html
     orientation: rows
 server: shiny
 execute:
