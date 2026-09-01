@@ -49,6 +49,232 @@ ul.task-list li input[type="checkbox"] {
 <script src="dashboard_files/libs/quarto-dashboard/web-components.js" type="module"></script>
 <script src="dashboard_files/libs/quarto-dashboard/components.js"></script>
 
+<!-- Presentation controls are generated from presentation-controls.html. -->
+<style>
+.dashboard-card-visibility-toggle,
+.dashboard-global-visibility-toggle {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--bs-border-radius-sm, 0.25rem);
+  color: inherit;
+  display: inline-flex;
+  gap: 0.35rem;
+  justify-content: center;
+}
+
+.card[data-presentation-control-init] > .card-header {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.card[data-presentation-control-init] > .card-header > .card-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dashboard-card-visibility-toggle:hover,
+.dashboard-global-visibility-toggle:hover {
+  background: var(--bs-secondary-bg, rgba(108, 117, 125, 0.12));
+  border-color: var(--bs-border-color, rgba(0, 0, 0, 0.18));
+}
+
+.dashboard-card-visibility-toggle:focus-visible,
+.dashboard-global-visibility-toggle:focus-visible {
+  outline: 3px solid rgba(var(--bs-primary-rgb, 13, 110, 253), 0.35);
+  outline-offset: 2px;
+}
+
+.dashboard-card-visibility-toggle {
+  flex: 0 0 auto;
+  margin: -0.2rem -0.25rem -0.2rem auto;
+  padding: 0.2rem 0.35rem;
+}
+
+.dashboard-card-visibility-toggle i,
+.dashboard-global-visibility-toggle i {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.dashboard-global-visibility-control {
+  align-items: center;
+  display: flex;
+  margin-left: auto;
+  padding: 0.25rem 0 0.25rem 0.75rem;
+}
+
+.dashboard-global-visibility-toggle {
+  font-size: 0.85rem;
+  padding: 0.3rem 0.55rem;
+  white-space: nowrap;
+}
+
+.card.presentation-hidden > .card-body {
+  position: relative;
+}
+
+.card.presentation-hidden > .card-body > * {
+  visibility: hidden !important;
+}
+
+.card.presentation-hidden > .card-body::after {
+  align-items: center;
+  background: var(--bs-tertiary-bg, #f8f9fa);
+  color: var(--bs-secondary-color, #6c757d);
+  content: "Hidden for presentation";
+  display: flex;
+  font-size: 0.9rem;
+  inset: 0;
+  justify-content: center;
+  position: absolute;
+  text-align: center;
+}
+
+.card.presentation-hidden > bslib-tooltip {
+  display: none;
+}
+
+@media (max-width: 991.98px) {
+  .dashboard-global-visibility-control {
+    margin-left: 0;
+    padding: 0.5rem 0;
+  }
+}
+</style>
+
+<script>
+(function() {
+  "use strict";
+
+  const cardSelector = ".dashboard-page .card.cell[data-title]";
+  const hiddenClass = "presentation-hidden";
+  const storagePrefix = "talent-dashboard-card-hidden:";
+
+  function cards() {
+    return Array.from(document.querySelectorAll(cardSelector));
+  }
+
+  function directChild(card, selector) {
+    return Array.from(card.children).find(function(child) {
+      return child.matches(selector);
+    });
+  }
+
+  function storageKey(card) {
+    const page = card.closest(".dashboard-page");
+    return [
+      storagePrefix,
+      window.location.pathname,
+      page && page.id ? page.id : "dashboard",
+      card.getAttribute("data-title") || "untitled"
+    ].join(":");
+  }
+
+  function storedState(card) {
+    try {
+      return window.sessionStorage.getItem(storageKey(card)) === "true";
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function storeState(card, hidden) {
+    try {
+      window.sessionStorage.setItem(storageKey(card), String(hidden));
+    } catch (error) {
+      // Controls remain usable when browser storage is unavailable.
+    }
+  }
+
+  function updateCardButton(card, hidden) {
+    const button = card.querySelector(":scope > .card-header .dashboard-card-visibility-toggle");
+    if (!button) return;
+    const action = hidden ? "Show" : "Hide";
+    const title = card.getAttribute("data-title") || "box";
+    button.innerHTML = '<i class="bi ' + (hidden ? "bi-eye" : "bi-eye-slash") + '" aria-hidden="true"></i>';
+    button.setAttribute("aria-label", action + " " + title);
+    button.setAttribute("aria-pressed", String(hidden));
+    button.setAttribute("title", action + " this box");
+  }
+
+  function setHidden(card, hidden, persist) {
+    const body = directChild(card, ".card-body");
+    card.classList.toggle(hiddenClass, hidden);
+    if (body) {
+      body.inert = hidden;
+      body.setAttribute("aria-hidden", String(hidden));
+    }
+    updateCardButton(card, hidden);
+    if (persist !== false) storeState(card, hidden);
+    if (!hidden) window.dispatchEvent(new Event("resize"));
+  }
+
+  function updateGlobalButton() {
+    const button = document.querySelector(".dashboard-global-visibility-toggle");
+    if (!button) return;
+    const anyHidden = cards().some(function(card) {
+      return card.classList.contains(hiddenClass);
+    });
+    const label = anyHidden ? "Show all boxes" : "Hide all boxes";
+    button.innerHTML = '<i class="bi ' + (anyHidden ? "bi-eye" : "bi-eye-slash") + '" aria-hidden="true"></i><span>' + label + "</span>";
+    button.setAttribute("aria-label", label);
+    button.setAttribute("aria-pressed", String(anyHidden));
+    button.setAttribute("title", label);
+  }
+
+  function initializeCard(card) {
+    if (card.hasAttribute("data-presentation-control-init")) return;
+    const header = directChild(card, ".card-header");
+    const body = directChild(card, ".card-body");
+    if (!header || !body) return;
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "dashboard-card-visibility-toggle";
+    button.addEventListener("click", function() {
+      setHidden(card, !card.classList.contains(hiddenClass));
+      updateGlobalButton();
+    });
+    header.appendChild(button);
+    card.setAttribute("data-presentation-control-init", "true");
+    setHidden(card, storedState(card), false);
+  }
+
+  function initialize() {
+    cards().forEach(initializeCard);
+    const target = document.querySelector("#dashboard-collapse") || document.querySelector(".navbar-container");
+    if (target && !document.querySelector(".dashboard-global-visibility-toggle")) {
+      const wrapper = document.createElement("div");
+      const button = document.createElement("button");
+      wrapper.className = "dashboard-global-visibility-control";
+      button.type = "button";
+      button.className = "dashboard-global-visibility-toggle";
+      button.addEventListener("click", function() {
+        const allCards = cards();
+        const anyHidden = allCards.some(function(card) {
+          return card.classList.contains(hiddenClass);
+        });
+        allCards.forEach(function(card) {
+          setHidden(card, !anyHidden);
+        });
+        updateGlobalButton();
+      });
+      wrapper.appendChild(button);
+      target.appendChild(wrapper);
+    }
+    updateGlobalButton();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initialize);
+  } else {
+    initialize();
+  }
+})();
+</script>
+
 
 
 </head>
