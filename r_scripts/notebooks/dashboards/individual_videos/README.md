@@ -28,6 +28,13 @@ These definitions are centralized in the shared metric metadata and follow the
 with an additional note describing how the daily snapshot is interpreted in
 this dashboard.
 
+The Transcript page loads the full available text for the selected video from
+the canonical `text.subtitle_units` and `text.chat_messages` relations. It
+merges streamer subtitles and live chat chronologically and displays only the
+speaker, video-relative timestamp, and dialogue. Transcript loading is scoped
+to the authorized talent and video and is independent of the analytics
+snapshot date range.
+
 ## Authorization
 
 The dashboard uses the shared fail-closed authorization helpers in

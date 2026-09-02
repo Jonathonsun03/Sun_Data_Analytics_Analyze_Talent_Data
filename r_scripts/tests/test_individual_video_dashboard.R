@@ -31,11 +31,30 @@ on.exit(unlink(fixture_path), add = TRUE)
 con <- DBI::dbConnect(duckdb::duckdb(), dbdir = fixture_path)
 DBI::dbExecute(con, "CREATE SCHEMA catalog")
 DBI::dbExecute(con, "CREATE SCHEMA clean")
+DBI::dbExecute(con, "CREATE SCHEMA text")
 DBI::dbExecute(
   con,
   paste(
     "CREATE TABLE catalog.channels (",
     "talent_code VARCHAR, channel_id VARCHAR, channel_name VARCHAR)"
+  )
+)
+DBI::dbExecute(
+  con,
+  paste(
+    "CREATE TABLE text.subtitle_units (",
+    "subtitle_unit_key VARCHAR, video_id VARCHAR, channel_id VARCHAR,",
+    "talent_code VARCHAR, sequence_number BIGINT, subtitle_start VARCHAR,",
+    "subtitle_text VARCHAR)"
+  )
+)
+DBI::dbExecute(
+  con,
+  paste(
+    "CREATE TABLE text.chat_messages (",
+    "message_key VARCHAR, video_id VARCHAR, channel_id VARCHAR,",
+    "talent_code VARCHAR, username VARCHAR, message VARCHAR,",
+    "time_in_seconds DOUBLE, message_timestamp TIMESTAMP)"
   )
 )
 DBI::dbExecute(
@@ -113,6 +132,31 @@ DBI::dbAppendTable(
       cpm = c(2, 2.5, 3, 4)
     )
 )
+DBI::dbAppendTable(
+  con,
+  DBI::Id(schema = "text", table = "subtitle_units"),
+  tibble::tribble(
+    ~subtitle_unit_key, ~video_id, ~channel_id, ~talent_code,
+    ~sequence_number, ~subtitle_start, ~subtitle_text,
+    "SUB_A_1", "VIDEO_A", "C1", "T1", 1L, "00:00:05.500", "Streamer opening",
+    "SUB_A_2", "VIDEO_A", "C1", "T1", 2L, "00:00:20.000", "Streamer response",
+    "SUB_B_1", "VIDEO_B", "C2", "T2", 1L, "00:00:01.000", "Other transcript"
+  )
+)
+DBI::dbAppendTable(
+  con,
+  DBI::Id(schema = "text", table = "chat_messages"),
+  tibble::tribble(
+    ~message_key, ~video_id, ~channel_id, ~talent_code,
+    ~username, ~message, ~time_in_seconds, ~message_timestamp,
+    "CHAT_A_1", "VIDEO_A", "C1", "T1", "Viewer One", "Hello!", 10,
+    as.POSIXct("2026-01-01 00:00:10", tz = "UTC"),
+    "CHAT_A_2", "VIDEO_A", "C1", "T1", "Viewer Two", "Welcome!", 15,
+    as.POSIXct("2026-01-01 00:00:15", tz = "UTC"),
+    "CHAT_B_1", "VIDEO_B", "C2", "T2", "Other Viewer", "Other chat", 2,
+    as.POSIXct("2026-01-01 00:00:02", tz = "UTC")
+  )
+)
 DBI::dbDisconnect(con, shutdown = TRUE)
 
 dashboard_resolve_database_path <- function(database_path = NULL) {
@@ -151,6 +195,55 @@ assert_equal(
   names(dashboard_individual_video_choices(catalog)),
   c("Allowed Video", "No Analytics Yet"),
   "The video choice labels should contain titles only."
+)
+
+assert_equal(
+  dashboard_individual_video_timecode_seconds(c("01:02:03.500", "02:03", "7")),
+  c(3723.5, 123, 7),
+  "Video timecodes should convert to elapsed seconds."
+)
+
+transcript <- dashboard_load_individual_video_transcript(
+  fixture_path,
+  talent_code = "T1",
+  video_id = "VIDEO_A"
+)
+assert_equal(
+  transcript$source,
+  c("subtitle", "chat", "chat", "subtitle"),
+  "Streamer and chat transcript rows should be merged chronologically."
+)
+assert_equal(
+  transcript$speaker,
+  c("Talent One", "Viewer One", "Viewer Two", "Talent One"),
+  "Transcript speakers should identify the streamer and chat participants."
+)
+assert_equal(
+  transcript$seconds,
+  c(5.5, 10, 15, 20),
+  "Transcript timestamps are incorrect."
+)
+transcript_table <- dashboard_individual_video_transcript_table(transcript)
+assert_equal(
+  names(transcript_table),
+  c("Speaker", "Timestamp", "Dialogue"),
+  "The transcript table should expose only the requested columns."
+)
+assert_equal(
+  transcript_table$Timestamp,
+  c("00:00:05", "00:00:10", "00:00:15", "00:00:20"),
+  "Transcript display timestamps are incorrect."
+)
+
+cross_talent_transcript <- dashboard_load_individual_video_transcript(
+  fixture_path,
+  talent_code = "T1",
+  video_id = "VIDEO_B"
+)
+assert_equal(
+  nrow(cross_talent_transcript),
+  0L,
+  "A transcript from another talent must not be returned."
 )
 
 cross_talent_history <- dashboard_load_individual_video_history(

@@ -14,6 +14,33 @@ dashboard_individual_video_format_value <- function(value, format) {
   )
 }
 
+dashboard_individual_video_format_timecode <- function(seconds) {
+  vapply(as.numeric(seconds), function(value) {
+    if (is.na(value) || !is.finite(value) || value < 0) {
+      return("Unavailable")
+    }
+    whole_seconds <- as.integer(floor(value))
+    sprintf(
+      "%02d:%02d:%02d",
+      whole_seconds %/% 3600L,
+      (whole_seconds %% 3600L) %/% 60L,
+      whole_seconds %% 60L
+    )
+  }, character(1))
+}
+
+dashboard_individual_video_transcript_table <- function(transcript) {
+  if (is.null(transcript) || nrow(transcript) == 0) {
+    return(tibble::tibble())
+  }
+  transcript %>%
+    dplyr::transmute(
+      Speaker = .data$speaker,
+      Timestamp = dashboard_individual_video_format_timecode(.data$seconds),
+      Dialogue = .data$dialogue
+    )
+}
+
 dashboard_individual_video_value_box <- function(title, value, note = NULL) {
   displayed_value <- if (is.null(note)) {
     value

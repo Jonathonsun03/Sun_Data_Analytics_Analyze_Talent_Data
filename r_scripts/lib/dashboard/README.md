@@ -48,8 +48,10 @@ back to the full talent catalog.
 
 `r_scripts/notebooks/dashboards/individual_videos/dashboard.qmd` uses the same
 session access context. Its video selector lists every catalog video for the
-authorized talent, including a clear no-analytics-yet state, and its history
-query is constrained by both `talent_code` and `video_id`.
+authorized talent by title, and its analytics-history and full-transcript
+queries are constrained by both `talent_code` and `video_id`. The transcript
+view reads canonical streamer subtitles and chat messages without applying the
+analytics snapshot date filter.
 
 Each new Shiny session reloads the talent catalog from DuckDB so analytics
 snapshot bounds do not remain pinned to the long-running Quarto process's

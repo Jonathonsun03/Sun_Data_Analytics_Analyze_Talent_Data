@@ -61,6 +61,18 @@ execute:
   width: 100% !important;
 }
 
+#video_transcript table.dataTable td:nth-child(1),
+#video_transcript table.dataTable td:nth-child(2) {
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+#video_transcript table.dataTable td:nth-child(3) {
+  min-width: 30rem;
+  vertical-align: top;
+  white-space: normal;
+}
+
 .plot-builder-statistics {
   border-top: 1px solid rgba(0, 0, 0, 0.14);
   margin-top: 1rem;
@@ -392,6 +404,19 @@ DT::dataTableOutput("snapshot_table")
 uiOutput("metric_method")
 ```
 
+# Transcript
+
+This is the full available transcript for the selected video. For live videos,
+streamer subtitles and chat messages are merged by their video timestamp. The
+analytics snapshot date range does not filter this page.
+
+## Row
+
+```{r}
+#| title: "Full Video Transcript"
+DT::dataTableOutput("video_transcript")
+```
+
 ```{r}
 #| label: server
 #| context: server
@@ -529,6 +554,19 @@ video_history_raw <- reactive({
   req(identical(selected$video_id[[1]], input$video))
 
   dashboard_load_individual_video_history(
+    database_path = dashboard_database_path,
+    talent_code = input$talent,
+    video_id = input$video
+  )
+})
+
+video_transcript <- reactive({
+  req(dashboard_session_access$authorized)
+  req(dashboard_talent_is_authorized(input$talent, dashboard_session_access))
+  selected <- selected_video_row()
+  req(identical(selected$video_id[[1]], input$video))
+
+  dashboard_load_individual_video_transcript(
     database_path = dashboard_database_path,
     talent_code = input$talent,
     video_id = input$video
@@ -800,6 +838,32 @@ output$snapshot_table <- DT::renderDataTable({
   table <- dashboard_individual_video_snapshot_table(video_history(), selected_metric())
   dashboard_datatable(table, page_length = 20, scroll_x = TRUE)
 })
+
+output$video_transcript <- DT::renderDataTable({
+  transcript <- dashboard_individual_video_transcript_table(video_transcript())
+  validate(
+    need(
+      nrow(transcript) > 0,
+      "No subtitle or chat transcript is available for this video."
+    )
+  )
+  DTSettings(
+    transcript,
+    class = "display stripe hover compact",
+    scroll_x = FALSE,
+    filter = "none",
+    options = list(
+      pageLength = 50,
+      autoWidth = FALSE,
+      columnDefs = list(
+        list(targets = 0, width = "15%"),
+        list(targets = 1, width = "10%"),
+        list(targets = 2, width = "75%")
+      )
+    ),
+    rownames = FALSE
+  )
+}, server = TRUE)
 
 output$metric_method <- renderUI({
   info <- dashboard_individual_video_metric_info(selected_metric())
