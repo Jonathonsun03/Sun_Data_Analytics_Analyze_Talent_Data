@@ -31,11 +31,7 @@ dashboard_resolve_database_path <- function(database_path = NULL) {
     load_repo_env()
     path <- trimws(Sys.getenv("UNIFIED_CATALOG_DB_PATH", unset = ""))
     if (!nzchar(path)) {
-      path <- file.path(
-        get_datalake_root(),
-        "Data_lakehouse",
-        "talent_lakehouse.duckdb"
-      )
+      path <- talent_lakehouse_db_path()
     }
   }
 

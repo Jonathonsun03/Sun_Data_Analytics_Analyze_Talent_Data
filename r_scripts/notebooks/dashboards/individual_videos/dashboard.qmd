@@ -1,0 +1,820 @@
+---
+title: "Individual Video Performance"
+format:
+  dashboard:
+    orientation: rows
+server: shiny
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+<style>
+@media (min-width: 769px) {
+  body.dashboard-sidebar .bslib-sidebar-layout {
+    --bslib-sidebar-width: 340px;
+  }
+}
+
+#snapshot_dates .input-daterange {
+  flex-wrap: nowrap;
+}
+
+#snapshot_dates .input-daterange .form-control {
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.individual-video-context {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.65rem 1rem;
+  padding: 0.8rem 1rem;
+}
+
+.individual-video-context-label {
+  color: var(--bs-secondary-color, #666);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.individual-video-context-value {
+  font-size: 0.92rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.performance-selection {
+  align-items: start;
+  display: grid;
+  grid-template-columns: minmax(14rem, 20%) minmax(0, 1fr);
+}
+
+.performance-metric-control {
+  padding: 0.8rem 0 0.8rem 1rem;
+}
+
+.performance-metric-control .shiny-input-container {
+  margin-bottom: 0;
+  width: 100% !important;
+}
+
+.plot-builder-statistics {
+  border-top: 1px solid rgba(0, 0, 0, 0.14);
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+}
+
+.plot-builder-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.plot-builder-controls .shiny-input-container {
+  margin-bottom: 0;
+  width: 100% !important;
+}
+
+.plot-builder-definition {
+  background: rgba(69, 128, 230, 0.08);
+  border-left: 3px solid #4580E6;
+  border-radius: 0.25rem;
+  padding: 0.55rem 0.65rem;
+}
+
+.plot-builder-definition-label {
+  color: #2A5DAE;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.2rem;
+  text-transform: uppercase;
+}
+
+.plot-builder-definition p {
+  font-size: 0.76rem;
+  line-height: 1.35;
+  margin-bottom: 0.3rem;
+}
+
+.plot-builder-definition .plot-builder-definition-note {
+  color: var(--bs-secondary-color, #666);
+  font-size: 0.7rem;
+  margin-bottom: 0;
+}
+
+.plot-builder-statistics h5,
+.plot-builder-statistics h6 {
+  margin-bottom: 0.35rem;
+}
+
+.plot-builder-stat-note {
+  color: var(--bs-secondary-color, #666);
+  font-size: 0.76rem;
+  line-height: 1.3;
+  margin-bottom: 0.8rem;
+}
+
+.plot-builder-stat-section {
+  margin-bottom: 0.9rem;
+}
+
+.plot-builder-stat-grid {
+  display: grid;
+  gap: 0.45rem 0.65rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.plot-builder-stat-item {
+  min-width: 0;
+}
+
+.plot-builder-stat-label {
+  color: var(--bs-secondary-color, #666);
+  font-size: 0.68rem;
+  line-height: 1.2;
+}
+
+.plot-builder-stat-value {
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.plot-builder-relationship {
+  background: rgba(69, 128, 230, 0.08);
+  border-radius: 0.4rem;
+  padding: 0.65rem;
+}
+
+@media (max-width: 768px) {
+  .performance-selection {
+    grid-template-columns: 1fr;
+  }
+
+  .performance-metric-control {
+    padding-right: 1rem;
+  }
+
+  .card:not(.bslib-value-box) {
+    min-height: 23rem;
+  }
+
+  .js-plotly-plot {
+    min-height: 19rem;
+  }
+
+  .dataTables_wrapper {
+    font-size: 0.78rem;
+  }
+}
+</style>
+
+```{r}
+#| label: setup
+#| context: setup
+#| include: false
+
+knitr::opts_knit$set(
+  root.dir = normalizePath(getwd(), winslash = "/", mustWork = TRUE)
+)
+
+dashboard_machine_library <- file.path(
+  path.expand("~/R"),
+  paste0(R.version$platform, "-library"),
+  paste(R.version$major, sub("\\..*$", "", R.version$minor), sep = ".")
+)
+if (dir.exists(dashboard_machine_library)) {
+  .libPaths(unique(c(.libPaths(), dashboard_machine_library)))
+}
+
+library(here)
+library(shiny)
+
+source(here::here("r_scripts", "lib", "dashboard", "load.R"))
+
+dashboard_database_path <- dashboard_resolve_database_path()
+dashboard_startup_talents <- dashboard_unified_talent_catalog(
+  dashboard_database_path
+)
+dashboard_global_min_date <- min(
+  dashboard_startup_talents$earliest_analytics_snapshot_date,
+  na.rm = TRUE
+)
+dashboard_global_max_date <- max(
+  dashboard_startup_talents$latest_analytics_snapshot_date,
+  na.rm = TRUE
+)
+if (!is.finite(dashboard_global_min_date)) {
+  dashboard_global_min_date <- Sys.Date()
+}
+if (!is.finite(dashboard_global_max_date)) {
+  dashboard_global_max_date <- Sys.Date()
+}
+
+individual_video_metric_definitions <- dashboard_individual_video_metric_definitions()
+individual_video_metric_choices <- stats::setNames(
+  individual_video_metric_definitions$metric,
+  individual_video_metric_definitions$label
+)
+
+individual_video_optional_date <- function(date_range, index) {
+  if (is.null(date_range) || length(date_range) < index ||
+      is.na(date_range[[index]])) {
+    return(NULL)
+  }
+  as.Date(date_range[[index]])
+}
+
+individual_video_context_item <- function(label, value) {
+  htmltools::div(
+    htmltools::div(class = "individual-video-context-label", label),
+    htmltools::div(class = "individual-video-context-value", value)
+  )
+}
+```
+
+# {.sidebar}
+
+```{r}
+uiOutput("dashboard_identity")
+
+selectInput(
+  inputId = "talent",
+  label = "Talent",
+  choices = c("Loading authorized talents..." = ""),
+  selected = ""
+)
+
+uiOutput("video_selector")
+
+dateRangeInput(
+  inputId = "snapshot_dates",
+  label = "Analytics snapshots between",
+  start = dashboard_global_min_date,
+  end = dashboard_global_max_date,
+  min = dashboard_global_min_date,
+  max = dashboard_global_max_date,
+  format = "yyyy-mm-dd",
+  separator = " to "
+)
+
+uiOutput("video_data_freshness")
+
+helpText(
+  "Talent and video options are permission-scoped. The date range selects analytics snapshots, not publication dates."
+)
+```
+
+# Performance
+
+This page follows one selected metric across the video's observed analytics history.
+
+## Row {height=16%}
+
+```{r}
+#| title: "Performance Selection"
+htmltools::div(
+  class = "performance-selection",
+  htmltools::div(
+    class = "performance-metric-control",
+    selectInput(
+      inputId = "metric",
+      label = "Metric",
+      choices = individual_video_metric_choices,
+      selected = "views",
+      width = "100%",
+      selectize = FALSE
+    )
+  ),
+  uiOutput("video_context")
+)
+```
+
+## Row {height=20%}
+
+```{r}
+#| title: "Latest Observed Value"
+uiOutput("metric_latest")
+```
+
+```{r}
+#| title: "Change in Selected Window"
+uiOutput("metric_change")
+```
+
+```{r}
+#| title: "Average Change per Day"
+uiOutput("metric_daily_change")
+```
+
+```{r}
+#| title: "Snapshot Coverage"
+uiOutput("metric_coverage")
+```
+
+## Row {height=48%}
+
+```{r}
+#| title: "Metric by Analytics Snapshot"
+plotlyOutput("metric_trend", height = "100%")
+```
+
+```{r}
+#| title: "Average Daily Change Between Snapshots"
+plotlyOutput("metric_change_plot", height = "100%")
+```
+
+# Plot Builder
+
+Choose two available metrics for the selected video. The muted path shows the
+full relationship across the active date window; use the snapshot slider below
+the chart to move the highlighted point through time.
+
+## Row
+
+### Column {width=25%}
+
+```{r}
+#| title: "Variables"
+htmltools::div(
+  class = "plot-builder-controls",
+  selectInput(
+    inputId = "plot_x_metric",
+    label = "Horizontal (X) variable",
+    choices = individual_video_metric_choices,
+    selected = "views",
+    width = "100%"
+  ),
+  uiOutput("plot_x_definition"),
+  selectInput(
+    inputId = "plot_y_metric",
+    label = "Vertical (Y) variable",
+    choices = individual_video_metric_choices,
+    selected = "average_view_percentage",
+    width = "100%"
+  ),
+  uiOutput("plot_y_definition"),
+  helpText(
+    "Choose two different variables. Use the slider below the plot to move through snapshots."
+  ),
+  uiOutput("plot_builder_statistics")
+)
+```
+
+### Column {width=75%}
+
+```{r}
+#| title: "Animated Snapshot Scatter Plot"
+plotlyOutput("plot_builder_scatter", height = "100%")
+```
+
+# Snapshot Detail
+
+The interval fields compare each row with the prior visible snapshot. A gap of
+several days is normalized by the actual elapsed days.
+
+## Row {height=72%}
+
+```{r}
+#| title: "Selected Metric History"
+DT::dataTableOutput("snapshot_table")
+```
+
+## Row {height=28%}
+
+```{r}
+#| title: "How to Read This Metric"
+uiOutput("metric_method")
+```
+
+```{r}
+#| label: server
+#| context: server
+#| include: false
+
+dashboard_talents <- dashboard_unified_talent_catalog(dashboard_database_path)
+dashboard_session_access <- dashboard_access_context(
+  session$request,
+  dashboard_talents$talent_code
+)
+dashboard_allowed_talent_choices <- dashboard_authorized_talent_choices(
+  dashboard_talents,
+  dashboard_session_access
+)
+
+output$dashboard_identity <- renderUI({
+  if (!dashboard_session_access$authorized) {
+    return(
+      htmltools::div(
+        class = "alert alert-danger",
+        "No active talent permissions were found for this account."
+      )
+    )
+  }
+  htmltools::tags$small(
+    class = "text-muted",
+    paste("Signed in as", dashboard_session_access$verified_email)
+  )
+})
+
+session$onFlushed(function() {
+  if (length(dashboard_allowed_talent_choices) == 0) {
+    updateSelectInput(
+      session,
+      inputId = "talent",
+      choices = c("No authorized talents" = ""),
+      selected = ""
+    )
+    return()
+  }
+
+  selected_code <- isolate(input$talent)
+  if (!dashboard_talent_is_authorized(selected_code, dashboard_session_access)) {
+    selected_code <- unname(dashboard_allowed_talent_choices[[1]])
+  }
+  updateSelectInput(
+    session,
+    inputId = "talent",
+    choices = dashboard_allowed_talent_choices,
+    selected = selected_code
+  )
+}, once = TRUE)
+
+authorized_video_catalog <- reactive({
+  req(dashboard_session_access$authorized)
+  req(dashboard_talent_is_authorized(input$talent, dashboard_session_access))
+  dashboard_individual_video_catalog(
+    database_path = dashboard_database_path,
+    talent_code = input$talent
+  )
+})
+
+output$video_selector <- renderUI({
+  if (!dashboard_session_access$authorized) {
+    return(
+      selectInput(
+        inputId = "video",
+        label = "Video",
+        choices = c("No authorized videos" = ""),
+        selected = ""
+      )
+    )
+  }
+
+  catalog <- authorized_video_catalog()
+  choices <- dashboard_individual_video_choices(catalog)
+  if (length(choices) == 0) {
+    return(
+      selectInput(
+        inputId = "video",
+        label = "Video",
+        choices = c("No videos found" = ""),
+        selected = ""
+      )
+    )
+  }
+
+  selectizeInput(
+    inputId = "video",
+    label = "Video",
+    choices = choices,
+    selected = unname(choices[[1]]),
+    multiple = FALSE,
+    options = list(
+      create = FALSE,
+      placeholder = "Search video titles"
+    )
+  )
+})
+
+selected_video_row <- reactive({
+  catalog <- authorized_video_catalog()
+  req(input$video)
+  selected <- catalog %>%
+    dplyr::filter(.data$video_id == input$video) %>%
+    dplyr::slice_head(n = 1)
+  validate(need(nrow(selected) == 1, "Select an authorized video."))
+  selected
+})
+
+observeEvent(
+  list(input$talent, input$video),
+  {
+    selected <- selected_video_row()
+    req(
+      !is.na(selected$first_snapshot_date[[1]]),
+      !is.na(selected$latest_snapshot_date[[1]])
+    )
+    updateDateRangeInput(
+      session,
+      inputId = "snapshot_dates",
+      start = selected$first_snapshot_date[[1]],
+      end = selected$latest_snapshot_date[[1]],
+      min = selected$first_snapshot_date[[1]],
+      max = selected$latest_snapshot_date[[1]]
+    )
+  },
+  ignoreInit = TRUE
+)
+
+video_history_raw <- reactive({
+  req(dashboard_session_access$authorized)
+  req(dashboard_talent_is_authorized(input$talent, dashboard_session_access))
+  selected <- selected_video_row()
+  req(identical(selected$video_id[[1]], input$video))
+
+  dashboard_load_individual_video_history(
+    database_path = dashboard_database_path,
+    talent_code = input$talent,
+    video_id = input$video
+  )
+})
+
+observe({
+  history <- video_history_raw()
+  available_metrics <- individual_video_metric_definitions$metric[
+    vapply(
+      individual_video_metric_definitions$metric,
+      function(metric) {
+        metric %in% names(history) &&
+          any(is.finite(suppressWarnings(as.numeric(history[[metric]]))))
+      },
+      logical(1)
+    )
+  ]
+  if (all(c("subscribers_gained", "subscribers_lost") %in% names(history)) &&
+      any(is.finite(history$subscribers_gained - history$subscribers_lost))) {
+    available_metrics <- unique(c(available_metrics, "net_subscribers"))
+  }
+  choices <- individual_video_metric_choices[
+    unname(individual_video_metric_choices) %in% available_metrics
+  ]
+  req(length(choices) > 0)
+  selected_metric <- isolate(input$metric)
+  if (is.null(selected_metric) || !selected_metric %in% unname(choices)) {
+    selected_metric <- unname(choices[[1]])
+  }
+  updateSelectInput(
+    session,
+    inputId = "metric",
+    choices = choices,
+    selected = selected_metric
+  )
+
+  selected_x <- isolate(input$plot_x_metric)
+  if (is.null(selected_x) || !selected_x %in% unname(choices)) {
+    selected_x <- unname(choices[[1]])
+  }
+  remaining_y <- setdiff(unname(choices), selected_x)
+  selected_y <- isolate(input$plot_y_metric)
+  if (is.null(selected_y) || !selected_y %in% remaining_y) {
+    selected_y <- if (length(remaining_y) > 0) remaining_y[[1]] else selected_x
+  }
+  updateSelectInput(
+    session,
+    inputId = "plot_x_metric",
+    choices = choices,
+    selected = selected_x
+  )
+  updateSelectInput(
+    session,
+    inputId = "plot_y_metric",
+    choices = choices,
+    selected = selected_y
+  )
+})
+
+selected_metric <- reactive({
+  req(input$metric)
+  validate(
+    need(
+      input$metric %in% individual_video_metric_definitions$metric,
+      "Select a supported metric."
+    )
+  )
+  input$metric
+})
+
+plot_builder_metrics <- reactive({
+  choices <- unname(individual_video_metric_choices)
+  req(input$plot_x_metric, input$plot_y_metric)
+  validate(
+    need(input$plot_x_metric %in% choices, "Select a supported X variable."),
+    need(input$plot_y_metric %in% choices, "Select a supported Y variable."),
+    need(
+      !identical(input$plot_x_metric, input$plot_y_metric),
+      "Choose two different variables."
+    )
+  )
+  list(x = input$plot_x_metric, y = input$plot_y_metric)
+})
+
+output$plot_x_definition <- renderUI({
+  req(input$plot_x_metric)
+  validate(
+    need(
+      input$plot_x_metric %in% individual_video_metric_definitions$metric,
+      "Select a supported X variable."
+    )
+  )
+  dashboard_individual_video_metric_definition(input$plot_x_metric)
+})
+
+output$plot_y_definition <- renderUI({
+  req(input$plot_y_metric)
+  validate(
+    need(
+      input$plot_y_metric %in% individual_video_metric_definitions$metric,
+      "Select a supported Y variable."
+    )
+  )
+  dashboard_individual_video_metric_definition(input$plot_y_metric)
+})
+
+video_history <- reactive({
+  history <- video_history_raw()
+  history <- dashboard_apply_snapshot_window(
+    history,
+    start_date = individual_video_optional_date(input$snapshot_dates, 1),
+    end_date = individual_video_optional_date(input$snapshot_dates, 2)
+  )
+  prepared <- dashboard_individual_video_prepare(history)
+  validate(need(nrow(prepared) > 0, "No snapshots are available in the selected date range."))
+  prepared
+})
+
+metric_summary <- reactive({
+  summary <- dashboard_individual_video_summary(video_history(), selected_metric())
+  validate(need(!is.null(summary), "The selected metric has no observations in this date range."))
+  summary
+})
+
+output$video_data_freshness <- renderUI({
+  selected <- selected_video_row()
+  if (is.na(selected$latest_snapshot_date[[1]])) {
+    return(
+      htmltools::div(
+        class = "alert alert-warning py-2 px-3",
+        "This video does not have an analytics snapshot yet."
+      )
+    )
+  }
+  htmltools::div(
+    class = "alert alert-info py-2 px-3",
+    htmltools::tags$strong(
+      paste(
+        "Analytics available through",
+        format(selected$latest_snapshot_date[[1]], "%Y-%m-%d")
+      )
+    ),
+    htmltools::tags$br(),
+    htmltools::tags$small(
+      paste(scales::comma(selected$snapshot_count[[1]]), "daily snapshots available")
+    )
+  )
+})
+
+output$video_context <- renderUI({
+  selected <- selected_video_row()
+  htmltools::div(
+    class = "individual-video-context",
+    individual_video_context_item("Title", selected$title[[1]]),
+    individual_video_context_item(
+      "Published",
+      if (is.na(selected$published_at[[1]])) {
+        "Unavailable"
+      } else {
+        format(as.Date(selected$published_at[[1]]), "%Y-%m-%d")
+      }
+    ),
+    individual_video_context_item(
+      "Content type",
+      tools::toTitleCase(as.character(selected$content_type[[1]]))
+    ),
+    individual_video_context_item(
+      "Video",
+      htmltools::tags$a(
+        href = paste0("https://www.youtube.com/watch?v=", selected$video_id[[1]]),
+        target = "_blank",
+        rel = "noopener noreferrer",
+        selected$video_id[[1]]
+      )
+    )
+  )
+})
+
+output$metric_latest <- renderUI({
+  summary <- metric_summary()
+  dashboard_individual_video_value_box(
+    summary$metric_info$label[[1]],
+    dashboard_individual_video_format_value(
+      summary$latest_value,
+      summary$metric_info$format[[1]]
+    ),
+    note = paste("at", format(summary$latest_snapshot_date, "%Y-%m-%d"))
+  )
+})
+
+output$metric_change <- renderUI({
+  summary <- metric_summary()
+  dashboard_individual_video_value_box(
+    "Observed change",
+    dashboard_individual_video_format_value(
+      summary$total_change,
+      summary$metric_info$format[[1]]
+    ),
+    note = "latest minus first visible snapshot"
+  )
+})
+
+output$metric_daily_change <- renderUI({
+  summary <- metric_summary()
+  dashboard_individual_video_value_box(
+    "Average per day",
+    dashboard_individual_video_format_value(
+      summary$average_change_per_day,
+      summary$metric_info$format[[1]]
+    ),
+    note = "observed change divided by elapsed days"
+  )
+})
+
+output$metric_coverage <- renderUI({
+  summary <- metric_summary()
+  dashboard_individual_video_value_box(
+    "Metric observations",
+    scales::comma(summary$snapshot_count),
+    note = paste(scales::comma(summary$span_days), "days from first to latest")
+  )
+})
+
+output$metric_trend <- plotly::renderPlotly({
+  plot <- dashboard_individual_video_trend_plot(video_history(), selected_metric())
+  validate(need(inherits(plot, "plotly"), "No trend is available for this metric."))
+  plot
+})
+
+output$metric_change_plot <- plotly::renderPlotly({
+  plot <- dashboard_individual_video_change_plot(video_history(), selected_metric())
+  validate(need(inherits(plot, "plotly"), "At least two snapshots are required for interval change."))
+  plot
+})
+
+output$plot_builder_scatter <- plotly::renderPlotly({
+  metrics <- plot_builder_metrics()
+  plot <- dashboard_individual_video_scatter_plot(
+    video_history(),
+    x_metric = metrics$x,
+    y_metric = metrics$y
+  )
+  validate(
+    need(
+      inherits(plot, "plotly"),
+      "No paired observations are available for these variables."
+    )
+  )
+  plot
+})
+
+output$plot_builder_statistics <- renderUI({
+  metrics <- plot_builder_metrics()
+  panel <- dashboard_individual_video_statistics_panel(
+    video_history(),
+    c(metrics$x, metrics$y)
+  )
+  validate(
+    need(
+      !is.null(panel),
+      "Descriptive statistics are unavailable for these variables."
+    )
+  )
+  panel
+})
+
+output$snapshot_table <- DT::renderDataTable({
+  table <- dashboard_individual_video_snapshot_table(video_history(), selected_metric())
+  dashboard_datatable(table, page_length = 20, scroll_x = TRUE)
+})
+
+output$metric_method <- renderUI({
+  info <- dashboard_individual_video_metric_info(selected_metric())
+  semantics <- if (identical(info$metric_kind[[1]], "cumulative")) {
+    "This is a cumulative snapshot metric. The trend shows its recorded total; interval change is the difference from the prior visible snapshot divided by elapsed days."
+  } else {
+    "This is a snapshot-level average or rate. The trend shows the recorded level; interval change is the change in that level divided by elapsed days."
+  }
+  htmltools::div(
+    style = "padding:0.8rem 1rem;",
+    htmltools::tags$p(semantics),
+    htmltools::tags$p(
+      class = "text-muted mb-0",
+      "The first available observation may occur after publication, and changes between snapshots do not reveal within-interval timing."
+    )
+  )
+})
+```

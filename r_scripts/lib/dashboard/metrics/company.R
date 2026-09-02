@@ -174,40 +174,6 @@ dashboard_company_content_type_summary <- function(analytics) {
     dplyr::arrange(.data$talent_name, dplyr::desc(.data$`Videos / Streams`))
 }
 
-dashboard_company_representative_content <- function(analytics, per_talent = 3) {
-  analytics %>%
-    dplyr::mutate(
-      .company_views = dashboard_company_numeric(.data$views),
-      `Watch Hours` = dashboard_company_numeric(
-        .data$estimatedMinutesWatched
-      ) / 60
-    ) %>%
-    dplyr::group_by(.data$talent_name) %>%
-    dplyr::slice_max(
-      order_by = .data$.company_views,
-      n = per_talent,
-      with_ties = FALSE
-    ) %>%
-    dplyr::ungroup() %>%
-    dplyr::transmute(
-      Talent = .data$talent_name,
-      Title = .data$Title,
-      `Video ID` = .data$`Video ID`,
-      `Content Type` = .data$`Content Type`,
-      Topic = .data$topic,
-      `Reference / Tags` = .data$content_reference,
-      Views = .data$.company_views,
-      `Watch Hours` = .data$`Watch Hours`,
-      `Published Date` = .data$publish_date,
-      Criterion = paste0(
-        "Top ",
-        per_talent,
-        " by cumulative views for each selected talent"
-      )
-    ) %>%
-    dplyr::arrange(.data$Talent, dplyr::desc(.data$Views))
-}
-
 dashboard_company_video_explorer <- function(analytics) {
   analytics %>%
     dplyr::transmute(
@@ -363,6 +329,29 @@ dashboard_company_month_summary <- function(analytics) {
       name = "Content Releases"
     ) %>%
     dplyr::arrange(.data$publish_month)
+}
+
+dashboard_company_month_content_type_summary <- function(analytics) {
+  analytics %>%
+    dplyr::filter(
+      !is.na(.data$publish_date),
+      !is.na(.data$`Content Type`),
+      nzchar(trimws(as.character(.data$`Content Type`)))
+    ) %>%
+    dplyr::mutate(
+      content_type = stringr::str_to_title(
+        trimws(as.character(.data$`Content Type`))
+      )
+    ) %>%
+    dplyr::group_by(
+      publish_month = lubridate::floor_date(.data$publish_date, unit = "month"),
+      .data$content_type
+    ) %>%
+    dplyr::summarise(
+      `Content Releases` = dplyr::n_distinct(.data$`Video ID`),
+      .groups = "drop"
+    ) %>%
+    dplyr::arrange(.data$publish_month, .data$content_type)
 }
 
 dashboard_company_weekday_summary <- function(analytics) {

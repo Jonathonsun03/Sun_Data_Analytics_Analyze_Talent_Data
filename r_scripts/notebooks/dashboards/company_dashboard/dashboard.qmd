@@ -149,6 +149,28 @@ company_display_name <- function(x) {
   gsub("_", " ", as.character(x), fixed = TRUE)
 }
 
+company_talent_plot_name <- function(x, company_name = NULL) {
+  labels <- company_display_name(x)
+  if (is.null(company_name) || length(company_name) == 0 ||
+      is.na(company_name[[1]])) {
+    return(labels)
+  }
+
+  company_label <- company_display_name(company_name[[1]])
+  if (!nzchar(company_label)) {
+    return(labels)
+  }
+
+  company_suffix <- paste0(" ", company_label)
+  remove_suffix <- !is.na(labels) & endsWith(labels, company_suffix)
+  labels[remove_suffix] <- substr(
+    labels[remove_suffix],
+    1,
+    nchar(labels[remove_suffix]) - nchar(company_suffix)
+  )
+  labels
+}
+
 company_optional_input_date <- function(date_range, index) {
   if (is.null(date_range) || length(date_range) < index ||
       is.na(date_range[[index]])) {
@@ -281,6 +303,66 @@ company_month_plot <- function(data, value_col, y_label) {
     ggplot2::theme_minimal(base_size = 11)
 }
 
+company_month_content_type_plot <- function(data) {
+  if (is.null(data) || nrow(data) == 0) {
+    return(NULL)
+  }
+  month_totals <- data %>%
+    dplyr::group_by(.data$publish_month) %>%
+    dplyr::summarise(
+      total_releases = sum(.data$`Content Releases`),
+      .groups = "drop"
+    )
+
+  ggplot2::ggplot(
+    data,
+    ggplot2::aes(
+      x = .data$publish_month,
+      y = .data$`Content Releases`,
+      fill = .data$content_type,
+      text = paste0(
+        format(.data$publish_month, "%Y-%m"),
+        "<br>Content type: ",
+        .data$content_type,
+        "<br>Releases: ",
+        scales::comma(.data$`Content Releases`)
+      )
+    )
+  ) +
+    ggplot2::geom_col(position = "stack", width = 24) +
+    ggplot2::geom_text(
+      data = month_totals,
+      ggplot2::aes(
+        x = .data$publish_month,
+        y = .data$total_releases,
+        label = scales::comma(.data$total_releases)
+      ),
+      inherit.aes = FALSE,
+      vjust = -0.35,
+      fontface = "bold",
+      size = 3
+    ) +
+    ggplot2::scale_x_date(date_labels = "%Y-%m", date_breaks = "2 months") +
+    ggplot2::scale_y_continuous(
+      expand = ggplot2::expansion(mult = c(0, 0.12))
+    ) +
+    ggplot2::labs(
+      x = "Publication month",
+      y = "Content releases",
+      fill = "Content type",
+      subtitle = paste(
+        "Each bar is the month's total releases; colored segments show the",
+        "mix of Live, Video, and Short content."
+      )
+    ) +
+    ggplot2::theme_minimal(base_size = 11) +
+    ggplot2::theme(
+      legend.position = "bottom",
+      axis.text.x = ggplot2::element_text(angle = 35, hjust = 1),
+      plot.subtitle = ggplot2::element_text(color = "#555555")
+    )
+}
+
 company_talent_weekday_plot <- function(data) {
   if (is.null(data) || nrow(data) == 0) {
     return(NULL)
@@ -327,7 +409,7 @@ company_talent_weekday_plot <- function(data) {
     ggplot2::theme(legend.position = "bottom")
 }
 
-company_portfolio_share_plot <- function(data) {
+company_portfolio_share_plot <- function(data, company_name = NULL) {
   if (is.null(data) || nrow(data) == 0) {
     return(NULL)
   }
@@ -335,34 +417,34 @@ company_portfolio_share_plot <- function(data) {
     "Releases",
     "Cumulative views",
     "Audience watch hours",
-    "Video-page subscriptions"
+    "Subscriber gains"
   )
   plot_data <- dplyr::bind_rows(
     data %>%
       dplyr::transmute(
-        Talent = company_display_name(.data$talent_name),
+        Talent = company_talent_plot_name(.data$talent_name, company_name),
         Metric = "Releases",
         Value = as.numeric(.data$`Videos / Streams`),
         Share = .data$`Release Share`
       ),
     data %>%
       dplyr::transmute(
-        Talent = company_display_name(.data$talent_name),
+        Talent = company_talent_plot_name(.data$talent_name, company_name),
         Metric = "Cumulative views",
         Value = .data$`Total Views`,
         Share = .data$`View Share`
       ),
     data %>%
       dplyr::transmute(
-        Talent = company_display_name(.data$talent_name),
+        Talent = company_talent_plot_name(.data$talent_name, company_name),
         Metric = "Audience watch hours",
         Value = .data$`Watch Hours`,
         Share = .data$`Watch-time Share`
       ),
     data %>%
       dplyr::transmute(
-        Talent = company_display_name(.data$talent_name),
-        Metric = "Video-page subscriptions",
+        Talent = company_talent_plot_name(.data$talent_name, company_name),
+        Metric = "Subscriber gains",
         Value = .data$`Video-Page Subscriptions`,
         Share = .data$`Video-Page Subscription Share`
       )
@@ -381,32 +463,37 @@ company_portfolio_share_plot <- function(data) {
         scales::comma(round(.data$Total))
       ),
       `Share Label` = scales::percent(.data$Share, accuracy = 0.1),
+      `Bar Label` = dplyr::if_else(
+        is.finite(.data$Share) & .data$Share >= 0.08,
+        scales::percent(.data$Share, accuracy = 1),
+        ""
+      ),
       Metric = factor(.data$Metric, levels = rev(metric_levels))
     ) %>%
     dplyr::ungroup()
 
   ggplot2::ggplot(
     plot_data,
-      ggplot2::aes(
-        x = .data$Share,
-        y = .data$Metric,
-        fill = .data$Talent,
-        text = paste0(
-          .data$Talent,
-          "<br>",
-          .data$Metric,
-          "<br>Contribution: ",
-          .data$`Contribution Value`,
-          " of ",
-          .data$`Company Total`,
-          "<br>Share: ",
-          .data$`Share Label`
-        )
+    ggplot2::aes(
+      x = .data$Share,
+      y = .data$Metric,
+      fill = .data$Talent,
+      text = paste0(
+        .data$Talent,
+        "<br>",
+        .data$Metric,
+        "<br>Contribution: ",
+        .data$`Contribution Value`,
+        " of ",
+        .data$`Company Total`,
+        "<br>Share: ",
+        .data$`Share Label`
       )
-    ) +
+    )
+  ) +
     ggplot2::geom_col(position = "stack", width = 0.7) +
     ggplot2::geom_text(
-      ggplot2::aes(label = .data$`Share Label`),
+      ggplot2::aes(label = .data$`Bar Label`),
       position = ggplot2::position_stack(vjust = 0.5),
       color = "white",
       fontface = "bold",
@@ -418,26 +505,22 @@ company_portfolio_share_plot <- function(data) {
       limits = c(0, 1),
       expand = c(0, 0)
     ) +
-    ggplot2::guides(fill = ggplot2::guide_legend(reverse = TRUE)) +
+    ggplot2::guides(
+      fill = ggplot2::guide_legend(reverse = TRUE, nrow = 1, byrow = TRUE)
+    ) +
     ggplot2::labs(
-      x = "Talent share of the selected-company total",
+      x = NULL,
       y = NULL,
-      fill = "Talent",
-      subtitle = paste(
-        "Each bar represents 100% of one metric across the selected talents.",
-        "Colored segments show each talent's contribution."
-      ),
-      caption = paste(
-        "Values use each talent's latest analytics snapshot inside the active",
-        "date window. Hover for exact contribution and total values."
-      )
+      fill = NULL
     ) +
     ggplot2::theme_minimal(base_size = 11) +
     ggplot2::theme(
-      legend.position = "bottom",
+      legend.position = "top",
+      legend.justification = "left",
+      legend.text = ggplot2::element_text(size = 9),
+      axis.text.x = ggplot2::element_text(angle = 0, hjust = 0.5),
       panel.grid.major.y = ggplot2::element_blank(),
-      plot.subtitle = ggplot2::element_text(color = "#555555"),
-      plot.caption = ggplot2::element_text(hjust = 0, color = "#666666")
+      plot.margin = ggplot2::margin(t = 4, r = 8, b = 4, l = 4)
     )
 }
 ```
@@ -508,7 +591,7 @@ uiOutput("median_views")
 ```
 
 ```{r}
-#| title: "Average Video-Page Subscriptions"
+#| title: "Subscribers Gained per Video"
 uiOutput("subscriptions_per_release")
 ```
 
@@ -619,8 +702,8 @@ uiOutput("collaboration_plot")
 ## Row {height=44%}
 
 ```{r}
-#| title: "Monthly Release Table"
-uiOutput("month_table")
+#| title: "Monthly Releases by Content Type"
+uiOutput("month_content_type_plot")
 ```
 
 ```{r}
@@ -630,38 +713,22 @@ uiOutput("weekday_table")
 
 # Content Mix
 
-Topic and reference values come from the same latest title-classification rows
-used by the creator dashboard.
+The topic chart summarizes total content duration by classified topic. The
+reference table connects those topics to the games, franchises, formats, or
+other references included in the latest title-classification results.
 
-## Row {height=46%}
+## Row {height=54%}
 
 ```{r}
 #| title: "Content Hours by Topic"
 uiOutput("topic_plot")
 ```
 
-```{r}
-#| title: "Topic Summary"
-uiOutput("topic_table")
-```
-
-## Row {height=48%}
+## Row {height=40%}
 
 ```{r}
 #| title: "Topic and Included Reference"
 uiOutput("reference_table")
-```
-
-## Row {height=48%}
-
-```{r}
-#| title: "Collaboration Performance"
-uiOutput("collaboration_performance")
-```
-
-```{r}
-#| title: "Representative Content"
-uiOutput("representative_content")
 ```
 
 # Video Explorer & Data Extraction
@@ -746,7 +813,6 @@ cat(
   "- Average view duration is aggregate watch seconds divided by total views.\n",
   "- Average view percentage is weighted by views rather than averaged equally across releases.\n",
   "- Monthly and weekday panels group those distinct videos by publication date.\n",
-  "- Representative content is selected reproducibly as the top three releases by cumulative views for each selected talent.\n",
   "- Total views are not unique viewers or unique reach. Unsupported audience fields remain explicitly unavailable.\n",
   "- Company membership is maintained in `config/dashboard/company_talents.csv`.\n",
   sep = ""
@@ -988,6 +1054,10 @@ company_month_reactive <- reactive({
   dashboard_company_month_summary(company_analytics_reactive())
 })
 
+company_month_content_type_reactive <- reactive({
+  dashboard_company_month_content_type_summary(company_analytics_reactive())
+})
+
 company_weekday_reactive <- reactive({
   dashboard_company_weekday_summary(company_analytics_reactive())
 })
@@ -1020,20 +1090,8 @@ company_topic_performance_reactive <- reactive({
     dplyr::arrange(dplyr::desc(.data$`Total Views`))
 })
 
-company_collaboration_performance_reactive <- reactive({
-  company_analytics_reactive() %>%
-    dplyr::mutate(
-      Collaboration = dplyr::if_else(.data$is_collab, "Yes", "No")
-    ) %>%
-    dashboard_company_performance_summary(group_columns = "Collaboration")
-})
-
 company_video_reactive <- reactive({
   dashboard_company_video_explorer(company_analytics_reactive())
-})
-
-company_representative_reactive <- reactive({
-  dashboard_company_representative_content(company_analytics_reactive())
 })
 
 company_fun_statistics_reactive <- reactive({
@@ -1097,17 +1155,21 @@ output$median_views <- company_render_ui(function() {
 
 output$subscriptions_per_release <- company_render_ui(function() {
   performance <- company_performance_reactive()
+  subscriptions_per_video <- performance$`Video-Page Subscriptions per Release`
   company_value_box(
-    "Average Video-Page Subscriptions",
+    "Subscribers Gained per Video",
     company_number(
-      performance$`Video-Page Subscriptions per Release`,
+      subscriptions_per_video,
       accuracy = 0.1
     ),
     paste0(
+      "Each selected video generated about ",
+      company_number(subscriptions_per_video, accuracy = 0.1),
+      " attributed subscriptions from its watch page on average; ",
       scales::comma(round(performance$`Video-Page Subscriptions`[[1]])),
-      " events across ",
+      " total events across ",
       scales::comma(performance$`Videos / Streams`[[1]]),
-      " releases"
+      " videos"
     )
   )
 })
@@ -1256,7 +1318,14 @@ output$topic_performance <- company_render_ui(function() {
 })
 
 output$portfolio_share_plot <- company_render_ui(function() {
-  company_portfolio_share_plot(company_portfolio_reactive())
+  dashboard_ggplotly(
+    company_portfolio_share_plot(
+      company_portfolio_reactive(),
+      company_name = dashboard_filters()$company_name
+    ),
+    tooltip = "text",
+    tickangle = 0
+  )
 })
 
 output$portfolio_table <- company_render_ui(function() {
@@ -1339,12 +1408,8 @@ output$collaboration_plot <- company_render_ui(function() {
   )
 })
 
-output$month_table <- company_render_ui(function() {
-  company_month_reactive() %>%
-    dplyr::mutate(Month = format(.data$publish_month, "%Y-%m")) %>%
-    dplyr::select(dplyr::all_of(c("Month", "Content Releases"))) %>%
-    dplyr::arrange(dplyr::desc(.data$Month)) %>%
-    dashboard_datatable(page_length = 12)
+output$month_content_type_plot <- company_render_ui(function() {
+  company_month_content_type_plot(company_month_content_type_reactive())
 })
 
 output$weekday_table <- company_render_ui(function() {
@@ -1361,7 +1426,7 @@ output$weekday_table <- company_render_ui(function() {
 
 output$topic_plot <- company_render_ui(function() {
   company_topic_reactive() %>%
-    dplyr::slice_max(.data$`Content Hours`, n = 12, with_ties = FALSE) %>%
+    dplyr::slice_max(.data$`Content Hours`, n = 15, with_ties = FALSE) %>%
     dplyr::mutate(topic = stats::reorder(.data$topic, .data$`Content Hours`)) %>%
     ggplot2::ggplot(
       ggplot2::aes(
@@ -1380,13 +1445,6 @@ output$topic_plot <- company_render_ui(function() {
     ggplot2::theme_minimal(base_size = 11)
 })
 
-output$topic_table <- company_render_ui(function() {
-  company_topic_reactive() %>%
-    dplyr::mutate(`Content Hours` = round(.data$`Content Hours`, 1)) %>%
-    dplyr::rename(Topic = "topic") %>%
-    dashboard_datatable(page_length = 12)
-})
-
 output$reference_table <- company_render_ui(function() {
   dashboard_company_reference_summary(company_analytics_reactive()) %>%
     dplyr::mutate(`Content Hours` = round(.data$`Content Hours`, 1)) %>%
@@ -1394,38 +1452,7 @@ output$reference_table <- company_render_ui(function() {
       Topic = "topic",
       `Reference / Tags` = "content_reference"
     ) %>%
-    dashboard_datatable(page_length = 15)
-})
-
-output$collaboration_performance <- company_render_ui(function() {
-  company_collaboration_performance_reactive() %>%
-    dplyr::mutate(
-      `Average Views` = round(.data$`Average Views`),
-      `Median Views` = round(.data$`Median Views`),
-      `Watch Hours` = round(.data$`Watch Hours`, 1),
-      `Video-Page Subscriptions per Release` = round(
-        .data$`Video-Page Subscriptions per Release`,
-        2
-      )
-    ) %>%
-    dplyr::select(dplyr::all_of(c(
-      "Collaboration",
-      "Videos / Streams",
-      "Average Views",
-      "Median Views",
-      "Watch Hours",
-      "Video-Page Subscriptions per Release"
-    ))) %>%
-    dashboard_datatable(page_length = 10)
-})
-
-output$representative_content <- company_render_ui(function() {
-  company_representative_reactive() %>%
-    dplyr::mutate(
-      Talent = company_display_name(.data$Talent),
-      `Watch Hours` = round(.data$`Watch Hours`, 1)
-    ) %>%
-    dashboard_datatable(page_length = 10)
+    dashboard_datatable(page_length = 12)
 })
 
 output$video_explorer <- company_render_ui(function() {
@@ -1539,12 +1566,16 @@ output$metric_definitions <- company_render_ui(function() {
     "Total cumulative views divided by catalogued content hours.",
     "Video-page subscriptions",
     "Cumulative subscription events attributed by YouTube Analytics to the selected videos' watch pages; not current or net channel subscribers.",
-    "Average video-page subscriptions",
-    "Video-page subscription events divided by distinct selected releases.",
+    "Subscribers gained per video",
+    paste0(
+      "Total subscription events attributed to selected video watch pages ",
+      "divided by distinct selected videos. A value of 19 means each selected ",
+      "video generated about 19 attributed subscriptions on average."
+    ),
     "Collaboration-tagged releases",
     "Count and share of distinct releases whose latest title classification has collaborative energy.",
-    "Representative content",
-    "Top three releases by cumulative views for each selected talent."
+    "Topic and included reference",
+    "Latest title-classification topic and reference values, summarized across distinct selected releases."
   ) %>%
     dashboard_datatable(page_length = 12)
 })

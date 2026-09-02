@@ -561,13 +561,13 @@ Collaborations by Month
 </div>
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr) minmax(3em, 1fr);
 grid-auto-rows: minmax(0, 1fr);">
-<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Monthly Release Table" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Monthly Releases by Content Type" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
-Monthly Release Table
+Monthly Releases by Content Type
 </span></div></div>
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
-<div id="month_table" class="shiny-html-output html-fill-item html-fill-container"></div>
+<div id="month_content_type_plot" class="shiny-html-output html-fill-item html-fill-container"></div>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -593,10 +593,10 @@ Weekday Release Table
 </div>
 </div>
 </div><div id="content-mix" class="dashboard-page tab-pane grid-skip html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-content-mix">
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content) minmax(3em, 46fr) minmax(3em, 48fr) minmax(3em, 48fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content) minmax(3em, 54fr) minmax(3em, 40fr); grid-auto-columns: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
-<p>Topic and reference values come from the same latest title-classification rows used by the creator dashboard.</p>
+<p>The topic chart summarizes total content duration by classified topic. The reference table connects those topics to the games, franchises, formats, or other references included in the latest title-classification results.</p>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
     <template>Expand</template>
@@ -604,7 +604,7 @@ Weekday Release Table
         <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
     </span>
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr) minmax(3em, 1fr);
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
 grid-auto-rows: minmax(0, 1fr);">
 <div class="card cell html-fill-item html-fill-container bslib-card" data-title="Content Hours by Topic" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
@@ -613,20 +613,6 @@ Content Hours by Topic
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
 <div id="topic_plot" class="shiny-html-output html-fill-item html-fill-container"></div>
-</div>
-</div>
-<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
-    <template>Expand</template>
-    <span class="bslib-full-screen-enter badge rounded-pill">
-        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
-    </span>
-</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-title="Topic Summary" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
-<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
-Topic Summary
-</span></div></div>
-<div class="card-body html-fill-item html-fill-container">
-<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
-<div id="topic_table" class="shiny-html-output html-fill-item html-fill-container"></div>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -645,38 +631,6 @@ Topic and Included Reference
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
 <div id="reference_table" class="shiny-html-output html-fill-item html-fill-container"></div>
-</div>
-</div>
-<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
-    <template>Expand</template>
-    <span class="bslib-full-screen-enter badge rounded-pill">
-        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
-    </span>
-</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
-</div>
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr) minmax(3em, 1fr);
-grid-auto-rows: minmax(0, 1fr);">
-<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Collaboration Performance" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
-<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
-Collaboration Performance
-</span></div></div>
-<div class="card-body html-fill-item html-fill-container">
-<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
-<div id="collaboration_performance" class="shiny-html-output html-fill-item html-fill-container"></div>
-</div>
-</div>
-<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
-    <template>Expand</template>
-    <span class="bslib-full-screen-enter badge rounded-pill">
-        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
-    </span>
-</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-title="Representative Content" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
-<div class="card-header"><div class="card-title html-fill-item html-fill-container"><span style="display: inline">
-Representative Content
-</span></div></div>
-<div class="card-body html-fill-item html-fill-container">
-<div class="cell-output-display html-fill-item html-fill-container no-overflow-x">
-<div id="representative_content" class="shiny-html-output html-fill-item html-fill-container"></div>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -874,7 +828,6 @@ Calculation Notes
 <li>Average view duration is aggregate watch seconds divided by total views.</li>
 <li>Average view percentage is weighted by views rather than averaged equally across releases.</li>
 <li>Monthly and weekday panels group those distinct videos by publication date.</li>
-<li>Representative content is selected reproducibly as the top three releases by cumulative views for each selected talent.</li>
 <li>Total views are not unique viewers or unique reach. Unsupported audience fields remain explicitly unavailable.</li>
 <li>Company membership is maintained in <code>config/dashboard/company_talents.csv</code>.</li>
 </ul>
@@ -908,11 +861,11 @@ Calculation Notes
 <div id="snapshot_dates" class="shiny-date-range-input form-group shiny-input-container">
 <label class="control-label" id="snapshot_dates-label" for="snapshot_dates">Analytics snapshots between</label>
 <div class="input-daterange input-group input-group-sm">
-<input class="form-control" type="text" aria-labelledby="snapshot_dates-label" title="Date format: yyyy-mm-dd" data-date-language="en" data-date-week-start="0" data-date-format="yyyy-mm-dd" data-date-start-view="month" data-min-date="2025-12-05" data-max-date="2026-08-25" data-initial-date="2025-12-05" data-date-autoclose="true">
+<input class="form-control" type="text" aria-labelledby="snapshot_dates-label" title="Date format: yyyy-mm-dd" data-date-language="en" data-date-week-start="0" data-date-format="yyyy-mm-dd" data-date-start-view="month" data-min-date="2025-12-05" data-max-date="2026-08-26" data-initial-date="2025-12-05" data-date-autoclose="true">
 <span class="input-group-addon input-group-prepend input-group-append">
 <span class="input-group-text"> to </span>
 </span>
-<input class="form-control" type="text" aria-labelledby="snapshot_dates-label" title="Date format: yyyy-mm-dd" data-date-language="en" data-date-week-start="0" data-date-format="yyyy-mm-dd" data-date-start-view="month" data-min-date="2025-12-05" data-max-date="2026-08-25" data-initial-date="2026-08-25" data-date-autoclose="true">
+<input class="form-control" type="text" aria-labelledby="snapshot_dates-label" title="Date format: yyyy-mm-dd" data-date-language="en" data-date-week-start="0" data-date-format="yyyy-mm-dd" data-date-start-view="month" data-min-date="2025-12-05" data-max-date="2026-08-26" data-initial-date="2026-08-26" data-date-autoclose="true">
 </div>
 </div>
 </div>
@@ -1110,6 +1063,66 @@ company_month_plot <- function(data, value_col, y_label) {
     ggplot2::scale_x_date(date_labels = "%Y-%m", date_breaks = "3 months") +
     ggplot2::labs(x = "Publication month", y = y_label) +
     ggplot2::theme_minimal(base_size = 11)
+}
+
+company_month_content_type_plot <- function(data) {
+  if (is.null(data) || nrow(data) == 0) {
+    return(NULL)
+  }
+  month_totals <- data %>%
+    dplyr::group_by(.data$publish_month) %>%
+    dplyr::summarise(
+      total_releases = sum(.data$`Content Releases`),
+      .groups = "drop"
+    )
+
+  ggplot2::ggplot(
+    data,
+    ggplot2::aes(
+      x = .data$publish_month,
+      y = .data$`Content Releases`,
+      fill = .data$content_type,
+      text = paste0(
+        format(.data$publish_month, "%Y-%m"),
+        "<br>Content type: ",
+        .data$content_type,
+        "<br>Releases: ",
+        scales::comma(.data$`Content Releases`)
+      )
+    )
+  ) +
+    ggplot2::geom_col(position = "stack", width = 24) +
+    ggplot2::geom_text(
+      data = month_totals,
+      ggplot2::aes(
+        x = .data$publish_month,
+        y = .data$total_releases,
+        label = scales::comma(.data$total_releases)
+      ),
+      inherit.aes = FALSE,
+      vjust = -0.35,
+      fontface = "bold",
+      size = 3
+    ) +
+    ggplot2::scale_x_date(date_labels = "%Y-%m", date_breaks = "2 months") +
+    ggplot2::scale_y_continuous(
+      expand = ggplot2::expansion(mult = c(0, 0.12))
+    ) +
+    ggplot2::labs(
+      x = "Publication month",
+      y = "Content releases",
+      fill = "Content type",
+      subtitle = paste(
+        "Each bar is the month's total releases; colored segments show the",
+        "mix of Live, Video, and Short content."
+      )
+    ) +
+    ggplot2::theme_minimal(base_size = 11) +
+    ggplot2::theme(
+      legend.position = "bottom",
+      axis.text.x = ggplot2::element_text(angle = 35, hjust = 1),
+      plot.subtitle = ggplot2::element_text(color = "#555555")
+    )
 }
 
 company_talent_weekday_plot <- function(data) {
@@ -1504,6 +1517,10 @@ company_month_reactive <- reactive({
   dashboard_company_month_summary(company_analytics_reactive())
 })
 
+company_month_content_type_reactive <- reactive({
+  dashboard_company_month_content_type_summary(company_analytics_reactive())
+})
+
 company_weekday_reactive <- reactive({
   dashboard_company_weekday_summary(company_analytics_reactive())
 })
@@ -1536,20 +1553,8 @@ company_topic_performance_reactive <- reactive({
     dplyr::arrange(dplyr::desc(.data$`Total Views`))
 })
 
-company_collaboration_performance_reactive <- reactive({
-  company_analytics_reactive() %>%
-    dplyr::mutate(
-      Collaboration = dplyr::if_else(.data$is_collab, "Yes", "No")
-    ) %>%
-    dashboard_company_performance_summary(group_columns = "Collaboration")
-})
-
 company_video_reactive <- reactive({
   dashboard_company_video_explorer(company_analytics_reactive())
-})
-
-company_representative_reactive <- reactive({
-  dashboard_company_representative_content(company_analytics_reactive())
 })
 
 company_fun_statistics_reactive <- reactive({
@@ -1855,12 +1860,8 @@ output$collaboration_plot <- company_render_ui(function() {
   )
 })
 
-output$month_table <- company_render_ui(function() {
-  company_month_reactive() %>%
-    dplyr::mutate(Month = format(.data$publish_month, "%Y-%m")) %>%
-    dplyr::select(dplyr::all_of(c("Month", "Content Releases"))) %>%
-    dplyr::arrange(dplyr::desc(.data$Month)) %>%
-    dashboard_datatable(page_length = 12)
+output$month_content_type_plot <- company_render_ui(function() {
+  company_month_content_type_plot(company_month_content_type_reactive())
 })
 
 output$weekday_table <- company_render_ui(function() {
@@ -1877,7 +1878,7 @@ output$weekday_table <- company_render_ui(function() {
 
 output$topic_plot <- company_render_ui(function() {
   company_topic_reactive() %>%
-    dplyr::slice_max(.data$`Content Hours`, n = 12, with_ties = FALSE) %>%
+    dplyr::slice_max(.data$`Content Hours`, n = 15, with_ties = FALSE) %>%
     dplyr::mutate(topic = stats::reorder(.data$topic, .data$`Content Hours`)) %>%
     ggplot2::ggplot(
       ggplot2::aes(
@@ -1896,13 +1897,6 @@ output$topic_plot <- company_render_ui(function() {
     ggplot2::theme_minimal(base_size = 11)
 })
 
-output$topic_table <- company_render_ui(function() {
-  company_topic_reactive() %>%
-    dplyr::mutate(`Content Hours` = round(.data$`Content Hours`, 1)) %>%
-    dplyr::rename(Topic = "topic") %>%
-    dashboard_datatable(page_length = 12)
-})
-
 output$reference_table <- company_render_ui(function() {
   dashboard_company_reference_summary(company_analytics_reactive()) %>%
     dplyr::mutate(`Content Hours` = round(.data$`Content Hours`, 1)) %>%
@@ -1910,38 +1904,7 @@ output$reference_table <- company_render_ui(function() {
       Topic = "topic",
       `Reference / Tags` = "content_reference"
     ) %>%
-    dashboard_datatable(page_length = 15)
-})
-
-output$collaboration_performance <- company_render_ui(function() {
-  company_collaboration_performance_reactive() %>%
-    dplyr::mutate(
-      `Average Views` = round(.data$`Average Views`),
-      `Median Views` = round(.data$`Median Views`),
-      `Watch Hours` = round(.data$`Watch Hours`, 1),
-      `Video-Page Subscriptions per Release` = round(
-        .data$`Video-Page Subscriptions per Release`,
-        2
-      )
-    ) %>%
-    dplyr::select(dplyr::all_of(c(
-      "Collaboration",
-      "Videos / Streams",
-      "Average Views",
-      "Median Views",
-      "Watch Hours",
-      "Video-Page Subscriptions per Release"
-    ))) %>%
-    dashboard_datatable(page_length = 10)
-})
-
-output$representative_content <- company_render_ui(function() {
-  company_representative_reactive() %>%
-    dplyr::mutate(
-      Talent = company_display_name(.data$Talent),
-      `Watch Hours` = round(.data$`Watch Hours`, 1)
-    ) %>%
-    dashboard_datatable(page_length = 10)
+    dashboard_datatable(page_length = 12)
 })
 
 output$video_explorer <- company_render_ui(function() {
@@ -2059,8 +2022,8 @@ output$metric_definitions <- company_render_ui(function() {
     "Video-page subscription events divided by distinct selected releases.",
     "Collaboration-tagged releases",
     "Count and share of distinct releases whose latest title classification has collaborative energy.",
-    "Representative content",
-    "Top three releases by cumulative views for each selected talent."
+    "Topic and included reference",
+    "Latest title-classification topic and reference values, summarized across distinct selected releases."
   ) %>%
     dashboard_datatable(page_length = 12)
 })
