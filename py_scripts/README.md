@@ -167,3 +167,89 @@ Sheet rules:
 
 - `tasks/` was a temporary holding area and is no longer the canonical location.
 - New Python work should be placed in `run/` or `lib/` rather than `tasks/`.
+
+## Proxmox inference shutdown guard
+
+`run/inference_shutdown_guard.py` is the host-side guard used by the R lifecycle
+helper. It runs only as root on `pve-nlp`; its only power command is
+`/usr/sbin/shutdown -h now`. The reusable implementation is in
+`lib/inference_shutdown_guard.py`. It defaults to a dry run. Tests never issue
+real power commands:
+
+```bash
+python3 -m unittest discover -s py_scripts/tests -p test_inference_shutdown_guard.py
+```
+
+The guard is implemented but not deployed. SSH authentication to the host is
+currently unavailable. The live inference API has no documented workload
+endpoint, so a **verified service coordinator adapter is still required**.
+`config/inference_shutdown_guard.example.json` deliberately fails closed with
+`coverage_verified: false` and no adapter commands. Do not enable it by replacing
+those commands with health checks or process/CPU checks.
+
+### Service coordinator adapter contract
+
+The root-owned config lives at `/etc/sun-data/inference-shutdown-guard.json` on
+Proxmox. `prepare_command` and `release_command` are argument arrays with absolute
+executables (no shell interpolation). They may use `pct exec 106 -- ...` to invoke
+an installed coordinator inside the container. Both receive an additional unique
+request ID as their last argument and must respond within five seconds.
+
+Prepare must atomically stop all new inference admission and inspect running
+requests, queued jobs, and batch reservations between requests from **all**
+producers on this physical host. It must preserve the admission barrier until
+explicit release or reboot, not expire it after a timeout. It returns exit zero
+and JSON only when it has a complete observation, for example:
+
+```json
+{
+  "protocol": 1,
+  "request_id": "the supplied unique request ID",
+  "ctid": 106,
+  "coverage": "all_inference_work",
+  "admission_closed": true,
+  "drain_persistent": true,
+  "active_requests": 0,
+  "queued_jobs": 0,
+  "active_batches": 0
+}
+```
+
+All three counts must be integer zero. Missing fields, partial coverage,
+stale request IDs, timeouts, malformed JSON, or nonzero counts block shutdown.
+The coordinator must protect other callers' leases, including batches that have
+not issued their next request yet. The current caller-local R lock alone does
+not provide that protection. Server integration must register/release those
+leases before automatic shutdown is enabled. Other VMs/services sharing the
+physical host must also be covered if they do inference work.
+
+Release receives the same request ID and must be idempotent, resume admission
+only for that request's barrier, and prevent a delayed prepare with the same ID
+from creating a new barrier after release. The guard attempts release after busy,
+failed, and dry-run checks. If release fails, inspect the coordinator manually.
+After any shutdown attempt, admission stays closed even if SSH or shutdown fails.
+
+### Deployment after service integration is verified
+
+Copy `py_scripts/lib/inference_shutdown_guard.py` and
+`py_scripts/run/inference_shutdown_guard.py` to their corresponding paths beneath
+`/opt/sun-data/py_scripts/` on Proxmox, preserving their relative layout. Install
+the verified root-owned config with permissions `0600` in a root-owned directory.
+Then check without powering off:
+
+```bash
+python3 /opt/sun-data/py_scripts/run/inference_shutdown_guard.py
+```
+
+Only after a successful integration test, configure the analytics caller:
+
+```bash
+export INFERENCE_MACHINE_SHUTDOWN_GUARD_COMMAND='python3 /opt/sun-data/py_scripts/run/inference_shutdown_guard.py'
+```
+
+The R helper passes the exact argument `shutdown -h now`, which enables execution.
+The standalone CLI also supports `--execute`. Exit 0 means the dry run succeeded
+or shutdown was accepted; 75 means busy, unverified, or inconclusive. A shutdown
+attempt with uncertain/failing results returns 1 so R retains its reservation.
+A host-wide nonblocking file lock prevents concurrent guards from racing. This
+does not itself track service jobs; the coordinator provides that evidence.

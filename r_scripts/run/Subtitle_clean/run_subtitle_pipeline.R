@@ -12,6 +12,7 @@ source(here("r_scripts", "lib", "clean_data", "clean_subtitles", "clean_subtitle
 source(here("r_scripts", "lib", "clean_data", "clean_subtitles", "punctuation_client.R"))
 source(here("r_scripts", "lib", "clean_data", "clean_subtitles", "subtitle_units.R"))
 
+with_inference_machine({
 ensure_utf8_locale <- function() {
   cur <- suppressWarnings(Sys.getlocale("LC_CTYPE"))
   if (grepl("UTF-8", cur, ignore.case = TRUE)) return(invisible(cur))
@@ -53,7 +54,7 @@ ena_as_final <- tolower(Sys.getenv("SUBTITLE_ENA_AS_FINAL", unset = "false")) %i
 punctuation_enabled <- tolower(Sys.getenv("SUBTITLE_PUNCTUATION_ENABLED", unset = "true")) %in% c("1", "true", "yes")
 punctuation_url <- Sys.getenv(
   "SUBTITLE_PUNCTUATION_URL",
-  unset = "http://192.168.1.165:8000/v1/punctuate"
+  unset = inference_punctuation_url()
 )
 punctuation_timeout_sec <- as.numeric(Sys.getenv("SUBTITLE_PUNCTUATION_TIMEOUT_SEC", unset = "120"))
 punctuation_target_words <- as.integer(Sys.getenv("SUBTITLE_BLOCK_TARGET_WORDS", unset = "175"))
@@ -109,7 +110,7 @@ message("Using subtitle worker cores: ", n_cores)
 message("ENA as final per-video output: ", ena_as_final)
 message("Punctuation sentence reconstruction enabled: ", punctuation_enabled)
 
-TalentSubtitlePath <- function(talent_name) {
+talent_subtitle_path <- function(talent_name) {
   candidates <- c(
     file.path(datalake_root, talent_name, "Subtitles"),
     file.path(datalake_root, "Output", talent_name, "Subtitles"),
@@ -352,3 +353,5 @@ message("Wrote subtitle ENA units: ", ena_units_path)
 if (write_ena_txt) {
   message("Wrote subtitle ENA text: ", ena_units_txt_path)
 }
+
+})

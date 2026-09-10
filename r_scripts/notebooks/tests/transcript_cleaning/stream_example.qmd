@@ -1,0 +1,396 @@
+---
+title: "Transcript Cleaning: Livestream Example"
+subtitle: "A real subtitle excerpt from DuckDB through FullStop sentence reconstruction"
+format:
+  html:
+    toc: true
+    code-fold: show
+    embed-resources: true
+params:
+  video_id: "y_bFxtuDmlE"
+  start_sequence: 1
+  row_limit: 20
+  run_fullstop: true
+  publish_example: false
+  pipeline_version: "subtitle_sentence_v1"
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## What this notebook proves
+
+This notebook executes the maintained transcript-cleaning functions on a real
+livestream excerpt. It does not contain a hand-written expected transcript.
+The raw rows, accepted words, FullStop response, timestamps, and quality checks
+are calculated during each render.
+
+The default render is read-only. `publish_example:true` writes only the derived
+excerpt under `source_scope = 'notebook_stream_example'`; it never changes
+`text.subtitle_units`.
+
+## Connect and load the maintained functions
+
+```{r}
+#| label: setup
+
+required_packages <- c(
+  "DBI", "duckdb", "dplyr", "here", "knitr", "purrr", "stringr", "tibble"
+)
+missing_packages <- required_packages[
+  !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
+]
+if (length(missing_packages) > 0L) {
+  stop("Missing packages: ", paste(missing_packages, collapse = ", "), call. = FALSE)
+}
+
+source(here::here("r_scripts", "lib", "utils", "repo_env.R"))
+source(here::here("r_scripts", "lib", "utils", "datalake_root.r"))
+source(here::here("r_scripts", "lib", "duckdb", "db_connect.R"))
+source(here::here(
+  "r_scripts", "lib", "clean_data", "clean_subtitles", "clean_subtitles.R"
+))
+source(here::here(
+  "r_scripts", "lib", "clean_data", "clean_subtitles", "punctuation_client.R"
+))
+source(here::here(
+  "r_scripts", "lib", "clean_data", "clean_subtitles", "subtitle_units.R"
+))
+source(here::here("r_scripts", "lib", "duckdb", "subtitle_sentence_schema.R"))
+source(here::here("r_scripts", "lib", "duckdb", "subtitle_sentence_publish.R"))
+
+load_repo_env(repo_root = here::here())
+db_path <- talent_lakehouse_db_path()
+con <- duckdb_connect(db_path = db_path, read_only = TRUE)
+
+video_id <- trimws(as.character(params$video_id))
+start_sequence <- as.integer(params$start_sequence)
+row_limit <- as.integer(params$row_limit)
+run_fullstop <- isTRUE(params$run_fullstop) ||
+  tolower(as.character(params$run_fullstop)) %in% c("1", "true", "yes")
+publish_example <- isTRUE(params$publish_example) ||
+  tolower(as.character(params$publish_example)) %in% c("1", "true", "yes")
+pipeline_version <- trimws(as.character(params$pipeline_version))
+source_scope <- "notebook_stream_example"
+
+if (!nzchar(video_id)) stop("video_id must not be empty.", call. = FALSE)
+if (is.na(start_sequence) || start_sequence < 1L) {
+  stop("start_sequence must be positive.", call. = FALSE)
+}
+if (is.na(row_limit) || row_limit < 2L) stop("row_limit must be at least 2.", call. = FALSE)
+if (publish_example && !run_fullstop) {
+  stop("publish_example:true requires run_fullstop:true.", call. = FALSE)
+}
+
+display_table <- function(rows, digits = 2L, caption = NULL) {
+  if (nrow(rows) == 0L) rows <- data.frame(message = "No rows matched.")
+  knitr::kable(
+    rows,
+    format = "html",
+    digits = digits,
+    caption = caption,
+    escape = TRUE,
+    table.attr = 'class="table table-striped table-hover table-bordered table-sm"'
+  )
+}
+
+extract_words <- function(text) {
+  tolower(unlist(
+    stringr::str_extract_all(
+      paste(as.character(text), collapse = " "),
+      "[[:alnum:]]+(?:['’][[:alnum:]]+)*"
+    ),
+    use.names = FALSE
+  ))
+}
+```
+
+## 1. Import a real livestream excerpt
+
+The default is Nova Aokami's livestream *stream ends when Symboli Rudolf
+Festival comes home*. Metadata and subtitle text are queried from the unified
+talent DuckDB.
+
+```{r}
+#| label: load-stream-rows
+
+metadata <- DBI::dbGetQuery(
+  con,
+  paste(
+    "SELECT video.video_id, video.title, video.content_type,",
+    "subtitle.talent_code, COUNT(*) AS available_subtitle_rows",
+    "FROM catalog.videos AS video",
+    "JOIN text.subtitle_units AS subtitle USING (video_id)",
+    "WHERE video.video_id = ?",
+    "GROUP BY video.video_id, video.title, video.content_type, subtitle.talent_code"
+  ),
+  params = list(video_id)
+)
+if (nrow(metadata) != 1L || tolower(metadata$content_type[[1]]) != "live") {
+  stop("The selected video must resolve to one livestream.", call. = FALSE)
+}
+
+raw_units <- load_subtitle_units_for_reconstruction(
+  con,
+  video_id = video_id,
+  start_sequence = start_sequence,
+  row_limit = row_limit
+)
+if (nrow(raw_units) < 2L) stop("The excerpt has fewer than two rows.", call. = FALSE)
+
+display_table(metadata, caption = "Video metadata queried during this render")
+display_table(
+  raw_units[, c(
+    "subtitle_unit_key", "sequence_number", "subtitle_start", "subtitle_end",
+    "subtitle_text"
+  )],
+  caption = "Raw canonical subtitle rows used by this render"
+)
+```
+
+## 2. Normalize and remove rolling-caption repetition
+
+Normalization converts timestamps to seconds and standardizes whitespace while
+retaining the raw `subtitle_unit_key`. Deduplication accepts only words not
+already present at the end of the accumulated rolling caption stream.
+
+```{r}
+#| label: clean-stream-rows
+
+normalized_units <- normalize_subtitle_units_for_reconstruction(raw_units)
+cleaning_detail <- normalized_units |>
+  dplyr::mutate(
+    accepted_text = deduplicate_caption_overlaps(.data$text),
+    adds_new_text = nzchar(.data$accepted_text)
+  )
+
+cleaning_summary <- data.frame(
+  measure = c("Raw rows", "Rows adding words", "Raw words", "Accepted words"),
+  value = c(
+    nrow(cleaning_detail),
+    sum(cleaning_detail$adds_new_text),
+    sum(subtitle_word_count(cleaning_detail$text)),
+    sum(subtitle_word_count(cleaning_detail$accepted_text))
+  )
+)
+
+display_table(cleaning_summary, caption = "Deterministic cleaning totals")
+display_table(
+  cleaning_detail[, c("sequence_number", "text", "accepted_text", "adds_new_text")],
+  caption = "Raw normalized captions compared with newly accepted text"
+)
+```
+
+## 3. Build FullStop input blocks
+
+`build_punctuation_blocks()` repeats the maintained overlap cleaning, preserves
+speaker-turn boundaries, and creates blocks of at most 200 words. Every block
+retains the source subtitle keys that contributed to it.
+
+```{r}
+#| label: build-stream-blocks
+
+blocks <- build_punctuation_blocks(
+  normalized_units,
+  target_words = 175L,
+  max_words = 200L,
+  talent_name = metadata$talent_code[[1]]
+)
+if (nrow(blocks) == 0L) stop("No punctuation blocks were produced.", call. = FALSE)
+
+block_display <- blocks |>
+  dplyr::mutate(source_row_count = lengths(.data$source_subtitle_unit_keys)) |>
+  dplyr::select(
+    .data$block_number,
+    .data$start_sec,
+    .data$end_sec,
+    .data$word_count,
+    .data$source_row_count,
+    .data$model_input_text
+  )
+display_table(block_display, caption = "Actual text sent to FullStop")
+```
+
+## 4. Run FullStop and inspect the actual response
+
+The output below is generated during the render. FullStop restores punctuation
+and sentence boundaries; it does not replace speech-recognition words.
+
+```{r}
+#| label: run-stream-fullstop
+#| results: asis
+
+if (!run_fullstop) {
+  print(display_table(
+    data.frame(message = "FullStop disabled for this render."),
+    caption = "Inference status"
+  ))
+} else {
+  sentences <- reconstruct_sentence_units(
+    blocks,
+    timeout_sec = 120,
+    allow_unknown_language = TRUE
+  )
+  validate_subtitle_reconstruction(raw_units, blocks, sentences)
+
+  normalized_sentences <- tolower(stringr::str_squish(sentences$text))
+  adjacent_duplicates <- if (length(normalized_sentences) < 2L) {
+    0L
+  } else {
+    sum(normalized_sentences[-1L] == normalized_sentences[-length(normalized_sentences)])
+  }
+  quality_checks <- data.frame(
+    check = c(
+      "Sentence output is nonempty",
+      "Every sentence contains a letter or number",
+      "Every sentence has terminal punctuation",
+      "No adjacent duplicate sentences",
+      "FullStop preserved the input word sequence",
+      "Timestamps are chronological",
+      "Source subtitle keys are retained",
+      "Model identity was returned"
+    ),
+    pass = c(
+      nrow(sentences) > 0L,
+      all(stringr::str_detect(sentences$text, "[[:alnum:]]")),
+      all(stringr::str_detect(sentences$text, "[.!?][\"'’”]*$")),
+      adjacent_duplicates == 0L,
+      identical(extract_words(blocks$model_input_text), extract_words(sentences$text)),
+      all(diff(sentences$start_sec) >= 0),
+      all(lengths(sentences$source_subtitle_unit_keys) > 0L),
+      all(!is.na(sentences$punctuation_model) & nzchar(sentences$punctuation_model))
+    )
+  )
+  quality_checks$status <- ifelse(quality_checks$pass, "PASS", "FAIL")
+
+  provenance <- data.frame(
+    execution_status = "Generated during this render",
+    executed_at_utc = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+    source_relation = "text.subtitle_units",
+    video_id = video_id,
+    source_rows = nrow(raw_units),
+    output_sentences = nrow(sentences),
+    punctuation_model = paste(unique(sentences$punctuation_model), collapse = ", ")
+  )
+
+  print(display_table(provenance, caption = "Inference execution provenance"))
+  print(display_table(
+    sentences[, c(
+      "sentence_number", "start_sec", "end_sec", "speaker_turn_id", "text",
+      "punctuation_model", "timestamps_approximate"
+    )],
+    caption = "FullStop sentences returned during this render"
+  ))
+  print(display_table(
+    quality_checks[, c("status", "check")],
+    caption = "Quality checks calculated from the returned sentences"
+  ))
+  if (any(!quality_checks$pass)) stop("A stream quality check failed.", call. = FALSE)
+}
+```
+
+## 5. Validate publication or save the isolated example
+
+The dry run constructs the exact sentence and checkpoint records without
+changing DuckDB. Explicit publication closes the reader, uses one short-lived
+writer transaction, and reads the saved rows back.
+
+```{r}
+#| label: publish-stream-example
+#| results: asis
+
+if (run_fullstop) {
+  preview <- publish_subtitle_reconstruction(
+    con,
+    raw_units = raw_units,
+    blocks = blocks,
+    sentence_units = sentences,
+    pipeline_version = pipeline_version,
+    source_scope = source_scope,
+    dry_run = TRUE
+  )
+  print(display_table(
+    data.frame(
+      action = "Validated dry run",
+      sentence_rows = nrow(preview$sentence_rows),
+      checkpoint_rows = nrow(preview$checkpoint_rows),
+      source_checksum_sha256 = preview$source_checksum_sha256,
+      database_changed = preview$published
+    ),
+    caption = "Publication preview"
+  ))
+
+  if (publish_example) {
+    DBI::dbDisconnect(con, shutdown = TRUE)
+    con <- NULL
+    write_con <- duckdb_connect(db_path = db_path, read_only = FALSE)
+    publication <- tryCatch(
+      publish_subtitle_reconstruction(
+        write_con,
+        raw_units = raw_units,
+        blocks = blocks,
+        sentence_units = sentences,
+        pipeline_version = pipeline_version,
+        source_scope = source_scope,
+        dry_run = FALSE
+      ),
+      finally = DBI::dbDisconnect(write_con, shutdown = TRUE)
+    )
+    con <- duckdb_connect(db_path = db_path, read_only = TRUE)
+    persisted <- load_published_subtitle_sentences(
+      con,
+      video_id = video_id,
+      source_scope = source_scope
+    )
+    if (!identical(persisted$sentence_text, publication$sentence_rows$sentence_text)) {
+      stop("Persisted stream sentences did not match the generated output.", call. = FALSE)
+    }
+    print(display_table(
+      persisted[, c(
+        "sentence_number", "start_sec", "end_sec", "sentence_text",
+        "source_scope", "pipeline_run_id"
+      )],
+      caption = "Derived stream rows read back from DuckDB"
+    ))
+  }
+}
+```
+
+## Render commands
+
+Resolve a persistent output location first:
+
+```bash
+STREAM_NOTEBOOK_OUTPUT_DIR="$(
+  Rscript --vanilla -e '
+    source("r_scripts/lib/utils/repo_env.R")
+    source("r_scripts/lib/utils/datalake_root.r")
+    load_repo_env(repo_root = getwd())
+    cat(file.path(
+      get_datalake_root(), "Rendered_Notebooks", "transcript_cleaning", "stream_example"
+    ))
+  '
+)"
+mkdir -p "$STREAM_NOTEBOOK_OUTPUT_DIR"
+```
+
+Read-only execution with the real FullStop call:
+
+```bash
+quarto render r_scripts/notebooks/tests/transcript_cleaning/stream_example.qmd \
+  --output-dir "$STREAM_NOTEBOOK_OUTPUT_DIR"
+```
+
+Explicitly publish the isolated excerpt:
+
+```bash
+quarto render r_scripts/notebooks/tests/transcript_cleaning/stream_example.qmd \
+  -P publish_example:true \
+  --output-dir "$STREAM_NOTEBOOK_OUTPUT_DIR"
+```
+
+```{r}
+#| include: false
+if (!is.null(con) && DBI::dbIsValid(con)) DBI::dbDisconnect(con, shutdown = TRUE)
+```

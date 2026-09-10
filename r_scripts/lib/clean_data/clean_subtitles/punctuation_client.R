@@ -1,3 +1,5 @@
+source(here::here("r_scripts", "lib", "utils", "inference_machine.R"))
+
 parse_punctuation_response <- function(body) {
   payload <- if (is.list(body)) {
     body
@@ -31,7 +33,7 @@ parse_punctuation_response <- function(body) {
 
 punctuate_text <- function(
     text,
-    url = "http://192.168.1.165:8000/v1/punctuate",
+    url = inference_punctuation_url(),
     timeout_sec = 120,
     include_model = FALSE) {
   input_text <- trimws(as.character(text))
@@ -45,6 +47,8 @@ punctuate_text <- function(
     stop("`timeout_sec` must be a positive number.", call. = FALSE)
   }
 
+  with_inference_machine({
+  ensure_inference_machine(url)
   response <- httr::POST(
     url = url,
     httr::accept_json(),
@@ -66,4 +70,5 @@ punctuate_text <- function(
 
   parsed <- parse_punctuation_response(response_text)
   if (isTRUE(include_model)) parsed else parsed$text
+  })
 }

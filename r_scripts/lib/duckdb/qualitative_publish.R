@@ -346,7 +346,7 @@ qualitative_sql_string_list <- function(con, x) {
 }
 
 qualitative_align_subtitle_rows <- function(coded, source_con) {
-  if (!exists("CleanDuplicateTimestamps", mode = "function") ||
+  if (!exists("clean_duplicate_timestamps", mode = "function") ||
       !exists("period_to_seconds", mode = "function")) {
     stop(
       "Source clean_subtitles.R before aligning legacy subtitle rows.",
@@ -378,7 +378,7 @@ qualitative_align_subtitle_rows <- function(coded, source_con) {
     stop_sec = period_to_seconds(raw$subtitle_end),
     Text = raw$subtitle_text
   )
-  cleaned <- suppressWarnings(CleanDuplicateTimestamps(work))
+  cleaned <- suppressWarnings(clean_duplicate_timestamps(work))
   cleaned <- cleaned[
     !is.na(cleaned$Text) & nzchar(trimws(cleaned$Text)),
     ,

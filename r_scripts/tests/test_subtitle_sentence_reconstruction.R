@@ -86,6 +86,11 @@ assert_equal(
   c("I don't know.", "\"Really?\"", "Yes!"),
   "Sentence beginnings were not capitalized"
 )
+assert_equal(
+  split_punctuated_sentences("Have fun. “. I am ready."),
+  c("Have fun.", "I am ready."),
+  "Punctuation-only model fragments should not become sentence units"
+)
 
 captions <- tibble::tibble(
   VideoID = c(rep("video-a", 4), rep("video-b", 2)),
@@ -275,3 +280,18 @@ assert_true(
 )
 
 cat("subtitle sentence reconstruction tests passed\n")
+
+# Censor/punctuation-only turns are not inference units. Preserve later block
+# numbers so existing successful checkpoints still match after filtering.
+symbol_blocks <- build_punctuation_blocks(tibble::tibble(
+  video_id = "symbol-test",
+  start_sec = c(0, 1, 2, 3), end_sec = c(1, 2, 3, 4),
+  text = c(">> Hello world", ">> [ __ ]", ">> ___", ">> Welcome back"),
+  subtitle_unit_key = paste0("symbol-source-", 1:4)
+))
+assert_equal(symbol_blocks$block_number, c(1L, 4L), "Symbol filtering changed checkpoint block numbers")
+assert_equal(symbol_blocks$model_input_text, c("Hello world", "Welcome back"), "Symbol-only blocks were retained")
+assert_equal(nrow(build_punctuation_blocks(tibble::tibble(
+  video_id = "only-symbols", start_sec = 0, end_sec = 1, text = "[ __ ]"
+))), 0L, "All-symbol track produced inference blocks")
+cat("symbol-only block filtering tests passed\n")

@@ -1,5 +1,70 @@
 # Subtitles Runner
 
+## Canonical DuckDB sentence backfill
+
+The maintained full-track sentence backfill reads canonical raw rows from
+`text.subtitle_units`, closes DuckDB, and runs all inference for that video.
+Each successful block is saved immediately to one persistent RDS checkpoint file
+per video. After inference, the runner opens DuckDB, rechecks the source checksum,
+and transactionally publishes completed checkpoints and sentence rows to
+`text.subtitle_sentence_units` with `source_scope = 'full_track'`.
+
+Inventory the work without model calls or database writes:
+
+```bash
+bin/linux/subtitles/run_subtitle_sentence_backfill.sh --dry-run
+```
+
+Run a one-video pilot:
+
+```bash
+bin/linux/subtitles/run_subtitle_sentence_backfill.sh \
+  --execute \
+  --video-id VIDEO_ID
+```
+
+Start the complete backfill in a detached tmux session:
+
+```bash
+bin/linux/subtitles/start_subtitle_sentence_backfill_tmux.sh
+```
+
+The launcher prints the tmux session name and persistent DataLake log path.
+Use:
+
+```bash
+tmux attach -t subtitle-sentence-backfill
+```
+
+Detach without stopping the process with `Ctrl+B`, then `D`. Completed tracks
+are checksum- and pipeline-version-aware and are skipped on another run.
+Completed blocks for an interrupted track are also reused, so restarting the
+same command resumes rather than repeating successful FullStop requests.
+
+Failed blocks receive up to three attempts per run by default. Only successful
+responses are saved locally; restarting retries unfinished blocks. `--retry-failed`
+still resets exhausted legacy failed checkpoints already stored in DuckDB.
+Use `--force` only when intentionally rebuilding already-current tracks.
+
+The checkpoint directory defaults to
+`<Talent DataLake root>/Processed/subtitle_backfill_checkpoints/`, derived from the
+configured lakehouse path. Override it with `SUBTITLE_BACKFILL_CHECKPOINT_DIR` if
+needed; use a persistent directory outside the staging tree cleared by refresh.
+Each video has one hash-named `.rds` file containing its existing checkpoint rows
+and deterministic source/block keys. Writes replace that file atomically. Files
+remain after publication for recovery; DuckDB remains the authoritative store.
+
+No DuckDB reads or writes occur inside the per-video inference loop. The final
+save retries database lock conflicts up to 12 times with a fixed five-second
+sleep, using the existing helper. Other errors fail immediately. If retries are
+exhausted, keep the checkpoint file and rerun the same command: successful model
+calls are reused. Source changes prevent stale publication. The existing run-log
+updates still use short connections at the start and end of the overall run.
+
+DuckDB permits only one process that can write at a time. Close Quarto previews,
+interactive R sessions, or dashboards that hold the talent lakehouse open
+before starting the backfill.
+
 ## `run_subtitle_clean.sh`
 
 Wrapper script for:
@@ -57,7 +122,7 @@ bin/linux/subtitles/run_subtitle_clean.sh --talent-query "Avaritia"
 - `SUBTITLE_PUNCTUATION_ENABLED` (env var)
   - Enables the sentence reconstruction stage (default: `true`)
 - `SUBTITLE_PUNCTUATION_URL` (env var)
-  - Punctuation endpoint (default: `http://192.168.1.165:8000/v1/punctuate`)
+  - Punctuation endpoint (default: `http://192.168.1.173:8000/v1/punctuate`)
 - `SUBTITLE_PUNCTUATION_TIMEOUT_SEC` (env var)
   - Per-block HTTP timeout in seconds (default: `120`)
 - `SUBTITLE_BLOCK_TARGET_WORDS` / `SUBTITLE_BLOCK_MAX_WORDS` (env vars)

@@ -1,6 +1,5 @@
-TalentSubtitlePath <- function(talent_name) {
-    path <- file.path("Output", talent_name, "Subtitles")
-    return(path)
+talent_subtitle_path <- function(talent_name) {
+  file.path("Output", talent_name, "Subtitles")
 }
 
 decode_placeholder_bytes <- function(x) {
@@ -23,7 +22,7 @@ process_talent_subtitle <- function(talent_name,
                                     skip_existing = TRUE,
                                     subtitle_root = NULL,
                                     n_cores = 1) {
-  path <- if (is.null(subtitle_root)) TalentSubtitlePath(talent_name) else subtitle_root
+  path <- if (is.null(subtitle_root)) talent_subtitle_path(talent_name) else subtitle_root
   input_dir <- file.path(path, "Original")
   output_dir <- file.path(path, "Processed")
   rdata_dir <- file.path(path, "RData")
@@ -108,8 +107,8 @@ process_talent_subtitle <- function(talent_name,
     )
     if (is.null(df)) return(NULL)
 
-    df <- SplitTimeStamp(df)
-    df <- CleanDuplicateTimestamps(df)
+    df <- split_timestamp(df)
+    df <- clean_duplicate_timestamps(df)
 
     write_csv(df, out_path)
     list(out_name = out_name, df = df)
@@ -136,7 +135,7 @@ process_talent_subtitle <- function(talent_name,
 
 # Load the previously saved subtitle RData list for a talent.
 load_talent_subtitle_rdata <- function(talent_name, rdata_filename = NULL) {
-  path <- TalentSubtitlePath(talent_name)
+  path <- talent_subtitle_path(talent_name)
   rdata_dir <- file.path(path, "RData")
 
   if (is.null(rdata_filename)) {
@@ -209,7 +208,7 @@ period_to_seconds <- function(x) {
   out
 }
 
-SplitTimeStamp <- function(df) {
+split_timestamp <- function(df) {
   nm <- names(df)
   nm_lower <- tolower(nm)
 
@@ -259,7 +258,7 @@ SplitTimeStamp <- function(df) {
   return(clean_df)
 }
 
-CleanDuplicateTimestamps <- function(df) {
+clean_duplicate_timestamps <- function(df) {
 
   # helper: remove overlap where curr starts with the end of prev (word-boundary)
   trim_overlap <- function(prev, curr, max_words = 20) {
@@ -316,9 +315,9 @@ CleanDuplicateTimestamps <- function(df) {
     dplyr::ungroup()
 }
 
-ProcessChatData <- function(df){
-  df <- SplitTimeStamp(df)
-  df <- CleanDuplicateTimestamps(df)
+process_chat_data <- function(df) {
+  df <- split_timestamp(df)
+  df <- clean_duplicate_timestamps(df)
 
   return(df)
 }

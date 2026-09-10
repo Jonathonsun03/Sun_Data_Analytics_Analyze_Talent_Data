@@ -27,6 +27,11 @@ notebook sources.
   - executable notebooks that validate repository or environment behavior
   - `title_classification_pipeline.qmd` documents the mixed R/Python title
     pipeline and runs read-only health checks against the unified DuckDB
+  - `tests/transcript_cleaning/pipeline_overview.qmd` documents the complete
+    subtitle-cleaning, FullStop sentence-reconstruction, DuckDB publication,
+    and backfill design
+  - `tests/transcript_cleaning/stream_example.qmd` and `short_example.qmd`
+    execute focused, real-data quality demonstrations for the two content types
 
 ## Boundaries
 

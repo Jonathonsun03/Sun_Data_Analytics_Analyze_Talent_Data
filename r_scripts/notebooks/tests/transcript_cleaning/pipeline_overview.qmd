@@ -1,0 +1,1088 @@
+---
+title: "Subtitle Cleaning and Sentence Reconstruction Pipeline"
+subtitle: "From canonical raw subtitle units to auditable sentence-level DuckDB data"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    embed-resources: true
+params:
+  talent_code: null
+  video_id: null
+  preview_limit: 25
+  sample_video_id: "y_bFxtuDmlE"
+  sample_start_sequence: 1
+  sample_row_count: 20
+  run_punctuation_example: true
+  publish_example: false
+  pipeline_version: "subtitle_sentence_v1"
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Purpose and safety boundary
+
+This notebook documents the complete subtitle-cleaning design, demonstrates
+the deterministic transformations, and audits the current state of the unified
+talent DuckDB. It is the working explanation for both the historical backfill
+and the future incremental pipeline.
+
+An ordinary render is deliberately **read-only**. With the default parameters,
+it does not overwrite raw subtitles, create Parquet files, add DuckDB tables,
+or publish sentence rows. Its real subtitle example sends a small cleaned
+excerpt to the internal FullStop service so the rendered notebook demonstrates
+reconstruction quality. Set `run_punctuation_example:false` for a fully offline
+render. Saving the worked example requires the separate
+`publish_example:true` parameter.
+
+The core data invariant is:
+
+> `text.subtitle_units` is canonical raw transcript evidence. Cleaned sentences
+> are derived data and must preserve lineage back to the contributing
+> `subtitle_unit_key` values.
+
+## Current conclusion
+
+The transformation logic, FullStop HTTP client, derived DuckDB schema, and
+transactional publisher exist and have been tested. The current batch runner
+can still write experimental sentence-level Parquet files, but the maintained
+database destination is `text.subtitle_sentence_units` in the unified talent
+DuckDB. The sequential full-corpus runner now provides selection, bounded
+retry, immediate block checkpoints, and checksum-aware resume behavior.
+
+Current implementation status:
+
+| Component | Current status |
+|---|---|
+| Raw subtitle ingestion | Operational: `text.subtitle_units` |
+| Deterministic overlap removal | Implemented and tested |
+| Speaker-turn marker preservation | Implemented and tested |
+| Punctuation block construction | Implemented and tested |
+| FullStop HTTP client | Implemented and live-tested by the worked example |
+| Sentence splitting and approximate timestamps | Implemented and tested |
+| Parquet output | Prototype only |
+| Derived DuckDB sentence relation | Implemented; created by explicit publication |
+| Block checkpoint persistence | Implemented for completed blocks |
+| Full-corpus resume orchestration | Implemented; live rollout pending |
+| Dashboard use of cleaned sentences | Not yet implemented |
+
+## Focused real-data examples
+
+The overview retains one compact worked example so every architectural stage
+can be inspected in one document. Two focused notebooks provide clearer
+content-type quality demonstrations:
+
+- [`stream_example.qmd`](stream_example.qmd) processes a real livestream
+  excerpt.
+- [`short_example.qmd`](short_example.qmd) processes a complete real Short
+  subtitle track.
+
+## End-to-end pipeline map
+
+```{mermaid}
+flowchart TD
+  A[YouTube subtitle track] --> B[Ingestion pipeline]
+  B --> C[text.subtitle_units<br/>canonical raw rows]
+  B --> D[ops.source_files and ops.pipeline_runs]
+  C --> E[Select pending video and track]
+  E --> F[Normalize timestamps and text]
+  F --> G[Remove rolling-caption overlap]
+  G --> H[Preserve speaker-turn markers]
+  H --> I[Build 175-200 word blocks]
+  I --> J[FullStop punctuation service<br/>CT 106]
+  J --> K[Split punctuated text into sentences]
+  K --> L[Allocate approximate sentence timestamps]
+  L --> M[Validate completeness and lineage]
+  M --> N[text.subtitle_sentence_units<br/>derived DuckDB relation]
+  M --> O[ops block checkpoints and pipeline status]
+  N --> P[Individual-video dashboard]
+```
+
+## Render parameters
+
+From the repository root, resolve the configured DataLake and create the
+render-output directory once:
+
+```bash
+SUBTITLE_NOTEBOOK_LAKE_ROOT="$(
+  Rscript --vanilla -e '
+    source("r_scripts/lib/utils/repo_env.R")
+    source("r_scripts/lib/utils/datalake_root.r")
+    load_repo_env(repo_root = getwd())
+    cat(get_datalake_root())
+  '
+)"
+SUBTITLE_NOTEBOOK_OUTPUT_DIR="${SUBTITLE_NOTEBOOK_LAKE_ROOT}/Rendered_Notebooks/transcript_cleaning/pipeline_overview"
+mkdir -p "$SUBTITLE_NOTEBOOK_OUTPUT_DIR"
+```
+
+Render the database-wide documentation and status checks:
+
+```bash
+quarto render r_scripts/notebooks/tests/transcript_cleaning/pipeline_overview.qmd \
+  --output-dir "$SUBTITLE_NOTEBOOK_OUTPUT_DIR"
+```
+
+Inspect one talent or one video without changing data:
+
+```bash
+quarto render r_scripts/notebooks/tests/transcript_cleaning/pipeline_overview.qmd \
+  -P talent_code:LEI3 \
+  -P video_id:VIDEO_ID \
+  --output-dir "$SUBTITLE_NOTEBOOK_OUTPUT_DIR"
+```
+
+The optional parameters are:
+
+- `talent_code`: exact talent code from `catalog.talents`.
+- `video_id`: exact video identifier. This enables raw-row previews and the
+  rolling-caption diagnostic.
+- `preview_limit`: maximum raw rows displayed for the selected video.
+- `sample_video_id`: live video used by the worked cleaning example. The
+  default is an existing Nova Aokami livestream.
+- `sample_start_sequence`: first raw caption sequence in the worked example.
+- `sample_row_count`: number of consecutive raw captions used in the example.
+- `run_punctuation_example`: controls the live FullStop demonstration. The
+  default is `true`; deterministic cleaning still runs when it is disabled.
+- `publish_example`: explicitly writes the validated sample to DuckDB and reads
+  it back. The default is `false`.
+- `pipeline_version`: processing version written to sentence and checkpoint
+  lineage.
+
+Render without sending the example to FullStop:
+
+```bash
+quarto render r_scripts/notebooks/tests/transcript_cleaning/pipeline_overview.qmd \
+  -P run_punctuation_example:false \
+  --output-dir "$SUBTITLE_NOTEBOOK_OUTPUT_DIR"
+```
+
+Run the complete sample pipeline, including the controlled DuckDB write:
+
+```bash
+quarto render r_scripts/notebooks/tests/transcript_cleaning/pipeline_overview.qmd \
+  -P publish_example:true \
+  --output-dir "$SUBTITLE_NOTEBOOK_OUTPUT_DIR"
+```
+
+## Connect to the canonical DuckDB
+
+```{r}
+#| label: setup
+
+required_packages <- c(
+  "DBI", "duckdb", "dplyr", "here", "knitr", "purrr", "stringr", "tibble"
+)
+missing_packages <- required_packages[
+  !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
+]
+if (length(missing_packages) > 0L) {
+  stop(
+    "Install the required R packages before rendering: ",
+    paste(missing_packages, collapse = ", "),
+    call. = FALSE
+  )
+}
+
+source(here::here("r_scripts", "lib", "utils", "repo_env.R"))
+source(here::here("r_scripts", "lib", "utils", "datalake_root.r"))
+source(here::here("r_scripts", "lib", "duckdb", "db_connect.R"))
+source(here::here(
+  "r_scripts", "lib", "clean_data", "clean_subtitles", "clean_subtitles.R"
+))
+source(here::here(
+  "r_scripts", "lib", "clean_data", "clean_subtitles", "punctuation_client.R"
+))
+source(here::here(
+  "r_scripts", "lib", "clean_data", "clean_subtitles", "subtitle_units.R"
+))
+source(here::here(
+  "r_scripts", "lib", "duckdb", "subtitle_sentence_schema.R"
+))
+source(here::here(
+  "r_scripts", "lib", "duckdb", "subtitle_sentence_publish.R"
+))
+
+load_repo_env(repo_root = here::here())
+db_path <- talent_lakehouse_db_path()
+if (!file.exists(db_path)) {
+  stop("Unified talent lakehouse not found: ", db_path, call. = FALSE)
+}
+
+con <- duckdb_connect(db_path = db_path, read_only = TRUE)
+
+normalize_parameter <- function(value) {
+  if (is.null(value) || length(value) == 0L || is.na(value[[1]])) return(NULL)
+  value <- trimws(as.character(value[[1]]))
+  if (!nzchar(value)) NULL else value
+}
+
+talent_code <- normalize_parameter(params$talent_code)
+video_id <- normalize_parameter(params$video_id)
+preview_limit <- suppressWarnings(as.integer(params$preview_limit))
+if (is.na(preview_limit) || preview_limit < 1L) preview_limit <- 25L
+sample_video_id <- normalize_parameter(params$sample_video_id)
+sample_start_sequence <- suppressWarnings(as.integer(params$sample_start_sequence))
+sample_row_count <- suppressWarnings(as.integer(params$sample_row_count))
+run_punctuation_example <- isTRUE(params$run_punctuation_example) ||
+  tolower(as.character(params$run_punctuation_example)) %in% c("1", "true", "yes")
+publish_example <- isTRUE(params$publish_example) ||
+  tolower(as.character(params$publish_example)) %in% c("1", "true", "yes")
+pipeline_version <- normalize_parameter(params$pipeline_version)
+if (is.null(sample_video_id)) {
+  stop("sample_video_id must identify one video.", call. = FALSE)
+}
+if (is.na(sample_start_sequence) || sample_start_sequence < 1L) {
+  sample_start_sequence <- 1L
+}
+if (is.na(sample_row_count) || sample_row_count < 2L) sample_row_count <- 20L
+sample_row_count <- min(sample_row_count, 100L)
+if (is.null(pipeline_version)) {
+  stop("pipeline_version must be one non-empty value.", call. = FALSE)
+}
+if (publish_example && !run_punctuation_example) {
+  stop(
+    "publish_example:true requires run_punctuation_example:true.",
+    call. = FALSE
+  )
+}
+
+scope_conditions <- character()
+scope_parameters <- list()
+if (!is.null(talent_code)) {
+  scope_conditions <- c(scope_conditions, "talent_code = ?")
+  scope_parameters <- c(scope_parameters, list(talent_code))
+}
+if (!is.null(video_id)) {
+  scope_conditions <- c(scope_conditions, "video_id = ?")
+  scope_parameters <- c(scope_parameters, list(video_id))
+}
+scope_where <- if (length(scope_conditions) == 0L) {
+  ""
+} else {
+  paste("WHERE", paste(scope_conditions, collapse = " AND "))
+}
+
+display_table <- function(rows, digits = 2L, caption = NULL) {
+  if (nrow(rows) == 0L) {
+    rows <- data.frame(message = "No rows matched.")
+  }
+  knitr::kable(
+    rows,
+    format = "html",
+    digits = digits,
+    caption = caption,
+    escape = TRUE,
+    table.attr = paste(
+      'class="table table-striped table-hover table-bordered table-sm"'
+    )
+  )
+}
+
+relation_exists <- function(schema_name, relation_name) {
+  DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT COUNT(*) = 1 AS available",
+      "FROM information_schema.tables",
+      "WHERE table_schema = ? AND table_name = ?"
+    ),
+    params = list(schema_name, relation_name)
+  )$available[[1]]
+}
+
+configuration <- data.frame(
+  item = c(
+    "Database", "Talent scope", "Video scope", "Example video",
+    "Example calls FullStop", "Example publishes to DuckDB",
+    "Pipeline version", "Rendered at"
+  ),
+  value = c(
+    db_path,
+    if (is.null(talent_code)) "All talents" else talent_code,
+    if (is.null(video_id)) "All videos" else video_id,
+    sample_video_id,
+    run_punctuation_example,
+    publish_example,
+    pipeline_version,
+    format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+  )
+)
+display_table(configuration)
+```
+
+## Current lakehouse state
+
+The raw table, source-file registry, and pipeline-run registry are upstream
+requirements. The derived sentence and checkpoint relations are created by
+`init_subtitle_sentence_schema()` during an explicit publication, so they may
+be absent in a fresh database until the first approved write.
+
+```{r}
+#| label: relation-inventory
+
+relation_inventory <- data.frame(
+  role = c(
+    "Canonical raw subtitles",
+    "Source-file lineage",
+    "Pipeline execution history",
+    "Derived sentence output",
+    "Completed block checkpoints"
+  ),
+  schema_name = c("text", "ops", "ops", "text", "ops"),
+  relation_name = c(
+    "subtitle_units",
+    "source_files",
+    "pipeline_runs",
+    "subtitle_sentence_units",
+    "subtitle_reconstruction_blocks"
+  )
+)
+relation_inventory$available <- mapply(
+  relation_exists,
+  relation_inventory$schema_name,
+  relation_inventory$relation_name
+)
+relation_inventory$status <- ifelse(
+  relation_inventory$available,
+  "AVAILABLE",
+  "NOT PRESENT IN DATABASE"
+)
+display_table(relation_inventory[, c("status", "role", "schema_name", "relation_name")])
+```
+
+```{r}
+#| label: subtitle-coverage
+
+subtitle_coverage <- DBI::dbGetQuery(
+  con,
+  paste0(
+    "SELECT COUNT(*) AS raw_rows, ",
+    "COUNT(DISTINCT video_id) AS videos, ",
+    "COUNT(DISTINCT talent_code) AS talents, ",
+    "COUNT(DISTINCT subtitle_language) AS recorded_languages ",
+    "FROM text.subtitle_units ",
+    scope_where
+  ),
+  params = scope_parameters
+)
+display_table(subtitle_coverage)
+```
+
+```{r}
+#| label: raw-schema
+
+raw_schema <- DBI::dbGetQuery(
+  con,
+  paste(
+    "SELECT column_name, data_type, is_nullable",
+    "FROM information_schema.columns",
+    "WHERE table_schema = 'text' AND table_name = 'subtitle_units'",
+    "ORDER BY ordinal_position"
+  )
+)
+display_table(raw_schema)
+```
+
+## Stage 1: ingest and preserve raw evidence
+
+Subtitle acquisition belongs to the ingestion repository. Its publisher writes
+one keyed row per observed caption into `text.subtitle_units` and registers the
+source and execution in `ops.source_files` and `ops.pipeline_runs`.
+
+The cleaning pipeline must never update `subtitle_text` in this raw relation.
+Reprocessing must be possible from the original text, timestamps, language,
+track type, and source lineage.
+
+The backfill inventory begins from DuckDB—not from the experimental
+`Sentence_Units` Parquet folder. It groups raw rows by video and subtitle track,
+computes a stable input checksum, and compares that identity with completed
+derived work.
+
+## Stage 2: normalize timestamps and text
+
+Raw subtitle timestamps are stored as text such as `00:00:14.150`. The helper
+`period_to_seconds()` converts supported timestamp representations into numeric
+seconds. Text normalization then:
+
+- converts HTML markers such as `&gt;&gt;` and `&nbsp;`;
+- collapses repeated whitespace;
+- preserves the original raw row and key for lineage; and
+- orders rows by video, track, start time, end time, and sequence number.
+
+The historical `split_timestamp()` helper was designed around CSV-shaped data
+and drops columns that the lakehouse needs for lineage. The DuckDB workflow
+therefore uses `normalize_subtitle_units_for_reconstruction()`, which retains
+`subtitle_unit_key`, `source_file_id`, language, and track type while reusing
+`period_to_seconds()`.
+
+### Worked example from a real livestream
+
+The example below reads consecutive raw captions from the canonical DuckDB. By
+default it uses Nova Aokami's livestream *stream ends when Symboli Rudolf
+Festival comes home*. The title and talent code are queried rather than copied
+into the example.
+
+```{r}
+#| label: real-sample-load
+
+sample_metadata <- DBI::dbGetQuery(
+  con,
+  paste(
+    "SELECT video.video_id, video.title, video.content_type,",
+    "subtitle.talent_code, COUNT(*) AS available_subtitle_rows",
+    "FROM catalog.videos AS video",
+    "JOIN text.subtitle_units AS subtitle USING (video_id)",
+    "WHERE video.video_id = ?",
+    "GROUP BY video.video_id, video.title, video.content_type, subtitle.talent_code"
+  ),
+  params = list(sample_video_id)
+)
+if (nrow(sample_metadata) != 1L) {
+  stop("The sample video did not resolve to exactly one catalog record.", call. = FALSE)
+}
+display_table(sample_metadata)
+
+sample_raw <- load_subtitle_units_for_reconstruction(
+  con,
+  video_id = sample_video_id,
+  start_sequence = sample_start_sequence,
+  row_limit = sample_row_count
+)
+if (nrow(sample_raw) < 2L) {
+  stop("The requested real subtitle sample contains fewer than two rows.", call. = FALSE)
+}
+
+sample_prepared <- normalize_subtitle_units_for_reconstruction(sample_raw)
+
+display_table(sample_prepared[, c(
+  "sequence_number", "subtitle_start", "subtitle_end", "subtitle_text"
+)])
+```
+
+### Optional raw preview
+
+For privacy and rendering speed, raw text is displayed only when `video_id` is
+provided.
+
+```{r}
+#| label: raw-preview
+
+if (is.null(video_id)) {
+  display_table(data.frame(message = "Set the video_id parameter to preview raw subtitle rows."))
+} else {
+  raw_preview <- DBI::dbGetQuery(
+    con,
+    paste0(
+      "SELECT subtitle_unit_key, sequence_number, subtitle_start, subtitle_end, ",
+      "subtitle_language, subtitle_track_type, subtitle_text ",
+      "FROM text.subtitle_units ",
+      scope_where,
+      " ORDER BY sequence_number LIMIT ",
+      preview_limit
+    ),
+    params = scope_parameters
+  )
+  display_table(raw_preview)
+}
+```
+
+## Stage 3: remove rolling-caption repetition
+
+YouTube captions commonly grow over several consecutive rows. Treating every
+row as new dialogue repeats most of the transcript.
+
+There are two related deterministic implementations. All maintained project
+functions use `snake_case` names:
+
+1. `clean_duplicate_timestamps()` removes a caption when the following longer
+   caption contains it, then trims overlap between retained rows.
+2. `deduplicate_caption_overlaps()` keeps an accepted word stream and appends
+   only the non-overlapping suffix of each new caption.
+
+The second implementation is used by `build_punctuation_blocks()` and is the
+foundation for the DuckDB pipeline. Each block and reconstructed sentence now
+retains the raw `subtitle_unit_key` values that contributed to it.
+
+```{r}
+#| label: real-sample-deduplication
+
+sample_cleaned <- sample_prepared |>
+  dplyr::mutate(
+    newly_accepted_text = deduplicate_caption_overlaps(.data$text),
+    kept = nzchar(.data$newly_accepted_text)
+  )
+
+display_table(sample_cleaned[, c(
+  "sequence_number", "text", "newly_accepted_text", "kept"
+)])
+
+cleaned_transcript <- sample_cleaned |>
+  dplyr::filter(.data$kept) |>
+  dplyr::summarise(
+    cleaned_text = stringr::str_squish(paste(.data$newly_accepted_text, collapse = " "))
+  )
+
+cleaning_summary <- data.frame(
+  measure = c("Raw caption rows", "Rows adding new text", "Raw words", "Accepted words"),
+  value = c(
+    nrow(sample_cleaned),
+    sum(sample_cleaned$kept),
+    sum(subtitle_word_count(sample_cleaned$text)),
+    subtitle_word_count(cleaned_transcript$cleaned_text)
+  )
+)
+display_table(cleaning_summary)
+display_table(cleaned_transcript)
+```
+
+### Optional rolling-caption diagnostic
+
+This diagnostic estimates how many rows in one selected video are contained in
+the following longer caption. It does not represent the complete overlap
+algorithm, but it makes the dominant repetition pattern visible.
+
+```{r}
+#| label: rolling-caption-diagnostic
+
+if (is.null(video_id)) {
+  display_table(data.frame(message = "Set video_id to run the rolling-caption diagnostic."))
+} else {
+  rolling_diagnostic <- DBI::dbGetQuery(
+    con,
+    paste0(
+      "WITH ordered AS (",
+      "SELECT subtitle_text, LEAD(subtitle_text) OVER (",
+      "PARTITION BY video_id, subtitle_language, subtitle_track_type ",
+      "ORDER BY sequence_number",
+      ") AS next_text FROM text.subtitle_units ",
+      scope_where,
+      ") SELECT COUNT(*) AS raw_rows, ",
+      "COUNT(*) FILTER (WHERE next_text IS NOT NULL ",
+      "AND LENGTH(next_text) > LENGTH(subtitle_text) ",
+      "AND CONTAINS(next_text, subtitle_text)) AS contained_by_next_row ",
+      "FROM ordered"
+    ),
+    params = scope_parameters
+  )
+  rolling_diagnostic$estimated_repetitive_share <- with(
+    rolling_diagnostic,
+    ifelse(raw_rows == 0, NA_real_, contained_by_next_row / raw_rows)
+  )
+  display_table(rolling_diagnostic, digits = 3L)
+}
+```
+
+## Stage 4: preserve speaker-turn boundaries
+
+Some subtitle tracks use `>>` to mark a new speaker or turn. The function
+`expand_speaker_turn_segments()` separates those spans and assigns a stable
+`speaker_turn_id` within the video.
+
+This is boundary preservation, not speaker identification. A marker indicates
+that the speaker changed, but it does not establish the person's name. The
+derived relation should therefore store `speaker_turn_id` and `speaker_change`
+without inventing a speaker label.
+
+## Stage 5: build punctuation blocks
+
+FullStop works on text blocks rather than individual rolling captions. The
+current defaults target 175 words and cap blocks at 200 words.
+
+`build_punctuation_blocks()`:
+
+- orders caption spans;
+- removes exact word overlap;
+- respects speaker-turn boundaries;
+- normalizes existing punctuation before inference;
+- calculates block start and end times; and
+- keeps language information for the English-language gate.
+
+```{r}
+#| label: real-sample-block-construction
+
+sample_block_input <- sample_prepared
+sample_blocks <- build_punctuation_blocks(
+  sample_block_input,
+  target_words = 175L,
+  max_words = 200L,
+  talent_name = sample_metadata$talent_code[[1]]
+)
+display_table(sample_blocks[, c(
+  "block_number", "start_sec", "end_sec", "word_count", "model_input_text"
+)])
+```
+
+## Stage 6: call the FullStop punctuation service
+
+The analytics container uses `punctuate_text()` to send a JSON body containing
+one `text` field to:
+
+```text
+http://192.168.1.173:8000/v1/punctuate
+```
+
+The configured model is:
+
+```text
+oliverguhr/fullstop-punctuation-multilang-large
+```
+
+The response contains punctuated text and the model identity. FullStop restores
+sentence punctuation and capitalization; it does not repair incorrect words
+produced by speech recognition.
+
+By default this notebook sends the real cleaned blocks above to FullStop and
+displays the returned sentence units. The example does not write its result.
+Set `run_punctuation_example:false` when an offline render is required.
+
+```{r}
+#| label: optional-real-fullstop-example
+#| results: asis
+
+if (!run_punctuation_example) {
+  print(display_table(data.frame(
+    message = paste(
+      "FullStop example disabled; render with",
+      "-P run_punctuation_example:true to execute it."
+    )
+  )))
+} else {
+  sample_sentences <- reconstruct_sentence_units(
+    sample_blocks,
+    timeout_sec = 120,
+    allow_unknown_language = TRUE
+  )
+  extract_words <- function(text) {
+    tolower(unlist(
+      stringr::str_extract_all(
+        paste(text, collapse = " "),
+        "[[:alnum:]]+(?:['’][[:alnum:]]+)*"
+      ),
+      use.names = FALSE
+    ))
+  }
+  normalized_sentence_text <- tolower(stringr::str_squish(sample_sentences$text))
+  adjacent_duplicates <- if (length(normalized_sentence_text) < 2L) {
+    0L
+  } else {
+    sum(
+      normalized_sentence_text[-1L] ==
+        normalized_sentence_text[-length(normalized_sentence_text)]
+    )
+  }
+  quality_checks <- data.frame(
+    check = c(
+      "At least one reconstructed sentence",
+      "Every sentence contains a letter or number",
+      "Every sentence has terminal punctuation",
+      "No adjacent duplicate sentences",
+      "Word sequence preserved through punctuation",
+      "Sentence timestamps are chronological",
+      "Sentence timestamps stay inside the source sample",
+      "Model identity returned"
+    ),
+    pass = c(
+      nrow(sample_sentences) > 0L,
+      all(stringr::str_detect(sample_sentences$text, "[[:alnum:]]")),
+      all(stringr::str_detect(sample_sentences$text, "[.!?][\"'’”]*$")),
+      adjacent_duplicates == 0L,
+      identical(
+        extract_words(sample_blocks$model_input_text),
+        extract_words(sample_sentences$text)
+      ),
+      all(diff(sample_sentences$start_sec) >= 0) &&
+        all(sample_sentences$end_sec >= sample_sentences$start_sec),
+      min(sample_sentences$start_sec) >= min(sample_blocks$start_sec) &&
+        max(sample_sentences$end_sec) <= max(sample_blocks$end_sec),
+      all(!is.na(sample_sentences$punctuation_model)) &&
+        all(nzchar(sample_sentences$punctuation_model))
+    )
+  )
+  quality_checks$status <- ifelse(quality_checks$pass, "PASS", "FAIL")
+  inference_provenance <- data.frame(
+    execution_status = "Generated during this render",
+    executed_at_utc = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+    source_relation = "text.subtitle_units",
+    video_id = sample_video_id,
+    raw_caption_rows = nrow(sample_raw),
+    cleaned_blocks = nrow(sample_blocks),
+    output_sentences = nrow(sample_sentences),
+    punctuation_model = paste(unique(sample_sentences$punctuation_model), collapse = ", ")
+  )
+  print(display_table(
+    inference_provenance,
+    caption = "Inference execution provenance"
+  ))
+  print(display_table(sample_sentences[, c(
+    "sentence_number", "start_sec", "end_sec", "text",
+    "punctuation_model", "timestamps_approximate"
+  )], caption = "FullStop sentences returned during this render"))
+  print(display_table(
+    quality_checks[, c("status", "check")],
+    caption = "Checks calculated from the returned sentences"
+  ))
+  if (any(!quality_checks$pass)) {
+    stop("The FullStop example failed one or more quality checks.", call. = FALSE)
+  }
+}
+```
+
+A production call must add:
+
+- bounded timeouts;
+- retries with exponential backoff for transient failures;
+- a maximum attempt count;
+- error recording by video and block;
+- configurable, load-tested inference concurrency; and
+- no retry for deterministic validation failures.
+
+## Stage 7: reconstruct sentences and timestamps
+
+`split_punctuated_sentences()` splits FullStop output at sentence-final
+punctuation. `sentence_units_from_block()` then allocates the block duration
+across its sentences in proportion to their word counts.
+
+Those timestamps are estimates rather than word-level alignments. Every row
+must retain:
+
+```text
+timestamps_approximate = true
+timestamp_method = block_word_proportion
+```
+
+Sentence numbers are assigned in video order after all blocks are assembled.
+
+## Stage 8: validate before publication
+
+A video is publishable only when all required checks pass:
+
+1. Every eligible source block has one successful punctuation response.
+2. Blocks and sentences remain in chronological order.
+3. Sentence timestamps stay within their source block boundaries.
+4. Every sentence has non-empty text and at least one source subtitle key.
+5. Every source key resolves to the same video and subtitle track.
+6. The recorded model matches the service response.
+7. The source checksum still matches the input used to build the blocks.
+8. Sentence keys and sequence numbers are unique.
+9. The reduction and output-word totals remain within reviewable bounds.
+
+A failed video remains unavailable to downstream consumers until it passes all
+video-level checks. Other videos may continue processing.
+
+## Stage 9: publish to DuckDB
+
+The final relation is `text.subtitle_sentence_units`, not a Parquet file.
+`init_subtitle_sentence_schema()` creates the derived relation and its
+operations checkpoint relation during an explicit write. Its sentence record
+shape is:
+
+```sql
+-- Documentation excerpt; creation is owned by init_subtitle_sentence_schema().
+CREATE TABLE text.subtitle_sentence_units (
+  sentence_unit_key VARCHAR PRIMARY KEY,
+  video_id VARCHAR NOT NULL,
+  channel_id VARCHAR,
+  talent_code VARCHAR,
+  subtitle_language VARCHAR,
+  subtitle_track_type VARCHAR,
+  source_scope VARCHAR NOT NULL,
+  source_sequence_start BIGINT,
+  source_sequence_end BIGINT,
+  block_number BIGINT NOT NULL,
+  sentence_number BIGINT NOT NULL,
+  speaker_turn_id BIGINT,
+  speaker_change BOOLEAN NOT NULL,
+  start_sec DOUBLE,
+  end_sec DOUBLE,
+  sentence_text VARCHAR NOT NULL,
+  source_subtitle_unit_keys VARCHAR[] NOT NULL,
+  source_alignment_status VARCHAR NOT NULL,
+  punctuation_model VARCHAR NOT NULL,
+  timestamps_approximate BOOLEAN NOT NULL,
+  timestamp_method VARCHAR NOT NULL,
+  source_checksum_sha256 VARCHAR NOT NULL,
+  block_input_checksum_sha256 VARCHAR NOT NULL,
+  pipeline_version VARCHAR NOT NULL,
+  pipeline_run_id VARCHAR NOT NULL,
+  created_at TIMESTAMP NOT NULL
+);
+```
+
+Publication should use one DuckDB writer and one transaction per completed
+video/track. Inference workers may run concurrently, but they must return
+results to the coordinator rather than opening competing DuckDB writers.
+
+Within a transaction the publisher should:
+
+1. validate the candidate rows and compute the input checksum recorded on them;
+2. validate all candidate sentence rows;
+3. replace the derived rows for that exact video/track/source scope;
+4. mark its block checkpoints complete; and
+5. update the corresponding `ops.pipeline_runs` record.
+
+If any step fails, the transaction rolls back and the previous completed
+sentence version remains available.
+
+### Dry run, explicit publication, and read-back
+
+The first call below always prepares and validates the exact rows without
+writing. When `publish_example:true`, the notebook then closes its read-only
+connection, opens one short-lived writer connection, publishes the sentence
+and checkpoint rows transactionally, and reopens DuckDB read-only to verify the
+saved result.
+
+The partial example is stored with `source_scope = 'notebook_sample'`. It is
+therefore isolated from future `full_track` backfill rows and must never be used
+as a complete transcript by the dashboard.
+
+```{r}
+#| label: duckdb-publication-demonstration
+#| results: asis
+
+if (!run_punctuation_example) {
+  print(display_table(data.frame(
+    message = "FullStop is disabled, so no sentence rows are available to validate or publish."
+  )))
+} else {
+  publication_preview <- publish_subtitle_reconstruction(
+    con,
+    raw_units = sample_raw,
+    blocks = sample_blocks,
+    sentence_units = sample_sentences,
+    pipeline_version = pipeline_version,
+    source_scope = "notebook_sample",
+    dry_run = TRUE
+  )
+  preview_summary <- data.frame(
+    action = "Dry run",
+    sentence_rows = nrow(publication_preview$sentence_rows),
+    checkpoint_rows = nrow(publication_preview$checkpoint_rows),
+    source_checksum_sha256 = publication_preview$source_checksum_sha256,
+    database_changed = publication_preview$published
+  )
+  print(display_table(
+    preview_summary,
+    caption = "Validated publication preview generated during this render"
+  ))
+
+  if (!publish_example) {
+    existing_rows <- load_published_subtitle_sentences(
+      con,
+      video_id = sample_video_id,
+      source_scope = "notebook_sample"
+    )
+    if (nrow(existing_rows) == 0L) {
+      print(display_table(data.frame(
+        message = paste(
+          "Dry run passed. Render with -P publish_example:true to write and",
+          "read back this isolated notebook sample."
+        )
+      )))
+    } else {
+      print(display_table(existing_rows[, c(
+        "sentence_number", "start_sec", "end_sec", "sentence_text",
+        "punctuation_model", "pipeline_version", "pipeline_run_id"
+      )]))
+    }
+  } else {
+    DBI::dbDisconnect(con, shutdown = TRUE)
+    con <- NULL
+
+    write_con <- duckdb_connect(db_path = db_path, read_only = FALSE)
+    publication <- tryCatch(
+      publish_subtitle_reconstruction(
+        write_con,
+        raw_units = sample_raw,
+        blocks = sample_blocks,
+        sentence_units = sample_sentences,
+        pipeline_version = pipeline_version,
+        source_scope = "notebook_sample",
+        dry_run = FALSE
+      ),
+      finally = DBI::dbDisconnect(write_con, shutdown = TRUE)
+    )
+
+    con <- duckdb_connect(db_path = db_path, read_only = TRUE)
+    persisted_sentences <- load_published_subtitle_sentences(
+      con,
+      video_id = sample_video_id,
+      source_scope = "notebook_sample"
+    )
+    persisted_checkpoints <- DBI::dbGetQuery(
+      con,
+      paste(
+        "SELECT block_number, status, attempt_count, punctuation_model,",
+        "source_checksum_sha256, pipeline_version, pipeline_run_id, updated_at",
+        "FROM ops.subtitle_reconstruction_blocks",
+        "WHERE video_id = ? AND source_scope = 'notebook_sample'",
+        "ORDER BY block_number"
+      ),
+      params = list(sample_video_id)
+    )
+    persisted_run <- DBI::dbGetQuery(
+      con,
+      paste(
+        "SELECT pipeline_run_id, pipeline_name, started_at, completed_at,",
+        "status, error_summary FROM ops.pipeline_runs",
+        "WHERE pipeline_run_id = ?"
+      ),
+      params = list(publication$pipeline_run_id)
+    )
+
+    expected_rows <- publication$sentence_rows |>
+      dplyr::arrange(.data$sentence_number)
+    observed_rows <- persisted_sentences |>
+      dplyr::arrange(.data$sentence_number)
+    readback_checks <- data.frame(
+      check = c(
+        "Published sentence count matches",
+        "Sentence keys match",
+        "Sentence text matches",
+        "Source checksum matches",
+        "Pipeline run completed",
+        "Every block checkpoint completed"
+      ),
+      pass = c(
+        nrow(observed_rows) == nrow(expected_rows),
+        identical(observed_rows$sentence_unit_key, expected_rows$sentence_unit_key),
+        identical(observed_rows$sentence_text, expected_rows$sentence_text),
+        identical(
+          unique(observed_rows$source_checksum_sha256),
+          publication$source_checksum_sha256
+        ),
+        nrow(persisted_run) == 1L && persisted_run$status[[1]] == "completed",
+        nrow(persisted_checkpoints) == nrow(sample_blocks) &&
+          all(persisted_checkpoints$status == "complete")
+      )
+    )
+    readback_checks$status <- ifelse(readback_checks$pass, "PASS", "FAIL")
+
+    print(display_table(
+      persisted_run,
+      caption = "Pipeline run read back from ops.pipeline_runs"
+    ))
+    print(display_table(
+      readback_checks[, c("status", "check")],
+      caption = "Database read-back checks calculated during this render"
+    ))
+    print(display_table(persisted_sentences[, c(
+      "sentence_number", "start_sec", "end_sec", "sentence_text",
+      "source_scope", "punctuation_model", "pipeline_run_id"
+    )], caption = "Sentence rows read back from text.subtitle_sentence_units"))
+    print(display_table(
+      persisted_checkpoints,
+      caption = "Block checkpoints read back from ops.subtitle_reconstruction_blocks"
+    ))
+    if (any(!readback_checks$pass)) {
+      stop("DuckDB read-back verification failed.", call. = FALSE)
+    }
+  }
+}
+```
+
+## Stage 10: checkpoint and resume the backfill
+
+File-level resume is not sufficient for long livestreams. The publisher records
+the state of each punctuation block in
+`ops.subtitle_reconstruction_blocks`. The full-track runner consumes those
+checkpoints before making another model request.
+
+Each checkpoint needs at least:
+
+- video and track identity;
+- source checksum and pipeline version;
+- block number and normalized input checksum;
+- status: `pending`, `running`, `complete`, or `failed`;
+- attempt count and last error;
+- punctuation response and model;
+- pipeline run ID; and
+- created and updated timestamps.
+
+Normal resume skips completed blocks whose checksums and configuration still
+match. `retry-failed` selects only failed blocks. `force` intentionally creates
+new work for every block in scope.
+
+The initial inventory must run in dry-run mode and report pending, complete,
+stale, failed, and unsupported-language videos before any model calls occur.
+
+## Stage 11: full backfill rollout
+
+The safe rollout order is:
+
+1. One short prerecorded video.
+2. One long livestream with speaker-turn markers.
+3. An intentional interruption followed by resume.
+4. One complete talent.
+5. A database-wide dry run and request estimate.
+6. The full backfill with bounded concurrency.
+7. A reconciliation report comparing raw eligible videos with completed
+   sentence outputs and failures.
+
+The full run is not complete merely because the command exits. Completion
+requires zero unexplained missing videos and an explicit accounting of skipped
+languages, empty tracks, validation failures, and exhausted retries.
+
+## Stage 12: dashboard and incremental ingestion
+
+After the backfill is validated, the individual-video dashboard should read
+`text.subtitle_sentence_units` for completed videos. Until a video has a valid
+derived result, it may fall back to raw `text.subtitle_units` with a clear
+status indicator.
+
+New subtitle ingestion should then enqueue only changed video/track checksums.
+This makes reconstruction incremental instead of repeatedly scanning and
+punctuating the complete corpus.
+
+## Maintained implementation map
+
+- [`clean_subtitles.R`](../../../lib/clean_data/clean_subtitles/clean_subtitles.R)
+  contains historical timestamp parsing and deterministic cleaning.
+- [`subtitle_units.R`](../../../lib/clean_data/clean_subtitles/subtitle_units.R)
+  contains overlap removal, speaker-turn handling, block construction,
+  sentence splitting, and approximate timestamp allocation.
+- [`punctuation_client.R`](../../../lib/clean_data/clean_subtitles/punctuation_client.R)
+  contains the FullStop HTTP client and response validation.
+- [`run_subtitle_pipeline.R`](../../../run/Subtitle_clean/run_subtitle_pipeline.R)
+  is the current batch runner and experimental Parquet path.
+- [`run_sentence_reconstruction.R`](../../../run/Subtitle_clean/run_sentence_reconstruction.R)
+  reconstructs one cleaned CSV into the experimental format.
+- [`test_subtitle_sentence_reconstruction.R`](../../../tests/test_subtitle_sentence_reconstruction.R)
+  records the current transformation behavior.
+- [`subtitle_sentence_schema.R`](../../../lib/duckdb/subtitle_sentence_schema.R)
+  creates the derived sentence and block-checkpoint relations.
+- [`subtitle_sentence_publish.R`](../../../lib/duckdb/subtitle_sentence_publish.R)
+  loads canonical subtitle rows, validates reconstruction, publishes one
+  scope transactionally, and reads the result back.
+- [`subtitle_sentence_backfill.R`](../../../lib/duckdb/subtitle_sentence_backfill.R)
+  persists per-block FullStop responses and resumes tracks from matching
+  checkpoints.
+- [`backfill_subtitle_sentences.R`](../../../run/Subtitle_clean/backfill_subtitle_sentences.R)
+  selects canonical tracks, skips current results, and coordinates the
+  sequential full-track backfill.
+- [`test_subtitle_sentence_publish.R`](../../../tests/test_subtitle_sentence_publish.R)
+  verifies dry-run safety, lineage, transaction output, and idempotent
+  republishing in a temporary DuckDB.
+- [`test_subtitle_sentence_backfill.R`](../../../tests/test_subtitle_sentence_backfill.R)
+  verifies immediate block checkpointing and zero-request resume behavior.
+- [`db_connect.R`](../../../lib/duckdb/db_connect.R) resolves the canonical talent
+  lakehouse through `talent_lakehouse_db_path()`.
+- [`bin/linux/subtitles/README.md`](../../../../bin/linux/subtitles/README.md)
+  documents the existing runner and environment variables.
+
+## Implementation work still required
+
+The remaining production milestone consists of:
+
+1. Live full-video pilot and full-corpus rollout.
+2. A final reconciliation report for completed, failed, and unsupported tracks.
+3. Dashboard loading with a raw fallback.
+4. Incremental scheduling after new subtitle ingestion.
+
+```{r}
+#| include: false
+DBI::dbDisconnect(con, shutdown = TRUE)
+```
