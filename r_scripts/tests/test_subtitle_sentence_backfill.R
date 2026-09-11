@@ -20,7 +20,19 @@ source(file.path(
   "r_scripts", "lib", "duckdb", "subtitle_sentence_publish.R"
 ))
 source(file.path(
-  "r_scripts", "lib", "duckdb", "subtitle_sentence_backfill.R"
+  "r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_tracks.R"
+))
+source(file.path(
+  "r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_database.R"
+))
+source(file.path(
+  "r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_checkpoints.R"
+))
+source(file.path(
+  "r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_inference.R"
+))
+source(file.path(
+  "r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_reconstruction.R"
 ))
 
 assert_true <- function(value, message) {

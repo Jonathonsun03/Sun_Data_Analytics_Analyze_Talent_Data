@@ -1057,9 +1057,20 @@ punctuating the complete corpus.
 - [`subtitle_sentence_publish.R`](../../../lib/duckdb/subtitle_sentence_publish.R)
   loads canonical subtitle rows, validates reconstruction, publishes one
   scope transactionally, and reads the result back.
-- [`subtitle_sentence_backfill.R`](../../../lib/duckdb/subtitle_sentence_backfill.R)
-  persists per-block FullStop responses and resumes tracks from matching
-  checkpoints.
+- [`subtitle_backfill_tracks.R`](../../../lib/subtitle_backfill/subtitle_backfill_tracks.R)
+  discovers tracks, loads one track, and checks whether its result is current.
+- [`subtitle_backfill_checkpoints.R`](../../../lib/subtitle_backfill/subtitle_backfill_checkpoints.R)
+  builds, loads, validates, and atomically saves resumable checkpoints.
+- [`subtitle_backfill_database.R`](../../../lib/subtitle_backfill/subtitle_backfill_database.R)
+  owns short-lived DuckDB writes, lock retries, and pipeline-run records.
+- [`subtitle_backfill_inference.R`](../../../lib/subtitle_backfill/subtitle_backfill_inference.R)
+  runs or reuses punctuation inference for each block.
+- [`subtitle_backfill_reconstruction.R`](../../../lib/subtitle_backfill/subtitle_backfill_reconstruction.R)
+  validates and publishes one reconstructed video.
+- [`subtitle_backfill_runtime.R`](../../../lib/subtitle_backfill/subtitle_backfill_runtime.R)
+  reads runner configuration and waits on the collection marker.
+- [`subtitle_backfill_batch.R`](../../../lib/subtitle_backfill/subtitle_backfill_batch.R)
+  loads and processes one candidate track for the batch runner.
 - [`backfill_subtitle_sentences.R`](../../../run/Subtitle_clean/backfill_subtitle_sentences.R)
   selects canonical tracks, skips current results, and coordinates the
   sequential full-track backfill.

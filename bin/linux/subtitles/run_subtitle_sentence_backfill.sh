@@ -20,6 +20,7 @@ DRY_RUN="true"
 TALENT_CODE=""
 VIDEO_ID=""
 MAX_VIDEOS="0"
+MAX_NEW_VIDEOS="0"
 MAX_ATTEMPTS="3"
 REQUEST_PAUSE_SEC="0.2"
 TIMEOUT_SEC="120"
@@ -41,6 +42,8 @@ Options:
   --talent-code CODE           Limit to one exact talent code
   --video-id ID                Limit to one exact video ID
   --max-videos N               Process at most N tracks; 0 means all (default)
+  --max-new-videos N           Process at most N tracks needing work; current
+                               tracks do not count; 0 means all (default)
   --max-attempts N             Maximum FullStop attempts per block (default: 3)
   --request-pause-sec N        Pause after successful model requests (default: 0.2)
   --timeout-sec N              FullStop request timeout in seconds (default: 120)
@@ -74,6 +77,11 @@ while [[ $# -gt 0 ]]; do
     --max-videos)
       [[ $# -ge 2 ]] || { echo "Error: --max-videos requires a value" >&2; exit 1; }
       MAX_VIDEOS="$2"
+      shift 2
+      ;;
+    --max-new-videos)
+      [[ $# -ge 2 ]] || { echo "Error: --max-new-videos requires a value" >&2; exit 1; }
+      MAX_NEW_VIDEOS="$2"
       shift 2
       ;;
     --max-attempts)
@@ -139,6 +147,7 @@ export SUBTITLE_BACKFILL_DRY_RUN="${DRY_RUN}"
 export SUBTITLE_BACKFILL_TALENT_CODE="${TALENT_CODE}"
 export SUBTITLE_BACKFILL_VIDEO_ID="${VIDEO_ID}"
 export SUBTITLE_BACKFILL_MAX_VIDEOS="${MAX_VIDEOS}"
+export SUBTITLE_BACKFILL_MAX_NEW_VIDEOS="${MAX_NEW_VIDEOS}"
 export SUBTITLE_BACKFILL_MAX_ATTEMPTS="${MAX_ATTEMPTS}"
 export SUBTITLE_BACKFILL_REQUEST_PAUSE_SEC="${REQUEST_PAUSE_SEC}"
 export SUBTITLE_PUNCTUATION_TIMEOUT_SEC="${TIMEOUT_SEC}"

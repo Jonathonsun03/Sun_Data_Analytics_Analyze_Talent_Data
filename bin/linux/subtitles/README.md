@@ -23,6 +23,30 @@ bin/linux/subtitles/run_subtitle_sentence_backfill.sh \
   --video-id VIDEO_ID
 ```
 
+Process a bounded number of videos that actually need work:
+
+```bash
+bin/linux/subtitles/run_subtitle_sentence_backfill.sh \
+  --execute \
+  --max-new-videos 10
+```
+
+`--max-videos` still limits the candidate tracks inspected, including current
+tracks. `--max-new-videos` counts only tracks that need inference or publication;
+the options can be combined.
+
+The runner waits before DuckDB reads and completed-video publication while
+`<TALENT_DATALAKE_ROOT>/Logs/collection-active` exists. Set
+`COLLECTION_ACTIVE_MARKER` in both repositories only when the collection and
+analytics environments need an explicit shared path. The fixed polling interval
+is 15 seconds. Inference already in progress finishes without checking the
+marker; its DuckDB publication waits until collection removes the marker.
+
+The Bash file is only the command-line wrapper. Its R entrypoint is
+`r_scripts/run/Subtitle_clean/backfill_subtitle_sentences.R`; focused reusable
+functions live in `r_scripts/lib/subtitle_backfill/`. Their individual
+responsibilities and execution order are mapped in that directory's `README.md`.
+
 Start the complete backfill in a detached tmux session:
 
 ```bash

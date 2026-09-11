@@ -19,102 +19,61 @@ source(here::here(
 ))
 source(here::here("r_scripts", "lib", "duckdb", "subtitle_sentence_schema.R"))
 source(here::here("r_scripts", "lib", "duckdb", "subtitle_sentence_publish.R"))
-source(here::here("r_scripts", "lib", "duckdb", "subtitle_sentence_backfill.R"))
+source(here::here("r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_tracks.R"))
+source(here::here("r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_database.R"))
+source(here::here("r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_checkpoints.R"))
+source(here::here("r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_inference.R"))
+source(here::here("r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_reconstruction.R"))
+source(here::here("r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_runtime.R"))
+source(here::here("r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_batch.R"))
 
 backfill_exit_status <- with_inference_machine({
 load_repo_env(repo_root = here::here())
 
-backfill_env_text <- function(name, default = NULL) {
-  value <- trimws(Sys.getenv(name, unset = ""))
-  if (!nzchar(value)) default else value
-}
+config <- subtitle_backfill_config()
 
-backfill_env_bool <- function(name, default = FALSE) {
-  value <- backfill_env_text(name)
-  if (is.null(value)) return(default)
-  tolower(value) %in% c("1", "true", "yes", "on")
-}
-
-backfill_env_integer <- function(name, default, minimum = 0L) {
-  value <- suppressWarnings(as.integer(backfill_env_text(name, as.character(default))))
-  if (is.na(value) || value < minimum) {
-    stop(name, " must be an integer >= ", minimum, ".", call. = FALSE)
+tracks <- subtitle_backfill_with_reader(
+  config$db_path,
+  config$collection_marker,
+  function(con) {
+    list_subtitle_backfill_tracks(
+      con,
+      talent_code = config$talent_code,
+      video_id = config$video_id
+    )
   }
-  value
-}
-
-backfill_env_number <- function(name, default, minimum = 0) {
-  value <- suppressWarnings(as.numeric(backfill_env_text(name, as.character(default))))
-  if (is.na(value) || value < minimum) {
-    stop(name, " must be numeric and >= ", minimum, ".", call. = FALSE)
-  }
-  value
-}
-
-dry_run <- backfill_env_bool("SUBTITLE_BACKFILL_DRY_RUN", default = TRUE)
-talent_code <- backfill_env_text("SUBTITLE_BACKFILL_TALENT_CODE")
-video_id <- backfill_env_text("SUBTITLE_BACKFILL_VIDEO_ID")
-max_videos <- backfill_env_integer("SUBTITLE_BACKFILL_MAX_VIDEOS", 0L, 0L)
-max_attempts <- backfill_env_integer("SUBTITLE_BACKFILL_MAX_ATTEMPTS", 3L, 1L)
-timeout_sec <- backfill_env_number("SUBTITLE_PUNCTUATION_TIMEOUT_SEC", 120, 1)
-request_pause_sec <- backfill_env_number("SUBTITLE_BACKFILL_REQUEST_PAUSE_SEC", 0.2, 0)
-target_words <- backfill_env_integer("SUBTITLE_BLOCK_TARGET_WORDS", 175L, 1L)
-max_words <- backfill_env_integer("SUBTITLE_BLOCK_MAX_WORDS", 200L, target_words)
-pipeline_version <- backfill_env_text(
-  "SUBTITLE_BACKFILL_PIPELINE_VERSION",
-  "subtitle_sentence_v1"
 )
-punctuation_url <- backfill_env_text(
-  "SUBTITLE_PUNCTUATION_URL",
-  inference_punctuation_url()
-)
-allow_unknown_language <- backfill_env_bool(
-  "SUBTITLE_PUNCTUATION_ALLOW_UNKNOWN_LANGUAGE",
-  default = TRUE
-)
-retry_failed <- backfill_env_bool("SUBTITLE_BACKFILL_RETRY_FAILED", default = FALSE)
-force <- backfill_env_bool("SUBTITLE_BACKFILL_FORCE", default = FALSE)
-source_scope <- "full_track"
-db_path <- talent_lakehouse_db_path()
-
-with_backfill_reader <- function(operation) {
-  con <- duckdb_connect(db_path = db_path, read_only = TRUE)
-  tryCatch(operation(con), finally = DBI::dbDisconnect(con, shutdown = TRUE))
-}
-
-tracks <- with_backfill_reader(function(con) {
-  list_subtitle_backfill_tracks(
-    con,
-    talent_code = talent_code,
-    video_id = video_id
-  )
-})
 if (nrow(tracks) == 0L) stop("No subtitle tracks matched the selection.", call. = FALSE)
 
 language_supported <- subtitle_language_is_english(
   tracks$subtitle_language,
-  allow_unknown = allow_unknown_language
+  allow_unknown = config$allow_unknown_language
 )
 language_supported[is.na(language_supported)] <- FALSE
 unsupported_tracks <- tracks[!language_supported, , drop = FALSE]
 tracks <- tracks[language_supported, , drop = FALSE]
-if (max_videos > 0L) tracks <- utils::head(tracks, max_videos)
+if (config$max_videos > 0L) tracks <- utils::head(tracks, config$max_videos)
 
 message("Subtitle sentence backfill configuration")
-message("  database: ", db_path)
-message("  mode: ", if (dry_run) "DRY RUN" else "EXECUTE")
-message("  pipeline version: ", pipeline_version)
+message("  database: ", config$db_path)
+message("  mode: ", if (config$dry_run) "DRY RUN" else "EXECUTE")
+message("  pipeline version: ", config$pipeline_version)
 message("  selected tracks: ", nrow(tracks))
+message(
+  "  max new videos: ",
+  if (config$max_new_videos == 0L) "all" else config$max_new_videos
+)
+message("  collection marker: ", config$collection_marker)
 message("  selected raw rows: ", format(sum(tracks$raw_rows), big.mark = ","))
 message("  unsupported-language tracks: ", nrow(unsupported_tracks))
-message("  FullStop URL: ", punctuation_url)
-message("  block target/max words: ", target_words, "/", max_words)
-message("  per-block attempts: ", max_attempts)
-message("  request pause seconds: ", request_pause_sec)
-message("  retry failed checkpoints: ", retry_failed)
-message("  force reconstruction: ", force)
+message("  FullStop URL: ", config$punctuation_url)
+message("  block target/max words: ", config$target_words, "/", config$max_words)
+message("  per-block attempts: ", config$max_attempts)
+message("  request pause seconds: ", config$request_pause_sec)
+message("  retry failed checkpoints: ", config$retry_failed)
+message("  force reconstruction: ", config$force)
 
-if (dry_run) {
+if (config$dry_run) {
   print(utils::head(
     tracks[, c(
       "video_id", "talent_code", "content_type", "raw_rows", "title"
@@ -125,13 +84,17 @@ if (dry_run) {
   quit(save = "no", status = 0L)
 }
 
-pipeline_run_id <- start_subtitle_backfill_run(db_path)
+subtitle_backfill_wait_for_collection(
+  config$collection_marker,
+  "starting the backfill run"
+)
+pipeline_run_id <- start_subtitle_backfill_run(config$db_path)
 run_finished <- FALSE
 on.exit({
   if (!run_finished) {
     try(
       finish_subtitle_backfill_run(
-        db_path,
+        config$db_path,
         pipeline_run_id,
         status = "failed",
         error_summary = "Backfill process ended before normal completion."
@@ -148,6 +111,8 @@ requested_blocks <- 0L
 reused_blocks <- 0L
 failure_messages <- character()
 started_at <- Sys.time()
+examined_tracks <- 0L
+new_videos_started <- 0L
 
 for (track_index in seq_len(nrow(tracks))) {
   track <- tracks[track_index, , drop = FALSE]
@@ -167,59 +132,15 @@ for (track_index in seq_len(nrow(tracks))) {
   message(label, " - loading")
 
   track_result <- tryCatch(
-    {
-      video_input <- with_backfill_reader(function(con) {
-        raw_units <- load_subtitle_track_for_backfill(
-          con,
-          video_id = track$video_id[[1]],
-          subtitle_language = track$subtitle_language[[1]],
-          subtitle_track_type = track$subtitle_track_type[[1]]
-        )
-        list(
-          raw_units = raw_units,
-          is_current = !force && subtitle_backfill_track_is_current(
-            con, raw_units, pipeline_version, source_scope
-          ),
-          checkpoints = load_subtitle_backfill_checkpoints(
-            con, track$video_id[[1]], track$subtitle_language[[1]],
-            track$subtitle_track_type[[1]], subtitle_sentence_source_checksum(raw_units),
-            pipeline_version, source_scope
-          )
-        )
-      })
-      raw_units <- video_input$raw_units
-      is_current <- video_input$is_current
-      if (is_current) {
-        list(status = "current")
-      } else {
-        normalized_units <- normalize_subtitle_units_for_reconstruction(raw_units)
-        blocks <- build_punctuation_blocks(
-          normalized_units,
-          target_words = target_words,
-          max_words = max_words,
-          talent_name = track$talent_code[[1]]
-        )
-        message(label, " - blocks=", nrow(blocks))
-        result <- reconstruct_subtitle_track_with_checkpoints(
-          db_path = db_path,
-          raw_units = raw_units,
-          blocks = blocks,
-          pipeline_run_id = pipeline_run_id,
-          pipeline_version = pipeline_version,
-          source_scope = source_scope,
-          punctuation_url = punctuation_url,
-          timeout_sec = timeout_sec,
-          max_attempts = max_attempts,
-          request_pause_sec = request_pause_sec,
-          retry_failed = retry_failed,
-          force = force,
-          checkpoints = video_input$checkpoints
-        )
-        c(list(status = "published"), result)
-      }
-    },
-    error = function(error) list(status = "failed", error = error)
+    subtitle_backfill_process_track(track, config, pipeline_run_id, label),
+    error = function(error) {
+      list(status = "failed", error = error, examined = FALSE, is_new = FALSE)
+    }
   )
+  if (isTRUE(track_result$examined)) examined_tracks <- examined_tracks + 1L
+  if (isTRUE(track_result$is_new)) {
+    new_videos_started <- new_videos_started + 1L
+  }
 
   if (identical(track_result$status, "current")) {
     current_tracks <- current_tracks + 1L
@@ -257,11 +178,19 @@ for (track_index in seq_len(nrow(tracks))) {
     " elapsed_min=",
     sprintf("%.1f", elapsed_minutes)
   )
+  if (config$max_new_videos > 0L &&
+      new_videos_started >= config$max_new_videos) {
+    break
+  }
 }
 
 summary_text <- paste0(
   "selected=",
   nrow(tracks),
+  "; examined=",
+  examined_tracks,
+  "; new_started=",
+  new_videos_started,
   "; published=",
   successful_tracks,
   "; current=",
@@ -281,8 +210,12 @@ if (length(failure_messages) > 0L) {
   )
 }
 summary_text <- substr(summary_text, 1L, 1000L)
+subtitle_backfill_wait_for_collection(
+  config$collection_marker,
+  "finishing the backfill run"
+)
 finish_subtitle_backfill_run(
-  db_path,
+  config$db_path,
   pipeline_run_id,
   status = if (failed_tracks == 0L) "completed" else "failed",
   error_summary = summary_text

@@ -23,10 +23,14 @@ This directory contains the repository's maintained R code.
   - entrypoints live under `r_scripts/run/Subtitle_clean/` and `r_scripts/run/text_replay/`
   - `run_sentence_reconstruction.R` can punctuate an already-cleaned subtitle CSV and write separate sentence-level Parquet output
   - `r_scripts/notebooks/tests/transcript_cleaning/pipeline_overview.qmd` demonstrates the maintained raw-DuckDB-to-FullStop-to-derived-DuckDB path, including an opt-in transactional sample publication and read-back
-  - shared sentence schema, publication, and checkpoint-resume helpers live under `r_scripts/lib/duckdb/subtitle_sentence_*.R`
+  - shared sentence schema and publication helpers live under `r_scripts/lib/duckdb/subtitle_sentence_*.R`; the backfill subsystem lives under `r_scripts/lib/subtitle_backfill/`
+  - `subtitle_backfill_tracks.R` owns track reads and current-result checks; `subtitle_backfill_checkpoints.R` owns checkpoint construction and storage; `subtitle_backfill_database.R` owns short write connections and run records
+  - `subtitle_backfill_inference.R` handles the block loop; `subtitle_backfill_reconstruction.R` validates and publishes one video; `subtitle_backfill_runtime.R` loads runner settings and waits on collection; `subtitle_backfill_batch.R` processes one candidate track
   - `r_scripts/run/Subtitle_clean/backfill_subtitle_sentences.R` is the canonical resumable full-track DuckDB backfill entrypoint, wrapped by `bin/linux/subtitles/run_subtitle_sentence_backfill.sh`
   - backfill reads one video's source/status/checkpoints and disconnects before inference; successful blocks are saved to one persistent RDS file per video under `<Talent DataLake root>/Processed/subtitle_backfill_checkpoints/` (override: `SUBTITLE_BACKFILL_CHECKPOINT_DIR`)
   - completed videos are source-checksum-validated and written with their checkpoints in the existing transaction; database lock conflicts use fixed-delay retries, while local results survive publication failures
+  - `--max-new-videos` limits tracks requiring work without changing the existing `--max-videos` candidate limit
+  - the runner waits before DuckDB reads and completed-video publication while `<Talent DataLake root>/Logs/collection-active` exists
 - R-based stream summarization
   - the maintained runner is `r_scripts/run/Text_Replay_Analysis/Text_replay_analysis_openAI`
   - shared summarization helpers live under `r_scripts/lib/stream_summaries/`
