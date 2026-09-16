@@ -180,12 +180,13 @@ real power commands:
 python3 -m unittest discover -s py_scripts/tests -p test_inference_shutdown_guard.py
 ```
 
-The guard is implemented but not deployed. SSH authentication to the host is
-currently unavailable. The live inference API has no documented workload
-endpoint, so a **verified service coordinator adapter is still required**.
-`config/inference_shutdown_guard.example.json` deliberately fails closed with
-`coverage_verified: false` and no adapter commands. Do not enable it by replacing
-those commands with health checks or process/CPU checks.
+The deployed CT 106 service installs `lib/inference_activity_coordinator.py`.
+It atomically closes `/v1/*` admission and counts every admitted request through
+response completion, including requests waiting for the model semaphore. The
+Proxmox-side `run/inference_guard_adapter.py` reaches its loopback-only prepare
+and release routes with `pct exec 106`. Health, process, and CPU checks are not
+used as idle evidence. Each `with_inference_machine()` scope also holds a batch
+reservation, so work between consecutive model requests remains visible.
 
 ### Service coordinator adapter contract
 
@@ -217,11 +218,11 @@ and JSON only when it has a complete observation, for example:
 
 All three counts must be integer zero. Missing fields, partial coverage,
 stale request IDs, timeouts, malformed JSON, or nonzero counts block shutdown.
-The coordinator must protect other callers' leases, including batches that have
-not issued their next request yet. The current caller-local R lock alone does
-not provide that protection. Server integration must register/release those
-leases before automatic shutdown is enabled. Other VMs/services sharing the
-physical host must also be covered if they do inference work.
+The coordinator protects other callers' reservations, including batches that
+have not issued their next request yet. Callers using `with_inference_machine()`
+register and release these reservations over container SSH. Other producers on
+this physical host must use the same lifecycle scope to receive between-request
+protection; direct HTTP requests remain protected while admitted.
 
 Release receives the same request ID and must be idempotent, resume admission
 only for that request's barrier, and prevent a delayed prepare with the same ID

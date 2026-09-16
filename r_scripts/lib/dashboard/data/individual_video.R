@@ -132,27 +132,61 @@ dashboard_load_individual_video_transcript <- function(
   )
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  subtitles <- DBI::dbGetQuery(
-    con,
-    paste(
-      "SELECT",
-      "  channel.channel_name AS speaker,",
-      "  subtitle.subtitle_start AS timestamp_raw,",
-      "  subtitle.subtitle_text AS dialogue,",
-      "  subtitle.sequence_number AS source_order",
-      "FROM text.subtitle_units AS subtitle",
-      "JOIN catalog.videos AS video",
-      "  ON video.talent_code = subtitle.talent_code",
-      " AND video.channel_id = subtitle.channel_id",
-      " AND video.video_id = subtitle.video_id",
-      "JOIN catalog.channels AS channel",
-      "  ON channel.talent_code = subtitle.talent_code",
-      " AND channel.channel_id = subtitle.channel_id",
-      "WHERE subtitle.talent_code = ? AND subtitle.video_id = ?",
-      "ORDER BY subtitle.sequence_number"
-    ),
-    params = list(talent_code, video_id)
-  )
+  subtitles <- data.frame()
+  subtitle_status <- "missing"
+  if (DBI::dbExistsTable(con, DBI::Id(schema = "text", table = "subtitle_sentence_units"))) {
+    subtitles <- DBI::dbGetQuery(
+      con,
+      paste(
+        "SELECT channel.channel_name AS speaker,",
+        "  subtitle.start_sec AS timestamp_raw,",
+        "  subtitle.sentence_text AS dialogue,",
+        "  ROW_NUMBER() OVER (ORDER BY subtitle.block_number, subtitle.sentence_number) AS source_order",
+        "FROM text.subtitle_sentence_units AS subtitle",
+        "JOIN catalog.videos AS video",
+        "  ON video.talent_code = subtitle.talent_code",
+        " AND video.channel_id = subtitle.channel_id",
+        " AND video.video_id = subtitle.video_id",
+        "JOIN catalog.channels AS channel",
+        "  ON channel.talent_code = subtitle.talent_code",
+        " AND channel.channel_id = subtitle.channel_id",
+        "WHERE subtitle.talent_code = ? AND subtitle.video_id = ?",
+        "  AND subtitle.source_scope = 'full_track'",
+        "  AND TRIM(subtitle.sentence_text) <> ''",
+        "ORDER BY source_order"
+      ),
+      params = list(talent_code, video_id)
+    )
+    if (nrow(subtitles) > 0) subtitle_status <- "cleaned"
+  }
+
+  if (nrow(subtitles) == 0) {
+    subtitles <- DBI::dbGetQuery(
+      con,
+      paste(
+        "SELECT",
+        "  channel.channel_name AS speaker,",
+        "  subtitle.subtitle_start AS timestamp_raw,",
+        "  subtitle.subtitle_text AS dialogue,",
+        "  subtitle.sequence_number AS source_order",
+        "FROM text.subtitle_units AS subtitle",
+        "JOIN catalog.videos AS video",
+        "  ON video.talent_code = subtitle.talent_code",
+        " AND video.channel_id = subtitle.channel_id",
+        " AND video.video_id = subtitle.video_id",
+        "JOIN catalog.channels AS channel",
+        "  ON channel.talent_code = subtitle.talent_code",
+        " AND channel.channel_id = subtitle.channel_id",
+        "WHERE subtitle.talent_code = ? AND subtitle.video_id = ?",
+        "ORDER BY subtitle.sequence_number"
+      ),
+      params = list(talent_code, video_id)
+    )
+
+    if (any(!is.na(subtitles$dialogue) & nzchar(trimws(subtitles$dialogue)))) {
+      subtitle_status <- "raw"
+    }
+  }
 
   chat <- DBI::dbGetQuery(
     con,
@@ -179,7 +213,11 @@ dashboard_load_individual_video_transcript <- function(
     dplyr::transmute(
       source = "subtitle",
       speaker = as.character(.data$speaker),
-      seconds = dashboard_individual_video_timecode_seconds(.data$timestamp_raw),
+      seconds = if (subtitle_status == "cleaned") {
+        as.numeric(.data$timestamp_raw)
+      } else {
+        dashboard_individual_video_timecode_seconds(.data$timestamp_raw)
+      },
       dialogue = as.character(.data$dialogue),
       source_order = as.numeric(.data$source_order)
     )
@@ -192,7 +230,7 @@ dashboard_load_individual_video_transcript <- function(
       source_order = as.numeric(.data$source_order)
     )
 
-  dplyr::bind_rows(subtitles, chat) %>%
+  transcript <- dplyr::bind_rows(subtitles, chat) %>%
     dplyr::mutate(
       speaker = dplyr::case_when(
         !is.na(.data$speaker) & nzchar(trimws(.data$speaker)) ~ .data$speaker,
@@ -211,6 +249,8 @@ dashboard_load_individual_video_transcript <- function(
     dplyr::select(dplyr::all_of(c(
       "speaker", "seconds", "dialogue", "source", "source_order"
     )))
+  attr(transcript, "subtitle_status") <- subtitle_status
+  transcript
 }
 
 dashboard_load_individual_video_history <- function(

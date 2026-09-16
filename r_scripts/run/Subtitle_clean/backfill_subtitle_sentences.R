@@ -23,6 +23,7 @@ source(here::here("r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_tr
 source(here::here("r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_database.R"))
 source(here::here("r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_checkpoints.R"))
 source(here::here("r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_inference.R"))
+source(here::here("r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_speakers.R"))
 source(here::here("r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_reconstruction.R"))
 source(here::here("r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_runtime.R"))
 source(here::here("r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_batch.R"))
@@ -39,11 +40,16 @@ tracks <- subtitle_backfill_with_reader(
     list_subtitle_backfill_tracks(
       con,
       talent_code = config$talent_code,
-      video_id = config$video_id
+      video_id = config$video_id,
+      pipeline_version = config$pipeline_version,
+      source_scope = config$source_scope,
+      exclude_current = !config$force
     )
   }
 )
-if (nrow(tracks) == 0L) stop("No subtitle tracks matched the selection.", call. = FALSE)
+if (nrow(tracks) == 0L) {
+  message("No subtitle tracks require backfill for the current selection.")
+}
 
 language_supported <- subtitle_language_is_english(
   tracks$subtitle_language,
@@ -82,6 +88,10 @@ if (config$dry_run) {
   ))
   message("Dry run complete. No model calls or database writes were made.")
   quit(save = "no", status = 0L)
+}
+
+if (nrow(tracks) > 0L) {
+  ensure_inference_machine(config$punctuation_url)
 }
 
 subtitle_backfill_wait_for_collection(
@@ -131,12 +141,22 @@ for (track_index in seq_len(nrow(tracks))) {
   message("")
   message(label, " - loading")
 
+  attempt_id <- start_subtitle_backfill_attempt(
+    config$db_path,
+    pipeline_run_id,
+    track,
+    track_index,
+    config$pipeline_version,
+    config$source_scope
+  )
+
   track_result <- tryCatch(
     subtitle_backfill_process_track(track, config, pipeline_run_id, label),
     error = function(error) {
       list(status = "failed", error = error, examined = FALSE, is_new = FALSE)
     }
   )
+  finish_subtitle_backfill_attempt(config$db_path, attempt_id, track_result)
   if (isTRUE(track_result$examined)) examined_tracks <- examined_tracks + 1L
   if (isTRUE(track_result$is_new)) {
     new_videos_started <- new_videos_started + 1L
@@ -185,15 +205,15 @@ for (track_index in seq_len(nrow(tracks))) {
 }
 
 summary_text <- paste0(
-  "selected=",
+  "backlog_at_start=",
   nrow(tracks),
-  "; examined=",
-  examined_tracks,
-  "; new_started=",
+  "; batch_limit=",
+  if (config$max_new_videos == 0L) "all" else config$max_new_videos,
+  "; attempted=",
   new_videos_started,
-  "; published=",
+  "; completed=",
   successful_tracks,
-  "; current=",
+  "; skipped_current=",
   current_tracks,
   "; failed=",
   failed_tracks,

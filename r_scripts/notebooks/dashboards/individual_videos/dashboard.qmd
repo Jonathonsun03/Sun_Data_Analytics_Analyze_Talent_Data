@@ -61,6 +61,17 @@ execute:
   width: 100% !important;
 }
 
+.transcript-panel {
+  display: block;
+  width: 100%;
+}
+
+.transcript-panel > .shiny-html-output {
+  flex: none;
+  height: auto;
+  min-height: 0;
+}
+
 #video_transcript table.dataTable td:nth-child(1),
 #video_transcript table.dataTable td:nth-child(2) {
   vertical-align: top;
@@ -414,7 +425,11 @@ analytics snapshot date range does not filter this page.
 
 ```{r}
 #| title: "Full Video Transcript"
-DT::dataTableOutput("video_transcript")
+htmltools::div(
+  class = "transcript-panel",
+  uiOutput("transcript_notice"),
+  uiOutput("transcript_table_container")
+)
 ```
 
 ```{r}
@@ -839,14 +854,35 @@ output$snapshot_table <- DT::renderDataTable({
   dashboard_datatable(table, page_length = 20, scroll_x = TRUE)
 })
 
+output$transcript_notice <- renderUI({
+  transcript <- video_transcript()
+  status <- attr(transcript, "subtitle_status")
+  message <- switch(
+    status,
+    cleaned = "Showing the cleaned transcript with available chat messages.",
+    raw = "A cleaned transcript is not available. Showing raw subtitles with available chat messages; subtitles may contain repeated or overlapping text.",
+    missing = if (nrow(transcript) > 0) {
+      "No video transcript is available. Showing chat messages only."
+    } else {
+      "No video transcript or chat messages are available for this video."
+    }
+  )
+  htmltools::div(
+    class = if (identical(status, "cleaned")) "alert alert-info" else "alert alert-warning",
+    role = "status",
+    message
+  )
+})
+
+output$transcript_table_container <- renderUI({
+  if (nrow(video_transcript()) == 0) return(NULL)
+  DT::dataTableOutput("video_transcript")
+})
+
 output$video_transcript <- DT::renderDataTable({
   transcript <- dashboard_individual_video_transcript_table(video_transcript())
-  validate(
-    need(
-      nrow(transcript) > 0,
-      "No subtitle or chat transcript is available for this video."
-    )
-  )
+  # Explicitly clear the widget instead of leaving its previous DOM on validation failure.
+  if (nrow(transcript) == 0) return(NULL)
   DTSettings(
     transcript,
     class = "display stripe hover compact",

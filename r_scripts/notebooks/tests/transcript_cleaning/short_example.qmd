@@ -11,7 +11,7 @@ params:
   row_limit: 200
   run_fullstop: true
   publish_example: false
-  pipeline_version: "subtitle_sentence_v1"
+  pipeline_version: "subtitle_sentence_v2"
 execute:
   echo: true
   warning: false

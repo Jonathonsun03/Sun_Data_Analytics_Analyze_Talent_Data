@@ -31,9 +31,46 @@ bin/linux/subtitles/run_subtitle_sentence_backfill.sh \
   --max-new-videos 10
 ```
 
-`--max-videos` still limits the candidate tracks inspected, including current
-tracks. `--max-new-videos` counts only tracks that need inference or publication;
-the options can be combined.
+The initial DuckDB query excludes tracks already current for the exact source
+checksum and pipeline version. `--max-videos` limits that filtered candidate
+list; with `--force`, it limits the unfiltered list. `--max-new-videos` remains
+the batch work limit, and the options can be combined.
+
+Before an executable batch processes its first video, it checks the inference
+API. A ready API skips wake-on-LAN. If the API is unavailable, the runner sends
+one wake packet and waits for the host, container, and API, stopping after the
+configured readiness timeout rather than polling indefinitely.
+
+The checked-in user-systemd timer runs 50 new videos daily at 07:00
+America/New_York. It sets `INFERENCE_MANAGE_CONTAINER=true`, because CT 106 may
+remain stopped after the physical host wakes. Automatic physical-host shutdown
+is off by default, so the daily backfill leaves the NLP host running when it
+finishes.
+
+Shutdown remains available as an explicit opt-in. Set the following environment
+variable for a manual run or add the same `Environment=` setting to a private
+systemd override:
+
+```bash
+INFERENCE_MACHINE_SHUTDOWN_GUARD_COMMAND='python3 /opt/sun-data/py_scripts/run/inference_shutdown_guard.py'
+```
+
+Install or refresh the default timer with:
+
+```bash
+mkdir -p "$HOME/.config/systemd/user"
+cp config/systemd/sun-data-subtitle-backfill.{service,timer} \
+  "$HOME/.config/systemd/user/"
+systemctl --user daemon-reload
+systemctl --user enable --now sun-data-subtitle-backfill.timer
+```
+
+Inspect the next run and recent output with:
+
+```bash
+systemctl --user list-timers sun-data-subtitle-backfill.timer
+journalctl --user -u sun-data-subtitle-backfill.service
+```
 
 The runner waits before DuckDB reads and completed-video publication while
 `<TALENT_DATALAKE_ROOT>/Logs/collection-active` exists. Set

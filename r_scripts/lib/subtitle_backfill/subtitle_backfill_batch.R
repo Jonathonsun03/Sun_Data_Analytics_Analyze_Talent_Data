@@ -58,6 +58,21 @@ subtitle_backfill_process_track <- function(track, config, pipeline_run_id, labe
       retry_failed = config$retry_failed,
       force = config$force,
       checkpoints = video_input$checkpoints,
+      speaker_change_fn = if (config$speaker_turns_enabled) {
+        function(previous, sentence_a, sentence_b, following) {
+          request_subtitle_speaker_change(
+            previous,
+            sentence_a,
+            sentence_b,
+            following,
+            url = config$speaker_change_url,
+            model = config$speaker_change_model,
+            timeout_sec = config$speaker_change_timeout_sec
+          )
+        }
+      } else {
+        NULL
+      },
       before_publish = function() {
         subtitle_backfill_wait_for_collection(
           config$collection_marker,

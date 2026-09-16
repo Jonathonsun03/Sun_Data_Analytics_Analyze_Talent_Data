@@ -16,10 +16,24 @@ subtitle_backfill_relation_exists <- function(con, schema_name, relation_name) {
   )$available[[1]]
 }
 
+subtitle_backfill_column_exists <- function(con, schema_name, table_name, column_name) {
+  DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT COUNT(*) = 1 AS available FROM information_schema.columns",
+      "WHERE table_schema = ? AND table_name = ? AND column_name = ?"
+    ),
+    params = list(schema_name, table_name, column_name)
+  )$available[[1]]
+}
+
 list_subtitle_backfill_tracks <- function(
     con,
     talent_code = NULL,
-    video_id = NULL) {
+    video_id = NULL,
+    pipeline_version = "subtitle_sentence_v2",
+    source_scope = "full_track",
+    exclude_current = FALSE) {
   conditions <- character()
   parameters <- list()
   if (!is.null(talent_code) && nzchar(trimws(as.character(talent_code)))) {
@@ -30,27 +44,74 @@ list_subtitle_backfill_tracks <- function(
     conditions <- c(conditions, "subtitle.video_id = ?")
     parameters <- c(parameters, list(trimws(as.character(video_id))))
   }
-  where_sql <- if (length(conditions) == 0L) {
+  source_where_sql <- if (length(conditions) == 0L) {
     ""
   } else {
     paste("WHERE", paste(conditions, collapse = " AND "))
   }
+  can_exclude_current <- isTRUE(exclude_current) &&
+    subtitle_backfill_relation_exists(con, "text", "subtitle_sentence_units") &&
+    subtitle_backfill_column_exists(
+      con,
+      "text",
+      "subtitle_sentence_units",
+      "inferred_speaker_turn_id"
+    )
+  current_filter_sql <- if (can_exclude_current) {
+    parameters <- c(parameters, list(source_scope, pipeline_version))
+    paste(
+      "WHERE NOT EXISTS (",
+      "SELECT 1 FROM text.subtitle_sentence_units AS sentence",
+      "WHERE sentence.video_id = track.video_id",
+      "AND COALESCE(sentence.subtitle_language, '') =",
+      "COALESCE(track.subtitle_language, '')",
+      "AND COALESCE(sentence.subtitle_track_type, '') =",
+      "COALESCE(track.subtitle_track_type, '')",
+      "AND sentence.source_scope = ?",
+      "AND sentence.source_checksum_sha256 = track.source_checksum_sha256",
+      "AND sentence.pipeline_version = ?",
+      "AND sentence.inferred_speaker_turn_id IS NOT NULL",
+      ")"
+    )
+  } else {
+    ""
+  }
+
+  row_checksum_sql <- paste(
+    "COALESCE(CAST(subtitle.subtitle_unit_key AS VARCHAR), '<NA>')",
+    "|| chr(31) || COALESCE(CAST(subtitle.video_id AS VARCHAR), '<NA>')",
+    "|| chr(31) || COALESCE(CAST(subtitle.sequence_number AS VARCHAR), 'NA')",
+    "|| chr(31) || COALESCE(CAST(subtitle.subtitle_start AS VARCHAR), '<NA>')",
+    "|| chr(31) || COALESCE(CAST(subtitle.subtitle_end AS VARCHAR), '<NA>')",
+    "|| chr(31) || COALESCE(CAST(subtitle.subtitle_text AS VARCHAR), '<NA>')",
+    "|| chr(31) || COALESCE(CAST(subtitle.subtitle_language AS VARCHAR), '<NA>')",
+    "|| chr(31) || COALESCE(CAST(subtitle.subtitle_track_type AS VARCHAR), '<NA>')"
+  )
 
   DBI::dbGetQuery(
     con,
     paste(
+      "WITH track AS (",
       "SELECT subtitle.video_id, subtitle.channel_id, subtitle.talent_code,",
       "subtitle.subtitle_language, subtitle.subtitle_track_type,",
       "video.content_type, video.title, COUNT(*) AS raw_rows,",
       "MIN(subtitle.sequence_number) AS sequence_start,",
-      "MAX(subtitle.sequence_number) AS sequence_end",
+      "MAX(subtitle.sequence_number) AS sequence_end,",
+      "sha256(string_agg(", row_checksum_sql, ", chr(31)",
+      "ORDER BY subtitle.video_id, subtitle.sequence_number",
+      ")) AS source_checksum_sha256",
       "FROM text.subtitle_units AS subtitle",
       "LEFT JOIN catalog.videos AS video USING (video_id)",
-      where_sql,
+      source_where_sql,
       "GROUP BY subtitle.video_id, subtitle.channel_id, subtitle.talent_code,",
       "subtitle.subtitle_language, subtitle.subtitle_track_type,",
       "video.content_type, video.title",
-      "ORDER BY raw_rows, subtitle.video_id"
+      ")",
+      "SELECT video_id, channel_id, talent_code, subtitle_language,",
+      "subtitle_track_type, content_type, title, raw_rows, sequence_start,",
+      "sequence_end FROM track",
+      current_filter_sql,
+      "ORDER BY raw_rows, video_id"
     ),
     params = parameters
   )
@@ -99,6 +160,14 @@ subtitle_backfill_track_is_current <- function(
   )) {
     return(FALSE)
   }
+  if (!subtitle_backfill_column_exists(
+    con,
+    "text",
+    "subtitle_sentence_units",
+    "inferred_speaker_turn_id"
+  )) {
+    return(FALSE)
+  }
 
   source_checksum <- subtitle_sentence_source_checksum(raw_units)
   video_id <- subtitle_sentence_single_value(raw_units$video_id, "video_id")
@@ -118,7 +187,8 @@ subtitle_backfill_track_is_current <- function(
       "AND COALESCE(subtitle_language, '') = COALESCE(CAST(? AS VARCHAR), '')",
       "AND COALESCE(subtitle_track_type, '') = COALESCE(CAST(? AS VARCHAR), '')",
       "AND source_scope = ? AND source_checksum_sha256 = ?",
-      "AND pipeline_version = ?"
+      "AND pipeline_version = ?",
+      "AND inferred_speaker_turn_id IS NOT NULL"
     ),
     params = list(
       video_id,
@@ -131,4 +201,3 @@ subtitle_backfill_track_is_current <- function(
   )
   current$sentence_rows[[1]] > 0L
 }
-

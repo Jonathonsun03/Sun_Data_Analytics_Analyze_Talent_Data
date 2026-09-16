@@ -84,7 +84,35 @@ for (index in c(1L, 3L)) {
     dry_run = FALSE
   )
 }
+pending_tracks <- list_subtitle_backfill_tracks(
+  con,
+  pipeline_version = "subtitle_sentence_v2",
+  source_scope = "full_track",
+  exclude_current = TRUE
+)
+assert_equal(
+  pending_tracks$video_id,
+  c("b-new", "d-new"),
+  "Initial candidate query did not exclude current tracks"
+)
 DBI::dbDisconnect(con, shutdown = TRUE)
+
+no_work_status <- system2(
+  file.path(R.home("bin"), "Rscript"),
+  c(
+    "--vanilla",
+    "r_scripts/run/Subtitle_clean/backfill_subtitle_sentences.R"
+  ),
+  env = c(
+    "TALENT_LOAD_REPO_ENV=false",
+    paste0("TALENT_DATALAKE_ROOT=", test_root),
+    "SUBTITLE_BACKFILL_DRY_RUN=true",
+    "SUBTITLE_BACKFILL_VIDEO_ID=a-current"
+  ),
+  stdout = FALSE,
+  stderr = FALSE
+)
+assert_equal(no_work_status, 0L, "An empty filtered selection should succeed")
 
 for (index in c(2L, 4L)) {
   raw <- raw_tracks[[index]]
@@ -94,7 +122,7 @@ for (index in c(2L, 4L)) {
     built$blocks,
     subtitle_sentence_source_checksum(raw),
     "local-test-run",
-    "subtitle_sentence_v1",
+    "subtitle_sentence_v2",
     "full_track",
     "complete",
     1L,
@@ -118,7 +146,9 @@ runner_status <- system2(
     paste0("TALENT_DATALAKE_ROOT=", test_root),
     "SUBTITLE_BACKFILL_DRY_RUN=false",
     "SUBTITLE_BACKFILL_MAX_VIDEOS=0",
-    "SUBTITLE_BACKFILL_MAX_NEW_VIDEOS=1"
+    "SUBTITLE_BACKFILL_MAX_NEW_VIDEOS=1",
+    "SUBTITLE_SPEAKER_TURNS_ENABLED=false",
+    "SUBTITLE_PUNCTUATION_URL=https://example.com/v1/punctuate"
   ),
   stdout = FALSE,
   stderr = FALSE
@@ -141,11 +171,35 @@ summary <- DBI::dbGetQuery(
     "ORDER BY started_at DESC LIMIT 1"
   )
 )$error_summary[[1]]
+attempts <- DBI::dbGetQuery(
+  con,
+  paste(
+    "SELECT candidate_position, video_id, status, sentences, blocks,",
+    "requested_blocks, reused_blocks, publication_pipeline_run_id, error_summary",
+    "FROM ops.subtitle_backfill_attempts ORDER BY candidate_position"
+  )
+)
 DBI::dbDisconnect(con, shutdown = TRUE)
 
 assert_equal(published, "b-new", "--max-new-videos did not stop after one new video")
-if (!grepl("examined=2; new_started=1; published=1; current=1", summary, fixed = TRUE)) {
-  stop("Current videos incorrectly consumed the new-video limit: ", summary, call. = FALSE)
+stopifnot(
+  nrow(attempts) == 1L,
+  attempts$candidate_position[[1]] == 1L,
+  attempts$video_id[[1]] == "b-new",
+  attempts$status[[1]] == "published",
+  attempts$sentences[[1]] == 1L,
+  attempts$blocks[[1]] == 1L,
+  attempts$requested_blocks[[1]] == 0L,
+  attempts$reused_blocks[[1]] == 1L,
+  !is.na(attempts$publication_pipeline_run_id[[1]]),
+  is.na(attempts$error_summary[[1]])
+)
+if (!grepl(
+  "backlog_at_start=2; batch_limit=1; attempted=1; completed=1; skipped_current=0",
+  summary,
+  fixed = TRUE
+)) {
+  stop("Filtered candidate accounting was incorrect: ", summary, call. = FALSE)
 }
 
 cat("subtitle backfill runner control tests passed\n")

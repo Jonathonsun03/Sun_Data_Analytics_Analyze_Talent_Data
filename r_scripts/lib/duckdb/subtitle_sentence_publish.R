@@ -226,7 +226,7 @@ prepare_subtitle_reconstruction_records <- function(
     blocks,
     sentence_units,
     pipeline_run_id,
-    pipeline_version = "subtitle_sentence_v1",
+    pipeline_version = "subtitle_sentence_v2",
     source_scope = "full_track") {
   validate_subtitle_reconstruction(raw_units, blocks, sentence_units)
 
@@ -253,6 +253,10 @@ prepare_subtitle_reconstruction_records <- function(
     USE.NAMES = FALSE
   )
   names(block_checksums) <- as.character(blocks$block_number)
+
+  if (!"inferred_speaker_turn_id" %in% names(sentence_units)) {
+    sentence_units$inferred_speaker_turn_id <- sentence_units$speaker_turn_id
+  }
 
   sentence_rows <- sentence_units |>
     dplyr::mutate(
@@ -311,7 +315,8 @@ prepare_subtitle_reconstruction_records <- function(
       "block_input_checksum_sha256",
       "pipeline_version",
       "pipeline_run_id",
-      "created_at"
+      "created_at",
+      "inferred_speaker_turn_id"
     )))
 
   checkpoint_rows <- purrr::map_dfr(seq_len(nrow(blocks)), function(i) {
@@ -381,7 +386,7 @@ publish_subtitle_reconstruction <- function(
     raw_units,
     blocks,
     sentence_units,
-    pipeline_version = "subtitle_sentence_v1",
+    pipeline_version = "subtitle_sentence_v2",
     source_scope = "full_track",
     dry_run = TRUE,
     checkpoint_attempts = NULL) {

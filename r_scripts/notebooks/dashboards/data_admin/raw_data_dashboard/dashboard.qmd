@@ -26,6 +26,170 @@ execute:
   font-size: 0.80rem;
 }
 
+.transcript-workflow {
+  color: var(--bs-secondary-color);
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.transcript-processes-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 1rem;
+  align-items: stretch;
+  width: 100%;
+}
+
+.transcript-processes-layout > .transcript-browser-pane,
+.transcript-processes-layout > .transcript-detail-pane {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  padding: 1rem;
+}
+
+.transcript-processes-layout .html-fill-item {
+  flex: 0 0 auto;
+}
+
+.transcript-processes-layout .transcript-header-actions {
+  flex-direction: row;
+}
+
+.transcript-processes-layout .nav-tabs {
+  display: flex;
+  flex-direction: row;
+  gap: 1rem;
+}
+
+.transcript-processes-layout h3 {
+  font-size: 1rem;
+  margin: 0 0 1rem;
+}
+
+.transcript-detail-pane .tab-content {
+  max-height: 68vh;
+  overflow: auto;
+}
+
+@media (max-width: 900px) {
+  .transcript-processes-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.transcript-batch-summary,
+.transcript-video-metadata {
+  display: grid;
+  gap: 0.55rem 0.9rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.transcript-summary-item,
+.transcript-metadata-item {
+  min-width: 0;
+}
+
+.transcript-summary-label,
+.transcript-metadata-label {
+  color: var(--bs-secondary-color);
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.transcript-summary-value,
+.transcript-metadata-value {
+  display: block;
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+
+.transcript-summary-wide {
+  grid-column: 1 / -1;
+}
+
+.transcript-panel-divider {
+  border-top: 1px solid var(--bs-border-color);
+  margin: 0.85rem 0;
+}
+
+.transcript-video-heading {
+  margin-bottom: 0.8rem;
+}
+
+.transcript-video-heading h4 {
+  font-size: 1.12rem;
+  margin-bottom: 0.2rem;
+}
+
+.transcript-video-id {
+  color: var(--bs-secondary-color);
+  font-family: var(--bs-font-monospace);
+  font-size: 0.78rem;
+}
+
+.transcript-header-actions {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.transcript-header-actions > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.transcript-header-actions .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+#transcript_tracks table.dataTable td {
+  vertical-align: top;
+  white-space: normal;
+}
+
+.transcript-reading-list {
+  max-height: 68vh;
+  overflow-y: auto;
+  padding-right: 0.35rem;
+}
+
+.transcript-reading-row {
+  border-bottom: 1px solid var(--bs-border-color);
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  padding: 0.7rem 0.25rem;
+}
+
+.transcript-reading-time {
+  color: var(--bs-primary);
+  font-family: var(--bs-font-monospace);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.transcript-reading-text {
+  font-size: 0.96rem;
+  line-height: 1.5;
+}
+
+.transcript-empty-state {
+  color: var(--bs-secondary-color);
+  padding: 1.5rem 0.5rem;
+  text-align: center;
+}
+
 @media (max-width: 768px) {
   .dashboard-page .card,
   .dashboard-page .card:not(.bslib-value-box) {
@@ -39,6 +203,19 @@ execute:
 
   .dataTables_wrapper {
     font-size: 0.72rem;
+  }
+
+  .transcript-header-actions {
+    display: block;
+  }
+
+  .transcript-header-actions .btn {
+    margin-top: 0.5rem;
+  }
+
+  .transcript-reading-row {
+    gap: 0.35rem;
+    grid-template-columns: 1fr;
   }
 }
 </style>
@@ -95,6 +272,12 @@ raw_admin_value <- function(value, fallback = "—") {
   as.character(value[[1]])
 }
 
+raw_admin_values <- function(values, fallback = "—") {
+  values <- as.character(values)
+  values[is.na(values) | !nzchar(values)] <- fallback
+  values
+}
+
 raw_admin_time <- function(value) {
   if (length(value) == 0L || is.na(value[[1]])) return("Not available")
   parsed <- as.POSIXct(value[[1]], tz = "UTC")
@@ -117,7 +300,37 @@ raw_admin_input <- function(value, fallback) {
   if (is.null(value) || length(value) == 0L) fallback else value
 }
 
-raw_admin_table <- function(data, page_length = 10L, filter = "top") {
+raw_admin_metadata_item <- function(label, value, wide = FALSE) {
+  tags$div(
+    class = paste(
+      "transcript-metadata-item",
+      if (isTRUE(wide)) "transcript-summary-wide" else ""
+    ),
+    tags$span(class = "transcript-metadata-label", label),
+    tags$span(class = "transcript-metadata-value", raw_admin_value(value))
+  )
+}
+
+raw_admin_timestamp <- function(value) {
+  if (length(value) == 0L || is.na(value[[1]])) return("—")
+  seconds <- suppressWarnings(as.numeric(value[[1]]))
+  if (is.na(seconds) || seconds < 0) return("—")
+  whole_seconds <- floor(seconds)
+  hours <- whole_seconds %/% 3600L
+  minutes <- (whole_seconds %% 3600L) %/% 60L
+  remaining_seconds <- whole_seconds %% 60L
+  if (hours > 0L) {
+    sprintf("%02d:%02d:%02d", hours, minutes, remaining_seconds)
+  } else {
+    sprintf("%02d:%02d", minutes, remaining_seconds)
+  }
+}
+
+raw_admin_table <- function(
+    data,
+    page_length = 10L,
+    filter = "top",
+    selection = "none") {
   if (nrow(data) == 0L) {
     data <- data.frame(message = "No rows are available for this view.")
     filter <- "none"
@@ -126,6 +339,7 @@ raw_admin_table <- function(data, page_length = 10L, filter = "top") {
     data,
     rownames = FALSE,
     filter = filter,
+    selection = selection,
     escape = TRUE,
     options = list(
       pageLength = page_length,
@@ -166,23 +380,7 @@ checkboxInput(
 
 uiOutput("database_freshness")
 hr()
-uiOutput("relation_selector")
-uiOutput("talent_filter")
-textInput("video_filter", "Exact video ID", value = "")
-numericInput(
-  "row_limit",
-  "Maximum preview rows",
-  value = 500,
-  min = 25,
-  max = 5000,
-  step = 25
-)
-actionButton("load_preview", "Load preview")
-hr()
-helpText(
-  "Filters apply when the selected relation contains talent_code or video_id. ",
-  "All database connections are read-only."
-)
+helpText("Database refresh controls apply to the entire dashboard. All connections are read-only.")
 ```
 
 # Overview
@@ -265,9 +463,32 @@ DTOutput("health_checks")
 
 # Explore Relations
 
-Choose a relation and optional exact talent or video filter in the sidebar.
+Choose a relation and optional exact talent or video filter on this page.
 The preview is deliberately row-limited; the download contains the same rows
 shown in the current preview.
+
+## Row {height=22%}
+
+```{r}
+#| title: "Relation Preview Controls"
+fluidRow(
+  column(3, uiOutput("relation_selector")),
+  column(3, uiOutput("talent_filter")),
+  column(3, textInput("video_filter", "Exact video ID", value = "")),
+  column(
+    3,
+    numericInput(
+      "row_limit",
+      "Maximum preview rows",
+      value = 500,
+      min = 25,
+      max = 5000,
+      step = 25
+    ),
+    actionButton("load_preview", "Load preview")
+  )
+)
+```
 
 ## Row {height=18%}
 
@@ -298,7 +519,7 @@ div(
 )
 ```
 
-## Row {height=82%}
+## Row {height=60%}
 
 ```{r}
 #| title: "Relation Contents"
@@ -356,6 +577,61 @@ plotlyOutput("talent_coverage_plot", height = "100%")
 DTOutput("talent_coverage")
 ```
 
+# Transcript Processes {scrolling="true"}
+
+Choose a processing batch, review every recorded video attempt in that batch,
+then search by video ID, title, talent, or result. Times are UTC.
+
+```{r}
+#| title: "Browse and Inspect Transcripts"
+div(
+  class = "transcript-processes-layout",
+  div(
+    class = "transcript-browser-pane",
+    tags$h3("Batch and Videos"),
+    tags$p(
+      class = "transcript-workflow",
+      "Choose batch → Search/filter videos → Select video"
+    ),
+    selectInput(
+      "transcript_run",
+      "Processing batch",
+      choices = character(),
+      width = "100%"
+    ),
+    uiOutput("transcript_run_summary"),
+    tags$div(class = "transcript-panel-divider"),
+    textInput(
+      "transcript_batch_search",
+      "Search this batch",
+      value = "",
+      placeholder = "For example: 6dm9kUCCfhM, RIU5, or Failed",
+      width = "100%"
+    ),
+    uiOutput("transcript_search_summary"),
+    DTOutput("transcript_tracks", height = "auto", fill = FALSE)
+  ),
+  div(
+    class = "transcript-detail-pane",
+    tags$h3("Selected Video Transcript"),
+    div(
+      class = "transcript-header-actions",
+      uiOutput("selected_transcript_video"),
+      downloadButton("download_transcript", "Download full transcript CSV")
+    ),
+    tabsetPanel(
+      id = "transcript_view",
+      type = "tabs",
+      tabPanel("Reading View", uiOutput("transcript_reading")),
+      tabPanel(
+        "Audit / Table View",
+        DTOutput("transcript_sentences", height = "auto", fill = FALSE)
+      )
+    )
+  )
+)
+```
+
 # Recent Activity
 
 Relevant pipeline runs exclude classification, qualitative coding, and summary
@@ -380,6 +656,318 @@ DTOutput("recent_events")
 #| label: server
 #| context: server
 #| include: false
+
+
+transcript_runs <- reactive({
+  input$refresh_data
+  if (isTRUE(input$auto_refresh)) invalidateLater(5 * 60 * 1000, session)
+  tryCatch(
+    raw_data_admin_transcript_runs(raw_admin_database_path),
+    error = function(error) {
+      validate(need(FALSE, paste("Transcript runs unavailable:", conditionMessage(error))))
+    }
+  )
+})
+
+observe({
+  runs <- transcript_runs()
+  if (nrow(runs) == 0L) return()
+  attempted <- vapply(
+    runs$error_summary,
+    raw_data_admin_transcript_run_metric,
+    numeric(1),
+    keys = c("attempted", "new_started", "examined")
+  )
+  attempt_label <- ifelse(
+    is.na(attempted),
+    "attempt count unavailable",
+    paste(format(attempted, big.mark = ",", trim = TRUE), "attempted")
+  )
+  choices <- stats::setNames(
+    runs$pipeline_run_id,
+    paste(
+      raw_admin_times(runs$started_at),
+      toupper(runs$status),
+      attempt_label,
+      sep = " • "
+    )
+  )
+  current <- isolate(input$transcript_run)
+  selected <- if (!is.null(current) && current %in% runs$pipeline_run_id) {
+    current
+  } else {
+    runs$pipeline_run_id[[1]]
+  }
+  updateSelectInput(
+    session,
+    "transcript_run",
+    choices = choices,
+    selected = selected
+  )
+})
+
+selected_transcript_run <- reactive({
+  runs <- transcript_runs()
+  req(nrow(runs) > 0L)
+  run_id <- raw_admin_input(input$transcript_run, runs$pipeline_run_id[[1]])
+  if (!run_id %in% runs$pipeline_run_id) run_id <- runs$pipeline_run_id[[1]]
+  run <- runs[runs$pipeline_run_id == run_id, , drop = FALSE]
+  req(nrow(run) == 1L)
+  run
+})
+
+output$transcript_run_summary <- renderUI({
+  run <- selected_transcript_run()
+  details <- raw_data_admin_transcript_run_details(run$error_summary)
+  duration <- if (!is.na(run$duration_seconds[[1]])) {
+    paste(round(run$duration_seconds[[1]] / 60, 1), "minutes")
+  } else {
+    "Not recorded (batch may still be running or may have stopped unexpectedly)"
+  }
+  summary_item <- function(label, value, wide = FALSE) {
+    tags$div(
+      class = paste(
+        "transcript-summary-item",
+        if (isTRUE(wide)) "transcript-summary-wide" else ""
+      ),
+      tags$span(class = "transcript-summary-label", label),
+      tags$span(class = "transcript-summary-value", value)
+    )
+  }
+  tagList(
+    tags$div(
+      class = "transcript-batch-summary",
+      summary_item("Status", toupper(raw_admin_value(run$status))),
+      summary_item("Duration", duration),
+      summary_item("Started", raw_admin_time(run$started_at)),
+      summary_item("Finished", raw_admin_time(run$completed_at)),
+      summary_item("Batch counts", details$counts, wide = TRUE)
+    ),
+    if (!is.na(details$issues)) {
+      tags$details(
+        class = "admin-note mt-2",
+        tags$summary("Recorded issues"),
+        tags$p(details$issues)
+      )
+    }
+  )
+})
+
+transcript_tracks_all <- reactive({
+  run <- selected_transcript_run()
+  tryCatch(
+    raw_data_admin_transcript_tracks(raw_admin_database_path, run$pipeline_run_id[[1]]),
+    error = function(error) {
+      validate(need(FALSE, paste("Transcript records unavailable:", conditionMessage(error))))
+    }
+  )
+})
+
+transcript_tracks <- reactive({
+  raw_data_admin_filter_transcript_tracks(
+    transcript_tracks_all(),
+    raw_admin_input(input$transcript_batch_search, "")
+  )
+})
+
+output$transcript_search_summary <- renderUI({
+  total <- nrow(transcript_tracks_all())
+  shown <- nrow(transcript_tracks())
+  tags$p(
+    class = "admin-note",
+    paste0("Showing ", shown, " of ", total, " recorded videos in this batch.")
+  )
+})
+
+output$transcript_tracks <- renderDT({
+  tracks <- transcript_tracks()
+  if (nrow(tracks) == 0L) {
+    return(raw_admin_table(data.frame(message = "No matching videos."), filter = "none"))
+  }
+  talent_name <- raw_admin_values(tracks$talent_name)
+  talent_code <- raw_admin_values(tracks$talent_code)
+  talent <- ifelse(
+    talent_name == "—",
+    talent_code,
+    ifelse(talent_code == "—", talent_name, paste0(talent_name, " (", talent_code, ")"))
+  )
+  display <- data.frame(
+    Title = raw_admin_values(tracks$title, "Untitled video"),
+    Talent = talent,
+    Result = raw_admin_values(tracks$result),
+    Language = raw_admin_values(tracks$subtitle_language),
+    `Video ID` = raw_admin_values(tracks$video_id),
+    check.names = FALSE
+  )
+  DT::datatable(
+    display,
+    rownames = FALSE,
+    filter = "none",
+    selection = "single",
+    escape = TRUE,
+    class = "compact stripe hover row-border transcript-video-table",
+    options = list(
+      dom = "t",
+      ordering = FALSE,
+      paging = FALSE,
+      scrollY = "46vh",
+      scrollCollapse = TRUE,
+      autoWidth = FALSE,
+      columnDefs = list(
+        list(width = "38%", targets = 0L),
+        list(width = "24%", targets = 1L),
+        list(width = "14%", targets = 2L),
+        list(width = "10%", targets = 3L),
+        list(width = "14%", targets = 4L)
+      )
+    )
+  )
+})
+
+selected_transcript_track <- reactive({
+  tracks <- transcript_tracks()
+  selected <- input$transcript_tracks_rows_selected
+  req(length(selected) == 1L, selected >= 1L, selected <= nrow(tracks))
+  tracks[selected, , drop = FALSE]
+})
+
+output$selected_transcript_video <- renderUI({
+  tracks <- transcript_tracks()
+  selected <- input$transcript_tracks_rows_selected
+  if (nrow(tracks) == 0L) {
+    return(tags$p(
+      class = "transcript-empty-state",
+      "No videos match the current batch search."
+    ))
+  }
+  if (length(selected) != 1L || selected < 1L || selected > nrow(tracks)) {
+    return(tags$p(
+      class = "transcript-empty-state",
+      "Select one video on the left to inspect its transcript."
+    ))
+  }
+  track <- tracks[selected, , drop = FALSE]
+  talent_name <- raw_admin_value(track$talent_name)
+  talent_code <- raw_admin_value(track$talent_code)
+  talent <- if (talent_name == "—") {
+    talent_code
+  } else if (talent_code == "—") {
+    talent_name
+  } else {
+    paste0(talent_name, " (", talent_code, ")")
+  }
+  transcript_size <- paste(
+    raw_admin_value(track$sentences, "0"), "sentences •",
+    raw_admin_value(track$blocks, "0"), "blocks"
+  )
+  block_health <- paste(
+    raw_admin_value(track$failed_blocks, "0"), "failed •",
+    raw_admin_value(track$incomplete_blocks, "0"), "incomplete"
+  )
+  tagList(
+    tags$div(
+      class = "transcript-video-heading",
+      tags$h4(raw_admin_value(track$title, "Untitled video")),
+      tags$span(class = "transcript-video-id", raw_admin_value(track$video_id))
+    ),
+    tags$div(
+      class = "transcript-video-metadata",
+      raw_admin_metadata_item("Talent", talent),
+      raw_admin_metadata_item("Result", track$result),
+      raw_admin_metadata_item("Subtitle language", track$subtitle_language),
+      raw_admin_metadata_item("Track type", track$subtitle_track_type),
+      raw_admin_metadata_item("Transcript size", transcript_size),
+      raw_admin_metadata_item("Block health", block_health),
+      raw_admin_metadata_item("Source scope", track$source_scope),
+      raw_admin_metadata_item("Pipeline", track$pipeline_version),
+      raw_admin_metadata_item("Approximate alignment", track$approximate_alignment)
+    ),
+    if ("block_errors" %in% names(track) && !is.na(track$block_errors[[1]])) {
+      tags$details(
+        class = "admin-note mt-2",
+        tags$summary("Recorded processing error"),
+        tags$p(track$block_errors[[1]])
+      )
+    }
+  )
+})
+
+transcript_sentences <- reactive({
+  track <- selected_transcript_track()
+  tryCatch(
+    raw_data_admin_transcript_text(
+      raw_admin_database_path, selected_transcript_run()$pipeline_run_id[[1]],
+      track
+    ),
+    error = function(error) {
+      validate(need(FALSE, paste("Transcript text unavailable:", conditionMessage(error))))
+    }
+  )
+})
+
+output$transcript_reading <- renderUI({
+  selected <- input$transcript_tracks_rows_selected
+  validate(need(
+    length(selected) == 1L,
+    "Select one video on the left to view its transcript."
+  ))
+  sentences <- transcript_sentences()
+  validate(need(
+    nrow(sentences) > 0L,
+    "This video did not publish transcript text in the selected batch."
+  ))
+  rows <- lapply(seq_len(nrow(sentences)), function(index) {
+    approximate <- isTRUE(sentences$timestamps_approximate[[index]])
+    timestamp <- paste0(
+      if (approximate) "~" else "",
+      raw_admin_timestamp(sentences$start_sec[index]),
+      "–",
+      raw_admin_timestamp(sentences$end_sec[index])
+    )
+    audit_hint <- paste(
+      "Block", raw_admin_value(sentences$block_number[index]),
+      "• Sentence", raw_admin_value(sentences$sentence_number[index]),
+      "•", raw_admin_value(sentences$source_alignment_status[index])
+    )
+    tags$div(
+      class = "transcript-reading-row",
+      title = audit_hint,
+      tags$span(class = "transcript-reading-time", timestamp),
+      tags$span(
+        class = "transcript-reading-text",
+        raw_admin_value(sentences$sentence_text[index], "")
+      )
+    )
+  })
+  tags$div(class = "transcript-reading-list", rows)
+})
+
+output$transcript_sentences <- renderDT({
+  selected <- input$transcript_tracks_rows_selected
+  validate(need(
+    length(selected) == 1L,
+    "Select one video row in the batch table above to view its transcript."
+  ))
+  sentences <- transcript_sentences()
+  validate(need(
+    nrow(sentences) > 0L,
+    "This video did not publish transcript text in the selected batch."
+  ))
+  raw_admin_table(sentences, page_length = 25L)
+})
+
+output$download_transcript <- downloadHandler(
+  filename = function() "processed_transcript.csv",
+  content = function(file) {
+    text <- transcript_sentences()
+    validate(need(nrow(text) > 0L, "No published transcript to download."))
+    track <- selected_transcript_track()
+    metadata <- track[rep(1L, nrow(text)), c("video_id", "title", "talent_code", "talent_name")]
+    run_id <- selected_transcript_run()$pipeline_run_id[[1]]
+    utils::write.csv(cbind(pipeline_run_id = run_id, metadata, text),
+                     file, row.names = FALSE, na = "")
+  }
+)
 
 raw_admin_snapshot <- reactive({
   input$refresh_data

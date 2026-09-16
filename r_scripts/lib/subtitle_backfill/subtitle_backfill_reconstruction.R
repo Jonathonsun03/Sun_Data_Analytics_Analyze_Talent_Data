@@ -5,7 +5,7 @@ reconstruct_subtitle_track_with_checkpoints <- function(
     raw_units,
     blocks,
     pipeline_run_id,
-    pipeline_version = "subtitle_sentence_v1",
+    pipeline_version = "subtitle_sentence_v2",
     source_scope = "full_track",
     punctuation_url = inference_punctuation_url(),
     timeout_sec = 120,
@@ -14,6 +14,7 @@ reconstruct_subtitle_track_with_checkpoints <- function(
     retry_failed = FALSE,
     force = FALSE,
     punctuate_fn = punctuate_text,
+    speaker_change_fn = NULL,
     checkpoints = NULL,
     checkpoint_dir = NULL,
     before_publish = NULL) {
@@ -68,6 +69,9 @@ reconstruct_subtitle_track_with_checkpoints <- function(
     dplyr::mutate(sentence_number = dplyr::row_number()) |>
     dplyr::ungroup()
   validate_subtitle_reconstruction(raw_units, blocks, sentences)
+  if (!is.null(speaker_change_fn)) {
+    sentences <- infer_subtitle_speaker_turns(sentences, speaker_change_fn)
+  }
 
   if (!is.null(before_publish)) before_publish()
   publication <- subtitle_backfill_with_writer(db_path, function(con) {

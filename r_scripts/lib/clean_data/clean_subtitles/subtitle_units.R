@@ -301,6 +301,64 @@ deduplicate_caption_overlaps <- function(caption_text) {
   appended_text
 }
 
+deduplicate_rolling_caption_rows <- function(
+    work,
+    gap_tolerance_sec = 0.05,
+    min_overlap_words = 2L) {
+  if (nrow(work) == 0L) return(work)
+
+  # YouTube rolling captions repeat marked text in the immediately next window.
+  # Require markers, adjacent timestamps, and an exact multiword overlap so an
+  # ordinary repeated sentence in a later caption remains untouched.
+  cleaned_text <- work$text
+  for (video_id in unique(work$video_id)) {
+    video_rows <- which(work$video_id == video_id)
+    previous_text <- NULL
+    previous_end <- NA_real_
+
+    for (row_index in video_rows) {
+      text <- work$text[[row_index]]
+      words <- subtitle_word_locations(text)$word
+
+      if (!is.null(previous_text)) {
+        gap <- work$start_sec[[row_index]] - previous_end
+        previous_words <- subtitle_word_locations(previous_text)$word
+        overlap <- largest_exact_word_overlap(previous_words, words)
+        rolling_update <-
+          is.finite(gap) &&
+          abs(gap) <= gap_tolerance_sec &&
+          overlap >= min_overlap_words &&
+          stringr::str_detect(previous_text, stringr::fixed(">>")) &&
+          stringr::str_detect(text, stringr::fixed(">>"))
+
+        if (rolling_update && overlap == length(words)) {
+          cleaned_text[[row_index]] <- ""
+        } else if (rolling_update) {
+          locations <- subtitle_word_locations(text)
+          overlap_end <- locations$end[[overlap]]
+          next_word_start <- locations$start[[overlap + 1L]]
+          separator <- stringr::str_sub(
+            text,
+            overlap_end + 1L,
+            next_word_start - 1L
+          )
+          suffix <- stringr::str_squish(stringr::str_sub(text, next_word_start))
+          if (stringr::str_detect(separator, stringr::fixed(">>"))) {
+            suffix <- paste(">>", suffix)
+          }
+          cleaned_text[[row_index]] <- suffix
+        }
+      }
+
+      previous_text <- text
+      previous_end <- work$end_sec[[row_index]]
+    }
+  }
+
+  work$text <- cleaned_text
+  work
+}
+
 normalize_punctuation_model_input <- function(text) {
   text <- as.character(text)
   text <- stringr::str_replace_all(text, stringr::fixed(">>"), " ")
@@ -438,7 +496,9 @@ build_punctuation_blocks <- function(
     ) |>
     dplyr::arrange(.data$video_id, .data$start_sec, .data$end_sec, .data$source_order)
 
-  work <- expand_speaker_turn_segments(work) |>
+  work <- deduplicate_rolling_caption_rows(work) |>
+    dplyr::filter(.data$text != "") |>
+    expand_speaker_turn_segments() |>
     dplyr::group_by(.data$video_id, .data$speaker_turn_id) |>
     dplyr::mutate(
       speaker_turn_marked = any(.data$speaker_turn_marked),

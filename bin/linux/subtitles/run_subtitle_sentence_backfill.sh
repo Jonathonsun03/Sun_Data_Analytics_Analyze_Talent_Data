@@ -24,7 +24,7 @@ MAX_NEW_VIDEOS="0"
 MAX_ATTEMPTS="3"
 REQUEST_PAUSE_SEC="0.2"
 TIMEOUT_SEC="120"
-PIPELINE_VERSION="subtitle_sentence_v1"
+PIPELINE_VERSION="subtitle_sentence_v2"
 RETRY_FAILED="false"
 FORCE="false"
 

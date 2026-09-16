@@ -27,16 +27,27 @@ local({
   stopifnot(url == "http://192.168.1.173:8000/v1/punctuate")
   calls <- list()
   record <- function(...) calls[[length(calls) + 1L]] <<- list(...)
+  api_ready <- TRUE
   Sys.which <- function(x) setNames(paste0("/mock/", x), x)
   system2 <- function(command, args, ...) {
     stopifnot(command == "wakeonlan", args == shQuote("10:7B:44:93:28:E2"))
     record("wake", args)
+    api_ready <<- TRUE
     0L
   }
   guard_status <- 0L
+  batch_status <- 0L
+  batch_release_status <- 0L
   fail_stage <- ""
   inference_machine_ssh <- function(target, command, ...) {
     record("ssh", target, command)
+    if (grepl("internal/batches/", command, fixed = TRUE)) {
+      stopifnot(target == "jonathon@192.168.1.173")
+      if (grepl("internal/batches/release/", command, fixed = TRUE)) {
+        return(batch_release_status)
+      }
+      return(batch_status)
+    }
     if (startsWith(command, "verified-guard")) {
       stopifnot(target == "root@192.168.1.161", grepl("shutdown -h now", command, fixed = TRUE))
       return(guard_status)
@@ -53,7 +64,7 @@ local({
   inference_machine_api_ready <- function(url) {
     record("health", url)
     stopifnot(url == "http://192.168.1.173:8000")
-    fail_stage != "health"
+    fail_stage != "health" && api_ready
   }
   inference_machine_wait <- function(check, ...) {
     if (!check()) stop("mock readiness failure")
@@ -61,7 +72,7 @@ local({
   inference_machine_wait_off <- function(host) {
     stopifnot(host == "192.168.1.161")
     record("off", host)
-    TRUE
+    guard_status %in% c(0L, 255L)
   }
   fails <- function(code) {
     failed <- tryCatch({ force(code); FALSE }, error = function(e) TRUE)
@@ -78,33 +89,71 @@ local({
     ensure_inference_machine(url)
     with_inference_machine(ensure_inference_machine(url))
   })
-  stopifnot(identical(kinds(), c("wake", "ssh", "ssh", "health")), !dir.exists(lock_path))
+  stopifnot(
+    identical(kinds(), c("health", "ssh", "ssh", "ssh")),
+    !dir.exists(lock_path)
+  )
+  # An unavailable API sends one wake packet, then waits for the stack.
   calls <- list()
+  api_ready <- FALSE
+  with_inference_machine(ensure_inference_machine(url))
+  stopifnot(
+    identical(
+      kinds(),
+      c("health", "wake", "ssh", "ssh", "health", "ssh", "ssh")
+    ),
+    !dir.exists(lock_path)
+  )
+  calls <- list()
+  api_ready <- FALSE
   Sys.setenv(INFERENCE_MACHINE_SHUTDOWN_GUARD_COMMAND = "verified-guard", INFERENCE_MANAGE_CONTAINER = "true")
   with_inference_machine({
     ensure_inference_machine(url)
     with_inference_machine(ensure_inference_machine(url))
   })
-  stopifnot(identical(kinds(), c("wake", "ssh", "ssh", "ssh", "health", "ssh", "off")),
+  stopifnot(identical(
+    kinds(),
+    c("health", "wake", "ssh", "ssh", "ssh", "health", "ssh", "ssh", "ssh", "off")
+  ),
             !dir.exists(lock_path))
   # Errors still run the guard; busy never reaches the shutdown wait.
   calls <- list()
+  api_ready <- TRUE
   guard_status <- 75L
   fails(with_inference_machine({ ensure_inference_machine(url); stop("model failure") }))
   stopifnot(!"off" %in% kinds(), !dir.exists(lock_path))
   # Transport/check errors keep the host on and retain the reservation.
   calls <- list()
+  api_ready <- TRUE
   guard_status <- 255L
   suppressWarnings(with_inference_machine(ensure_inference_machine(url)))
-  stopifnot(!"off" %in% kinds(), dir.exists(lock_path))
+  stopifnot("off" %in% kinds(), !dir.exists(lock_path))
+  # A failed guard retains the reservation when the host remains reachable.
+  calls <- list()
+  api_ready <- TRUE
+  guard_status <- 1L
+  suppressWarnings(with_inference_machine(ensure_inference_machine(url)))
+  stopifnot("off" %in% kinds(), dir.exists(lock_path))
   calls <- list()
   fails(with_inference_machine(ensure_inference_machine(url)))
   stopifnot(length(calls) == 0L)
   unlink(lock_path, recursive = TRUE)
+  # A reservation release failure leaves both the host and local lock in place.
+  calls <- list()
+  api_ready <- TRUE
+  batch_release_status <- 1L
+  ensure_error <- tryCatch({
+    with_inference_machine(ensure_inference_machine(url))
+    FALSE
+  }, warning = function(e) TRUE)
+  stopifnot(ensure_error, !"off" %in% kinds(), dir.exists(lock_path))
+  unlink(lock_path, recursive = TRUE)
+  batch_release_status <- 0L
   # Failed startup never runs a shutdown guard, even if configured.
   guard_status <- 0L
   for (stage in c("root@192.168.1.161", "ct", "jonathon@192.168.1.173", "health")) {
     calls <- list()
+    api_ready <- FALSE
     fail_stage <- stage
     fails(with_inference_machine(ensure_inference_machine(url)))
     stopifnot(!dir.exists(lock_path), !inference_machine_state$active,

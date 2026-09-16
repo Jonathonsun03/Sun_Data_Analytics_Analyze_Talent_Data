@@ -46,8 +46,16 @@ init_subtitle_sentence_schema <- function(con) {
        block_input_checksum_sha256 VARCHAR NOT NULL,
        pipeline_version VARCHAR NOT NULL,
        pipeline_run_id VARCHAR NOT NULL,
-       created_at TIMESTAMP NOT NULL
+       created_at TIMESTAMP NOT NULL,
+       inferred_speaker_turn_id BIGINT
      )"
+  )
+  DBI::dbExecute(
+    con,
+    paste(
+      "ALTER TABLE text.subtitle_sentence_units",
+      "ADD COLUMN IF NOT EXISTS inferred_speaker_turn_id BIGINT"
+    )
   )
 
   DBI::dbExecute(
@@ -80,6 +88,33 @@ init_subtitle_sentence_schema <- function(con) {
        created_at TIMESTAMP NOT NULL,
        updated_at TIMESTAMP NOT NULL,
        completed_at TIMESTAMP
+     )"
+  )
+
+  DBI::dbExecute(
+    con,
+    "CREATE TABLE IF NOT EXISTS ops.subtitle_backfill_attempts (
+       attempt_id VARCHAR PRIMARY KEY,
+       batch_pipeline_run_id VARCHAR NOT NULL,
+       candidate_position BIGINT NOT NULL,
+       video_id VARCHAR NOT NULL,
+       talent_code VARCHAR,
+       subtitle_language VARCHAR,
+       subtitle_track_type VARCHAR,
+       source_scope VARCHAR NOT NULL,
+       pipeline_version VARCHAR NOT NULL,
+       raw_rows BIGINT,
+       started_at TIMESTAMP NOT NULL,
+       completed_at TIMESTAMP,
+       status VARCHAR NOT NULL CHECK (
+         status IN ('running', 'published', 'current', 'failed')
+       ),
+       sentences BIGINT,
+       blocks BIGINT,
+       requested_blocks BIGINT,
+       reused_blocks BIGINT,
+       publication_pipeline_run_id VARCHAR,
+       error_summary VARCHAR
      )"
   )
 

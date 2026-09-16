@@ -1,0 +1,240 @@
+---
+title: "Qwen Subtitle Speaker-Change Few-Shot Test"
+subtitle: "PALACE PURGE comparison with the initial Qwen prompt"
+format:
+  html:
+    toc: true
+    code-fold: show
+    embed-resources: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Question
+
+Does one clear example of each class remove Qwen's initial
+`speaker_change` bias on the same eight PALACE PURGE boundaries?
+
+This is a read-only experiment. It does not publish speaker changes or alter
+subtitle reconstruction.
+
+## Source sentences
+
+The notebook reads the same reconstructed sentences used in
+`deberta_feasibility.qmd` and closes DuckDB immediately.
+
+```{r}
+library(DBI)
+library(here)
+library(knitr)
+
+source(here::here("r_scripts", "lib", "utils", "repo_env.R"))
+source(here::here("r_scripts", "lib", "utils", "datalake_root.r"))
+source(here::here("r_scripts", "lib", "duckdb", "db_connect.R"))
+
+load_repo_env(repo_root = here::here())
+con <- duckdb_connect(db_path = talent_lakehouse_db_path(), read_only = TRUE)
+
+sentences <- DBI::dbGetQuery(
+  con,
+  paste(
+    "SELECT sentence_number, speaker_turn_id, speaker_change, sentence_text",
+    "FROM text.subtitle_sentence_units",
+    "WHERE video_id = 'rp34cYzfLic'",
+    "AND pipeline_version = 'subtitle_sentence_v2'",
+    "AND sentence_number IN (1, 2, 5, 6, 7, 14, 15, 25, 26, 33, 34, 42, 43, 48, 49)",
+    "ORDER BY sentence_number"
+  )
+)
+
+DBI::dbDisconnect(con, shutdown = TRUE)
+rm(con)
+
+knitr::kable(sentences)
+```
+
+## API behavior
+
+`POST /v1/subtitle-speaker-change` is unchanged. It accepts
+`previous_context`, `sentence_a`, `sentence_b`, and `following_context`. The
+fixed internal instruction now defines all three labels and gives one
+`same_speaker` and one `speaker_change` example:
+
+```text
+same_speaker: Sentence B continues the same person's thought, explanation,
+story, or statement.
+
+speaker_change: Sentence B is a response, interruption, question/answer
+reversal, direct reply, or otherwise appears to come from another participant.
+
+uncertain: There is not enough textual evidence to decide.
+
+Example:
+A: I'm sure you're wondering where I've been.
+B: Don't worry, I'm safe.
+Answer: same_speaker
+
+Example:
+A: I thought that was your job, Hawthorne.
+B: Yes, that is my job.
+Answer: speaker_change
+```
+
+The endpoint now scores those three exact label continuations. It takes the
+mean token log probability for each label, then normalizes the three values
+into relative probabilities. This avoids favoring `uncertain` merely because
+it contains fewer tokens. The response `result` is exactly one of:
+
+- `same_speaker`
+- `speaker_change`
+- `uncertain`
+
+The highest-scoring label is returned when its lead over the second label is
+at least `min_margin`. Otherwise the result is `uncertain`. This run uses the
+default `min_margin = 0.10`; callers can configure it from 0 to 1.
+
+## Results
+
+```{r}
+results <- data.frame(
+  boundary = c("42→43", "48→49", "5→6", "6→7", "14→15", "25→26", "1→2", "33→34"),
+  evidence = c(
+    "known >>", "known >>",
+    rep("likely missing", 4),
+    rep("same-speaker control", 2)
+  ),
+  expected = c(rep("speaker_change", 6), rep("same_speaker", 2)),
+  initial_result = rep("speaker_change", 8),
+  few_shot_result = c(
+    "speaker_change", "speaker_change", "speaker_change", "same_speaker",
+    "same_speaker", "speaker_change", "same_speaker", "same_speaker"
+  ),
+  same_score = c(
+    0.6597, 0.5225, 0.4280, 0.6128,
+    0.9282, 0.4194, 0.6860, 0.5254
+  ),
+  change_score = c(
+    0.3188, 0.4202, 0.5601, 0.3757,
+    0.0656, 0.4773, 0.2391, 0.4229
+  ),
+  uncertain_score = c(
+    0.0217, 0.0573, 0.0120, 0.0112,
+    0.0062, 0.1032, 0.0746, 0.0517
+  ),
+  score_margin = c(
+    0.3408, 0.1023, 0.1321, 0.2371,
+    0.8627, 0.0579, 0.4469, 0.1025
+  ),
+  score_result = c(
+    "same_speaker", "same_speaker", "speaker_change", "same_speaker",
+    "same_speaker", "uncertain", "same_speaker", "same_speaker"
+  )
+)
+results$initial_matched <- results$expected == results$initial_result
+results$few_shot_matched <- results$expected == results$few_shot_result
+results$score_matched <- results$expected == results$score_result
+
+comparison <- results[, c(
+  "boundary", "evidence", "expected", "initial_result", "few_shot_result",
+  "score_result", "score_matched"
+)]
+knitr::kable(comparison)
+```
+
+### Relative label scores
+
+```{r}
+score_details <- results[, c(
+  "boundary", "same_score", "change_score", "uncertain_score", "score_margin"
+)]
+knitr::kable(score_details, digits = 4)
+```
+
+The first score-based request, including the cold model load, took **5.28
+seconds**. The following seven requests averaged **1.44 seconds per boundary**.
+
+```{r}
+accuracy <- aggregate(
+  cbind(initial_matched, few_shot_matched, score_matched) ~ evidence,
+  data = results,
+  FUN = sum
+)
+counts <- table(results$evidence)
+accuracy$total <- as.integer(counts[accuracy$evidence])
+accuracy$initial_accuracy <- sprintf(
+  "%d/%d (%.0f%%)",
+  accuracy$initial_matched,
+  accuracy$total,
+  100 * accuracy$initial_matched / accuracy$total
+)
+accuracy$few_shot_accuracy <- sprintf(
+  "%d/%d (%.0f%%)",
+  accuracy$few_shot_matched,
+  accuracy$total,
+  100 * accuracy$few_shot_matched / accuracy$total
+)
+accuracy$score_accuracy <- sprintf(
+  "%d/%d (%.0f%%)",
+  accuracy$score_matched,
+  accuracy$total,
+  100 * accuracy$score_matched / accuracy$total
+)
+overall <- data.frame(
+  evidence = "overall",
+  initial_accuracy = sprintf(
+    "%d/%d (%.0f%%)",
+    sum(results$initial_matched),
+    nrow(results),
+    100 * mean(results$initial_matched)
+  ),
+  few_shot_accuracy = sprintf(
+    "%d/%d (%.0f%%)",
+    sum(results$few_shot_matched),
+    nrow(results),
+    100 * mean(results$few_shot_matched)
+  ),
+  score_accuracy = sprintf(
+    "%d/%d (%.0f%%)",
+    sum(results$score_matched),
+    nrow(results),
+    100 * mean(results$score_matched)
+  )
+)
+
+knitr::kable(rbind(
+  accuracy[, c(
+    "evidence", "initial_accuracy", "few_shot_accuracy", "score_accuracy"
+  )],
+  overall
+))
+```
+
+## Assessment
+
+Few-shot prompting removed the always-change behavior. Both same-speaker
+controls improved from 0/2 to 2/2, while the known `>>` changes remained 2/2.
+
+The improvement came at a cost: likely missing changes fell from 4/4 to 2/4.
+Boundaries 6→7 and 14→15 changed from correct `speaker_change` predictions to
+incorrect `same_speaker` predictions. Overall accuracy therefore remained 6/8.
+The model still did not use `uncertain`.
+
+With score-based classification and a 0.10 margin, accuracy falls to 3/8. Both
+same-speaker controls remain correct, but the known changes fall to 0/2 and the
+likely missing changes fall to 1/4. Boundary 25→26 becomes `uncertain` because
+its top-two margin is only 0.0579; this removes a previously correct prediction.
+
+Score-based uncertainty does not fix the two requested problem cases. Boundary
+6→7 favors `same_speaker` by 0.2371. Boundary 14→15 favors `same_speaker` by
+0.8627. Both margins exceed the threshold, so neither becomes `uncertain`.
+
+Changing the margin cannot turn an incorrectly ranked label into the correct
+label. A threshold above 0.2371 would suppress the 6→7 error, but would also
+suppress correct change and same-speaker cases with smaller margins. The very
+confident 14→15 error would remain. Score-based uncertainty therefore does not
+improve overall classification on these eight boundaries.
+
+No production subtitle code, DuckDB data, schemas, or publication logic was
+changed.

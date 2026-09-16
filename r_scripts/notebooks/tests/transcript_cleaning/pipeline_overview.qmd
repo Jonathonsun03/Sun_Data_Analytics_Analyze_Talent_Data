@@ -16,7 +16,7 @@ params:
   sample_row_count: 20
   run_punctuation_example: true
   publish_example: false
-  pipeline_version: "subtitle_sentence_v1"
+  pipeline_version: "subtitle_sentence_v2"
 execute:
   echo: true
   warning: false

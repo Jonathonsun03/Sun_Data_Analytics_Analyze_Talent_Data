@@ -1,0 +1,160 @@
+---
+title: "Subtitle Speaker-Change Feasibility Test"
+subtitle: "PALACE PURGE and DeBERTa NLI"
+format:
+  html:
+    toc: true
+    code-fold: show
+    embed-resources: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Question
+
+Can the existing `MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli` model infer
+whether the speaker changed between two adjacent reconstructed subtitle
+sentences?
+
+This is a small, read-only feasibility test. It does not create a dataset,
+publish results, or modify subtitle reconstruction.
+
+## Read the source sentences
+
+The test reads the published `subtitle_sentence_v2` rows for PALACE PURGE
+(`rp34cYzfLic`) and closes DuckDB immediately. The selected boundaries include
+two explicit `>>` transitions, four likely missing transitions, and two
+same-speaker controls.
+
+```{r}
+library(DBI)
+library(here)
+library(knitr)
+
+source(here::here("r_scripts", "lib", "utils", "repo_env.R"))
+source(here::here("r_scripts", "lib", "utils", "datalake_root.r"))
+source(here::here("r_scripts", "lib", "duckdb", "db_connect.R"))
+
+load_repo_env(repo_root = here::here())
+con <- duckdb_connect(db_path = talent_lakehouse_db_path(), read_only = TRUE)
+
+sentences <- DBI::dbGetQuery(
+  con,
+  paste(
+    "SELECT sentence_number, speaker_turn_id, speaker_change, sentence_text",
+    "FROM text.subtitle_sentence_units",
+    "WHERE video_id = 'rp34cYzfLic'",
+    "AND pipeline_version = 'subtitle_sentence_v2'",
+    "AND sentence_number IN (1, 2, 5, 6, 7, 14, 15, 25, 26, 33, 34, 42, 43, 48, 49)",
+    "ORDER BY sentence_number"
+  )
+)
+
+DBI::dbDisconnect(con, shutdown = TRUE)
+rm(con)
+
+knitr::kable(sentences)
+```
+
+## Test cases
+
+Each pair was scored with one sentence of context before and after it. A pair
+was classified only when the winning entailment score was at least 0.60 and
+exceeded the competing entailment score by at least 0.20. Otherwise the result
+was `uncertain`.
+
+```{r}
+results <- data.frame(
+  boundary = c("42→43", "48→49", "5→6", "6→7", "14→15", "25→26", "1→2", "33→34"),
+  evidence = c(
+    "known >>", "known >>",
+    "likely missing", "likely missing", "likely missing", "likely missing",
+    "same-speaker control", "same-speaker control"
+  ),
+  expected = c(
+    rep("speaker_change", 6),
+    rep("same_speaker", 2)
+  ),
+  same_entailment = c(0.9863, 0.9731, 0.9561, 0.9785, 0.9790, 0.9653, 0.9839, 0.9790),
+  same_neutral = c(0.0019, 0.0034, 0.0049, 0.0034, 0.0025, 0.0088, 0.0014, 0.0046),
+  same_contradiction = c(0.0117, 0.0235, 0.0388, 0.0179, 0.0185, 0.0258, 0.0147, 0.0166),
+  change_entailment = c(0.9780, 0.9683, 0.9834, 0.9785, 0.9604, 0.8960, 0.9756, 0.9780),
+  change_neutral = c(0.0145, 0.0230, 0.0082, 0.0113, 0.0209, 0.0961, 0.0129, 0.0155),
+  change_contradiction = c(0.0072, 0.0086, 0.0082, 0.0100, 0.0185, 0.0082, 0.0114, 0.0062)
+)
+
+results$entailment_margin <- abs(
+  results$same_entailment - results$change_entailment
+)
+results$derived <- ifelse(
+  pmax(results$same_entailment, results$change_entailment) >= 0.60 &
+    results$entailment_margin >= 0.20,
+  ifelse(
+    results$same_entailment > results$change_entailment,
+    "same_speaker",
+    "speaker_change"
+  ),
+  "uncertain"
+)
+
+display_results <- results
+numeric_columns <- vapply(display_results, is.numeric, logical(1))
+display_results[numeric_columns] <- lapply(
+  display_results[numeric_columns],
+  round,
+  digits = 4
+)
+knitr::kable(display_results)
+```
+
+The hypotheses were:
+
+- `The same person is speaking in Sentence A and Sentence B.`
+- `A different person is speaking in Sentence B.`
+
+The model ran from the existing pinned snapshot through the deployed
+`ModelManager` on `cuda:0`. Loading took 3.28 seconds. Scoring the 16 hypothesis
+pairs for these eight boundaries in one batch took 0.36 seconds.
+
+## What the test shows
+
+The model did not reliably recognize known speaker changes. Both explicit
+`>>` examples were `uncertain`, and their raw entailment ranking slightly
+favored `same_speaker`, which is wrong.
+
+It also did not reliably identify the likely missing changes. The clearest
+positive example was sentence 5→6:
+
+> **A:** I might as well ask: Do I look [music] like her keeper?<br>
+> **B:** I thought that was your job, Hawthorne.
+
+The change hypothesis ranked higher, but only by 0.0273, far below a useful
+decision margin. Sentence 6→7 produced identical entailment scores for both
+hypotheses. Sentences 14→15 and 25→26 incorrectly favored `same_speaker`.
+
+The two same-speaker controls ranked `same_speaker` slightly higher, so those
+rankings were directionally correct. Their margins were only 0.0083 and
+0.0010, however, and cannot support confident decisions.
+
+Neutral scores do **not** dominate. The problem is more serious: entailment is
+above 0.89 for both mutually exclusive hypotheses in every displayed case.
+The model responds to the fluent meta-statements as entailed even when the
+subtitle text does not establish who spoke either sentence.
+
+## Recommendation
+
+This formulation is not promising enough to add to production. DeBERTa's raw
+scores are not calibrated evidence for subtitle speaker changes, and lowering
+the threshold would create arbitrary changes from tiny score differences.
+
+The other small models already in the inference stack are trained for entity
+extraction, embeddings, sentiment, question answering, summarization,
+punctuation, or search reranking. None is a better direct speaker-change
+classifier. In particular, the MiniLM reranker measures relevance rather than
+dialogue identity. The next experiment should use a model that can explicitly
+reason over dialogue turns; swapping to another existing small task model is
+unlikely to improve this test.
+
+No production code, DuckDB data, schemas, or publication logic was changed.

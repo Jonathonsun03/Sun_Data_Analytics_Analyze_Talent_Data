@@ -29,8 +29,12 @@ with an additional note describing how the daily snapshot is interpreted in
 this dashboard.
 
 The Transcript page loads the full available text for the selected video from
-the canonical `text.subtitle_units` and `text.chat_messages` relations. It
-merges streamer subtitles and live chat chronologically and displays only the
+`text.subtitle_sentence_units` (cleaned full-track sentences), falling back to
+raw `text.subtitle_units` when no cleaned sentences exist, and includes
+`text.chat_messages`. A yellow notice above the table identifies raw fallback,
+chat-only results, or missing transcripts. These notices stay within the Full
+Video Transcript panel. Selecting a video without transcript or chat removes
+the previous table and its export controls. The page merges streamer subtitles and live chat chronologically and displays only the
 speaker, video-relative timestamp, and dialogue. Transcript loading is scoped
 to the authorized talent and video and is independent of the analytics
 snapshot date range.

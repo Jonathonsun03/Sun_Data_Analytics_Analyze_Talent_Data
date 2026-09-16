@@ -29,7 +29,8 @@ This directory contains the repository's maintained R code.
   - `r_scripts/run/Subtitle_clean/backfill_subtitle_sentences.R` is the canonical resumable full-track DuckDB backfill entrypoint, wrapped by `bin/linux/subtitles/run_subtitle_sentence_backfill.sh`
   - backfill reads one video's source/status/checkpoints and disconnects before inference; successful blocks are saved to one persistent RDS file per video under `<Talent DataLake root>/Processed/subtitle_backfill_checkpoints/` (override: `SUBTITLE_BACKFILL_CHECKPOINT_DIR`)
   - completed videos are source-checksum-validated and written with their checkpoints in the existing transaction; database lock conflicts use fixed-delay retries, while local results survive publication failures
-  - `--max-new-videos` limits tracks requiring work without changing the existing `--max-videos` candidate limit
+  - the initial track query excludes output already current for the exact source checksum and pipeline version; each selected track is rechecked before work begins
+  - `--max-new-videos` limits tracks requiring work; `--max-videos` limits the filtered candidate list (or all candidates with `--force`)
   - the runner waits before DuckDB reads and completed-video publication while `<Talent DataLake root>/Logs/collection-active` exists
 - R-based stream summarization
   - the maintained runner is `r_scripts/run/Text_Replay_Analysis/Text_replay_analysis_openAI`

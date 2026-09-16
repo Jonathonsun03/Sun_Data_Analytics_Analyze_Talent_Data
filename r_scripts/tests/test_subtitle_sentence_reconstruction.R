@@ -168,6 +168,35 @@ assert_equal(
   c("intro words continue", "words continue now", "final words"),
   "Overlap cleanup crossed a speaker boundary or failed within a turn"
 )
+
+rolling_blocks <- build_punctuation_blocks(tibble::tibble(
+  video_id = "rolling-video",
+  start_sec = c(15.840, 17.830, 17.840, 19.190, 19.200),
+  end_sec = c(17.830, 17.840, 19.190, 19.200, 23.830),
+  text = c(
+    "It's fine. I got it. Uh\n>> guess I'll just uh",
+    ">> guess I'll just uh",
+    ">> guess I'll just uh\n>> go get a broom then.",
+    ">> go get a broom then.",
+    ">> go get a broom then.\n>> No, it's right back. It's a man. Um"
+  ),
+  subtitle_unit_key = paste0("rolling-source-", 1:5)
+), target_words = 100, max_words = 120)
+assert_equal(
+  rolling_blocks$model_input_text,
+  c(
+    "It's fine I got it Uh",
+    "guess I'll just uh",
+    "go get a broom then",
+    "No it's right back It's a man Um"
+  ),
+  "Rolling caption updates repeated phrases across artificial speaker turns"
+)
+assert_true(
+  !any(unlist(rolling_blocks$source_subtitle_unit_keys) %in%
+    c("rolling-source-2", "rolling-source-4")),
+  "Fully duplicated rolling caption rows should not enter sentence lineage"
+)
 assert_true(
   all(!duplicated(turn_blocks[, c("video_id", "speaker_turn_id", "block_number")])),
   "A punctuation block represented more than one speaker turn"

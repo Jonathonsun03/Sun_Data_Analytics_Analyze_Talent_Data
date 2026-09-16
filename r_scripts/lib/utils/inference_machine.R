@@ -1,4 +1,4 @@
-# Lazy, nested batch scope. Physical host and inference container are separate.
+# Nested batch scope. Physical host and inference container are separate.
 if (!exists("inference_machine_state", inherits = FALSE)) {
   inference_machine_state <- new.env(parent = emptyenv())
   inference_machine_state$scope <- FALSE
@@ -89,6 +89,21 @@ inference_machine_wait_off <- function(host) {
 inference_machine_finish <- function() {
   config <- inference_machine_state$config
   inference_machine_state$active <- FALSE
+  container_target <- paste0(config$container_user, "@", config$container_host)
+  release_command <- paste0(
+    "curl -fsS -o /dev/null -X POST http://127.0.0.1:8000/",
+    "internal/batches/release/",
+    inference_machine_state$batch_token
+  )
+  release_status <- tryCatch(
+    inference_machine_ssh(container_target, release_command),
+    error = function(e) 255L
+  )
+  if (!identical(release_status, 0L)) {
+    warning("Inference batch reservation could not be released; host left on and lock retained at ",
+            config$lock_path, call. = FALSE)
+    return(invisible(NULL))
+  }
   # An error/timeout may leave a request running server-side. Never infer idle
   # from completion of this R scope, SSH reachability, or the health endpoint.
   if (!nzchar(config$guard)) {
@@ -105,7 +120,8 @@ inference_machine_finish <- function() {
   if (identical(status, 75L)) {
     message("Inference host left on: shutdown guard reports busy or inconclusive.")
     unlink(config$lock_path, recursive = TRUE)
-  } else if (identical(status, 0L) && inference_machine_wait_off(config$host)) {
+  } else if (inference_machine_wait_off(config$host)) {
+    message("Inference host shutdown confirmed.")
     unlink(config$lock_path, recursive = TRUE)
   } else {
     warning("Shutdown guard failed or shutdown was not confirmed; lock retained at ",
@@ -147,29 +163,58 @@ ensure_inference_machine <- function(url) {
   # Failed startup releases the reservation, leaving the host on for inspection.
   started <- FALSE
   on.exit(if (!started) unlink(config$lock_path, recursive = TRUE), add = TRUE)
-  status <- system2("wakeonlan", shQuote(config$mac))
-  if (!identical(status, 0L)) stop("Wake-on-LAN failed.", call. = FALSE)
-  host_target <- paste0(config$user, "@", config$host)
-  inference_machine_wait(function() {
-    identical(inference_machine_ssh(host_target, "true", timeout = 10), 0L)
-  }, config$timeout, paste0("Proxmox SSH: ", host_target))
-  if (config$manage_container) {
-    command <- paste0(
-      "state=$(pct status ", config$ctid, ") || exit 1; ",
-      "case \"$state\" in 'status: running') exit 0;; ",
-      "'status: stopped') pct start ", config$ctid, ";; *) exit 1;; esac"
-    )
-    if (!identical(inference_machine_ssh(host_target, command, timeout = config$timeout), 0L)) {
-      stop("Could not ensure CT ", config$ctid, " is running.", call. = FALSE)
+  api_ready <- tryCatch(
+    isTRUE(inference_machine_api_ready(config$api_url)),
+    error = function(error) FALSE
+  )
+  if (api_ready) {
+    message("Inference API already ready; wake-on-LAN skipped.")
+  } else {
+    message("Inference API unavailable; sending wake-on-LAN.")
+    status <- system2("wakeonlan", shQuote(config$mac))
+    if (!identical(status, 0L)) stop("Wake-on-LAN failed.", call. = FALSE)
+    host_target <- paste0(config$user, "@", config$host)
+    inference_machine_wait(function() {
+      identical(inference_machine_ssh(host_target, "true", timeout = 10), 0L)
+    }, config$timeout, paste0("Proxmox SSH: ", host_target))
+    if (config$manage_container) {
+      command <- paste0(
+        "state=$(pct status ", config$ctid, ") || exit 1; ",
+        "case \"$state\" in 'status: running') exit 0;; ",
+        "'status: stopped') pct start ", config$ctid, ";; *) exit 1;; esac"
+      )
+      if (!identical(inference_machine_ssh(
+        host_target,
+        command,
+        timeout = config$timeout
+      ), 0L)) {
+        stop("Could not ensure CT ", config$ctid, " is running.", call. = FALSE)
+      }
     }
   }
   container_target <- paste0(config$container_user, "@", config$container_host)
   inference_machine_wait(function() {
     identical(inference_machine_ssh(container_target, "true", timeout = 10), 0L)
   }, config$timeout, paste0("container SSH: ", container_target))
-  inference_machine_wait(function() inference_machine_api_ready(config$api_url),
-                         config$timeout, paste0("inference API: ", config$api_url))
+  if (!api_ready) {
+    inference_machine_wait(
+      function() inference_machine_api_ready(config$api_url),
+      config$timeout,
+      paste0("inference API: ", config$api_url)
+    )
+  }
+  batch_token <- paste0(sample(c(letters, LETTERS, 0:9, "_", "-"), 64L, replace = TRUE),
+                        collapse = "")
+  reserve_command <- paste0(
+    "curl -fsS -o /dev/null -X POST http://127.0.0.1:8000/",
+    "internal/batches/reserve/",
+    batch_token
+  )
+  if (!identical(inference_machine_ssh(container_target, reserve_command), 0L)) {
+    stop("Could not reserve the inference machine for this batch.", call. = FALSE)
+  }
   inference_machine_state$config <- config
+  inference_machine_state$batch_token <- batch_token
   inference_machine_state$active <- TRUE
   started <- TRUE
   invisible(TRUE)

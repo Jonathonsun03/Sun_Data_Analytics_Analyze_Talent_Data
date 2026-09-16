@@ -84,11 +84,28 @@ subtitle_backfill_config <- function() {
     ),
     pipeline_version = subtitle_backfill_env_text(
       "SUBTITLE_BACKFILL_PIPELINE_VERSION",
-      "subtitle_sentence_v1"
+      "subtitle_sentence_v2"
     ),
     punctuation_url = subtitle_backfill_env_text(
       "SUBTITLE_PUNCTUATION_URL",
       inference_punctuation_url()
+    ),
+    speaker_change_url = paste0(
+      sub("/+$", "", subtitle_backfill_env_text(
+        "NLP_INFERENCE_URL",
+        "http://192.168.1.173:8000"
+      )),
+      "/v1/chat"
+    ),
+    speaker_change_model = "Qwen/Qwen2.5-3B-Instruct",
+    speaker_turns_enabled = subtitle_backfill_env_bool(
+      "SUBTITLE_SPEAKER_TURNS_ENABLED",
+      default = TRUE
+    ),
+    speaker_change_timeout_sec = subtitle_backfill_env_number(
+      "SUBTITLE_SPEAKER_CHANGE_TIMEOUT_SEC",
+      120,
+      1
     ),
     allow_unknown_language = subtitle_backfill_env_bool(
       "SUBTITLE_PUNCTUATION_ALLOW_UNKNOWN_LANGUAGE",

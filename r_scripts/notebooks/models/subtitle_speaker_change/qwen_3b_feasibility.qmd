@@ -1,0 +1,160 @@
+---
+title: "Qwen 3B Subtitle Speaker-Change Feasibility Test"
+subtitle: "Comparison with the Qwen 1.5B few-shot baseline"
+format:
+  html:
+    toc: true
+    code-fold: show
+    embed-resources: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## Question
+
+Does `Qwen/Qwen2.5-3B-Instruct` improve on the 6/8 Qwen 1.5B few-shot
+baseline when both models use the same prompt and PALACE PURGE boundaries?
+
+This test uses deterministic text generation rather than label scoring. It is
+read-only and does not publish speaker changes.
+
+## Source sentences
+
+The test reads the same eight reconstructed boundaries used by
+`qwen_feasibility.qmd` and closes DuckDB immediately.
+
+```{r}
+library(DBI)
+library(here)
+library(knitr)
+
+source(here::here("r_scripts", "lib", "utils", "repo_env.R"))
+source(here::here("r_scripts", "lib", "utils", "datalake_root.r"))
+source(here::here("r_scripts", "lib", "duckdb", "db_connect.R"))
+
+load_repo_env(repo_root = here::here())
+con <- duckdb_connect(db_path = talent_lakehouse_db_path(), read_only = TRUE)
+sentences <- DBI::dbGetQuery(
+  con,
+  paste(
+    "SELECT sentence_number, speaker_turn_id, speaker_change, sentence_text",
+    "FROM text.subtitle_sentence_units",
+    "WHERE video_id = 'rp34cYzfLic'",
+    "AND pipeline_version = 'subtitle_sentence_v2'",
+    "AND sentence_number IN (1, 2, 5, 6, 7, 14, 15, 25, 26, 33, 34, 42, 43, 48, 49)",
+    "ORDER BY sentence_number"
+  )
+)
+DBI::dbDisconnect(con, shutdown = TRUE)
+rm(con)
+
+knitr::kable(sentences)
+```
+
+## Method
+
+Qwen 3B received the same previous context, Sentence A, Sentence B, following
+context, label definitions, and two few-shot examples as the 1.5B generation
+test. Generation used `temperature = 0`, `max_new_tokens = 8`, and accepted
+only these exact outputs:
+
+- `same_speaker`
+- `speaker_change`
+- `uncertain`
+
+The model was loaded from pinned local revision
+`aa8e72537993ba99e69dfaafa59ed015b17504d1`. No score-based classification was
+used.
+
+## Results
+
+```{r}
+results <- data.frame(
+  boundary = c("42→43", "48→49", "5→6", "6→7", "14→15", "25→26", "1→2", "33→34"),
+  evidence = c(
+    "known >>", "known >>",
+    rep("likely missing", 4),
+    rep("same-speaker control", 2)
+  ),
+  expected = c(rep("speaker_change", 6), rep("same_speaker", 2)),
+  qwen_1_5b = c(
+    "speaker_change", "speaker_change", "speaker_change", "same_speaker",
+    "same_speaker", "speaker_change", "same_speaker", "same_speaker"
+  ),
+  qwen_3b = c(
+    "speaker_change", "speaker_change", "speaker_change", "speaker_change",
+    "same_speaker", "speaker_change", "same_speaker", "same_speaker"
+  ),
+  inference_seconds_3b = c(
+    15.4548, 2.2615, 2.2901, 2.2456,
+    2.8952, 2.2534, 2.9255, 2.8416
+  )
+)
+results$matched_1_5b <- results$expected == results$qwen_1_5b
+results$matched_3b <- results$expected == results$qwen_3b
+
+knitr::kable(results, digits = 4)
+```
+
+```{r}
+accuracy <- aggregate(
+  cbind(matched_1_5b, matched_3b) ~ evidence,
+  data = results,
+  FUN = sum
+)
+counts <- table(results$evidence)
+accuracy$total <- as.integer(counts[accuracy$evidence])
+accuracy$qwen_1_5b <- sprintf(
+  "%d/%d (%.0f%%)",
+  accuracy$matched_1_5b,
+  accuracy$total,
+  100 * accuracy$matched_1_5b / accuracy$total
+)
+accuracy$qwen_3b <- sprintf(
+  "%d/%d (%.0f%%)",
+  accuracy$matched_3b,
+  accuracy$total,
+  100 * accuracy$matched_3b / accuracy$total
+)
+overall <- data.frame(
+  evidence = "overall",
+  qwen_1_5b = "6/8 (75%)",
+  qwen_3b = "7/8 (88%)"
+)
+
+knitr::kable(rbind(
+  accuracy[, c("evidence", "qwen_1_5b", "qwen_3b")],
+  overall
+))
+```
+
+## Runtime and GPU memory
+
+| Measurement | Qwen 3B |
+|---|---:|
+| Cold model load | 21.04 seconds |
+| Mean across all eight generations | 4.15 seconds |
+| Mean after first-generation warm-up | 2.53 seconds |
+| GPU memory before load | 3 MiB |
+| GPU memory after load | 1,849 MiB |
+| Peak sampled GPU memory | 1,967 MiB |
+
+The first generation took 15.45 seconds because it included one-time runtime
+warm-up after the measured model load. Qwen 3B used FP16 with part of the model
+offloaded to system RAM to fit the 3 GiB GPU.
+
+## Assessment
+
+Qwen 3B improves overall accuracy from 6/8 to 7/8. It preserves both known
+changes and both same-speaker controls while improving likely missing changes
+from 2/4 to 3/4.
+
+The improvement is boundary 6→7, which 1.5B classified as `same_speaker` and
+3B correctly classified as `speaker_change`. Boundary 14→15 remains the only
+error: both models classify it as `same_speaker`.
+
+This small result favors Qwen 3B, although eight boundaries are insufficient
+for a production decision. No subtitle pipeline, DuckDB data, schemas, or
+publication logic was changed.

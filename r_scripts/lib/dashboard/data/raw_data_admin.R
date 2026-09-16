@@ -796,3 +796,262 @@ raw_data_admin_profile <- function(database_path, relation) {
   }
   list(columns = column_profile, numeric = numeric_profile)
 }
+
+# Transcript operations use exact run lineage; never substitute a newer transcript.
+raw_data_admin_transcript_run_details <- function(error_summary) {
+  if (length(error_summary) == 0L || is.na(error_summary[[1]]) ||
+      !nzchar(trimws(as.character(error_summary[[1]])))) {
+    return(list(counts = "No summary recorded.", issues = NA_character_))
+  }
+
+  parts <- strsplit(as.character(error_summary[[1]]), "; ", fixed = TRUE)[[1]]
+  metric_labels <- c(
+    backlog_at_start = "Videos awaiting processing at batch start",
+    selected = "Videos awaiting processing at batch start",
+    batch_limit = "Maximum videos this batch",
+    attempted = "Videos attempted",
+    new_started = "Videos attempted",
+    completed = "Videos completed",
+    published = "Videos completed",
+    skipped_current = "Videos already current and skipped",
+    current = "Videos already current and skipped",
+    failed = "Videos failed",
+    requested_blocks = "Model blocks requested",
+    reused_blocks = "Model blocks reused"
+  )
+  count_parts <- character()
+  issue_parts <- character()
+  seen_labels <- character()
+
+  for (part in parts) {
+    key <- sub("=.*$", "", part)
+    if (key %in% names(metric_labels)) {
+      label <- unname(metric_labels[[key]])
+      if (label %in% seen_labels) next
+      value <- sub("^[^=]*=", "", part)
+      numeric_value <- suppressWarnings(as.numeric(value))
+      if (!is.na(numeric_value)) {
+        value <- format(numeric_value, big.mark = ",", scientific = FALSE, trim = TRUE)
+      }
+      count_parts <- c(count_parts, paste0(label, ": ", value))
+      seen_labels <- c(seen_labels, label)
+    } else if (!identical(key, "examined")) {
+      issue_parts <- c(issue_parts, part)
+    }
+  }
+
+  list(
+    counts = if (length(count_parts) > 0L) {
+      paste(count_parts, collapse = " • ")
+    } else {
+      "No batch counts recorded."
+    },
+    issues = if (length(issue_parts) > 0L) {
+      paste(issue_parts, collapse = "; ")
+    } else {
+      NA_character_
+    }
+  )
+}
+
+raw_data_admin_transcript_run_metric <- function(error_summary, keys) {
+  if (length(error_summary) == 0L || is.na(error_summary[[1]]) ||
+      !nzchar(trimws(as.character(error_summary[[1]])))) {
+    return(NA_real_)
+  }
+  parts <- strsplit(as.character(error_summary[[1]]), "; ", fixed = TRUE)[[1]]
+  for (key in keys) {
+    match <- parts[startsWith(parts, paste0(key, "="))]
+    if (length(match) > 0L) {
+      value <- suppressWarnings(as.numeric(sub("^[^=]*=", "", match[[1]])))
+      if (!is.na(value)) return(value)
+    }
+  }
+  NA_real_
+}
+
+raw_data_admin_transcript_runs <- function(database_path) {
+  con <- raw_data_admin_connect(database_path)
+  on.exit(raw_data_admin_disconnect(con), add = TRUE)
+  if (nrow(raw_data_admin_columns(con, "ops", "pipeline_runs")) == 0L) {
+    return(data.frame())
+  }
+  DBI::dbGetQuery(con, paste(
+    "SELECT pipeline_run_id, pipeline_name, started_at, completed_at, status,",
+    "epoch(completed_at - started_at) AS duration_seconds, error_summary",
+    "FROM ops.pipeline_runs WHERE pipeline_name = 'subtitle_sentence_backfill'",
+    "ORDER BY started_at DESC, pipeline_run_id DESC LIMIT 100"
+  ))
+}
+
+raw_data_admin_transcript_related_run_ids <- function(con, pipeline_run_id) {
+  if (nrow(raw_data_admin_columns(con, "ops", "pipeline_runs")) == 0L) {
+    return(as.character(pipeline_run_id))
+  }
+  related <- DBI::dbGetQuery(
+    con,
+    paste(
+      "WITH batch AS (SELECT started_at, completed_at FROM ops.pipeline_runs",
+      "WHERE pipeline_run_id = ? AND pipeline_name = 'subtitle_sentence_backfill')",
+      "SELECT pipeline_run_id FROM ops.pipeline_runs WHERE pipeline_run_id = ?",
+      "OR (pipeline_name = 'subtitle_sentence_reconstruction'",
+      "AND started_at >= (SELECT started_at FROM batch)",
+      "AND started_at <= COALESCE((SELECT completed_at FROM batch), CURRENT_TIMESTAMP))",
+      "ORDER BY started_at, pipeline_run_id"
+    ),
+    params = list(pipeline_run_id, pipeline_run_id)
+  )$pipeline_run_id
+  attempt_runs <- character()
+  if (nrow(raw_data_admin_columns(
+    con,
+    "ops",
+    "subtitle_backfill_attempts"
+  )) > 0L) {
+    attempt_runs <- DBI::dbGetQuery(
+      con,
+      paste(
+        "SELECT publication_pipeline_run_id FROM ops.subtitle_backfill_attempts",
+        "WHERE batch_pipeline_run_id = ?",
+        "AND publication_pipeline_run_id IS NOT NULL"
+      ),
+      params = list(pipeline_run_id)
+    )$publication_pipeline_run_id
+  }
+  unique(c(
+    as.character(pipeline_run_id),
+    as.character(related),
+    as.character(attempt_runs)
+  ))
+}
+
+raw_data_admin_transcript_tracks <- function(database_path, pipeline_run_id) {
+  con <- raw_data_admin_connect(database_path)
+  on.exit(raw_data_admin_disconnect(con), add = TRUE)
+  if (nrow(raw_data_admin_columns(
+    con,
+    "ops",
+    "subtitle_backfill_attempts"
+  )) > 0L) {
+    attempts <- DBI::dbGetQuery(
+      con,
+      paste(
+        "SELECT attempt.candidate_position AS batch_position,",
+        "attempt.video_id, video.title, attempt.talent_code, talent.talent_name,",
+        "attempt.subtitle_language, attempt.subtitle_track_type,",
+        "attempt.source_scope, attempt.pipeline_version, attempt.raw_rows,",
+        "attempt.started_at, attempt.completed_at,",
+        "attempt.sentences, attempt.blocks, attempt.requested_blocks,",
+        "attempt.reused_blocks,",
+        "attempt.error_summary AS block_errors,",
+        "CASE attempt.status WHEN 'published' THEN 'Published'",
+        "WHEN 'current' THEN 'Already current'",
+        "WHEN 'failed' THEN 'Failed' ELSE 'In progress' END AS result",
+        "FROM ops.subtitle_backfill_attempts AS attempt",
+        "LEFT JOIN catalog.videos AS video",
+        "ON attempt.video_id = video.video_id",
+        "AND attempt.talent_code = video.talent_code",
+        "LEFT JOIN catalog.talents AS talent",
+        "ON attempt.talent_code = talent.talent_code",
+        "WHERE attempt.batch_pipeline_run_id = ?",
+        "ORDER BY attempt.candidate_position"
+      ),
+      params = list(pipeline_run_id)
+    )
+    if (nrow(attempts) > 0L) return(attempts)
+  }
+
+  related_run_ids <- raw_data_admin_transcript_related_run_ids(con, pipeline_run_id)
+  run_placeholders <- paste(rep("?", length(related_run_ids)), collapse = ", ")
+  sources <- character()
+  params <- list()
+  if (nrow(raw_data_admin_columns(con, "text", "subtitle_sentence_units")) > 0L) {
+    sources <- c(sources, paste(
+      "SELECT video_id, talent_code, subtitle_language, subtitle_track_type,",
+      "source_scope, pipeline_version, COUNT(*) AS sentences,",
+      "0 AS blocks, 0 AS failed_blocks, 0 AS incomplete_blocks,",
+      "SUM(CASE WHEN source_alignment_status = 'block_approximate' THEN 1 ELSE 0 END)",
+      "AS approximate_alignment, NULL::VARCHAR AS block_errors",
+      "FROM text.subtitle_sentence_units WHERE pipeline_run_id IN (",
+      run_placeholders, ") GROUP BY ALL"
+    ))
+    params <- c(params, as.list(related_run_ids))
+  }
+  if (nrow(raw_data_admin_columns(con, "ops", "subtitle_reconstruction_blocks")) > 0L) {
+    sources <- c(sources, paste(
+      "SELECT video_id, talent_code, subtitle_language, subtitle_track_type,",
+      "source_scope, pipeline_version, 0 AS sentences, COUNT(*) AS blocks,",
+      "SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed_blocks,",
+      "SUM(CASE WHEN status <> 'complete' THEN 1 ELSE 0 END) AS incomplete_blocks,",
+      "0 AS approximate_alignment, string_agg(DISTINCT error_summary, ' | ') AS block_errors",
+      "FROM ops.subtitle_reconstruction_blocks WHERE pipeline_run_id IN (",
+      run_placeholders, ") GROUP BY ALL"
+    ))
+    params <- c(params, as.list(related_run_ids))
+  }
+  if (length(sources) == 0L) return(data.frame())
+  DBI::dbGetQuery(con, paste(
+    "WITH records AS (", paste(sources, collapse = " UNION ALL "), "),",
+    "tracks AS (SELECT video_id, talent_code, subtitle_language, subtitle_track_type,",
+    "source_scope, pipeline_version, SUM(sentences) AS sentences, SUM(blocks) AS blocks,",
+    "SUM(failed_blocks) AS failed_blocks, SUM(incomplete_blocks) AS incomplete_blocks,",
+    "SUM(approximate_alignment) AS approximate_alignment,",
+    "string_agg(block_errors, ' | ') AS block_errors FROM records GROUP BY ALL)",
+    "SELECT tracks.video_id, video.title, tracks.talent_code, talent.talent_name,",
+    "tracks.subtitle_language, tracks.subtitle_track_type, tracks.source_scope,",
+    "tracks.pipeline_version, tracks.sentences, tracks.blocks, tracks.failed_blocks,",
+    "tracks.incomplete_blocks, tracks.approximate_alignment, tracks.block_errors,",
+    "CASE WHEN failed_blocks > 0 THEN 'Failed blocks'",
+    "WHEN incomplete_blocks > 0 THEN 'Incomplete blocks'",
+    "WHEN sentences > 0 THEN 'Published' ELSE 'No published sentences' END AS result",
+    "FROM tracks LEFT JOIN catalog.videos AS video",
+    "ON tracks.video_id = video.video_id AND tracks.talent_code = video.talent_code",
+    "LEFT JOIN catalog.talents AS talent ON tracks.talent_code = talent.talent_code",
+    "ORDER BY tracks.talent_code, tracks.video_id, tracks.subtitle_language,",
+    "tracks.subtitle_track_type, tracks.source_scope, tracks.pipeline_version"
+  ), params = params)
+}
+
+raw_data_admin_filter_transcript_tracks <- function(tracks, search = "") {
+  search <- if (is.null(search) || length(search) == 0L || is.na(search[[1]])) {
+    ""
+  } else {
+    trimws(as.character(search[[1]]))
+  }
+  if (nrow(tracks) == 0L || !nzchar(search)) return(tracks)
+
+  searchable_columns <- intersect(
+    c("video_id", "title", "talent_code", "talent_name", "result", "block_errors"),
+    names(tracks)
+  )
+  matches <- Reduce(`|`, lapply(searchable_columns, function(column) {
+    grepl(
+      tolower(search),
+      tolower(ifelse(is.na(tracks[[column]]), "", tracks[[column]])),
+      fixed = TRUE
+    )
+  }))
+  tracks[matches, , drop = FALSE]
+}
+
+raw_data_admin_transcript_text <- function(database_path, pipeline_run_id, track) {
+  con <- raw_data_admin_connect(database_path)
+  on.exit(raw_data_admin_disconnect(con), add = TRUE)
+  if (nrow(raw_data_admin_columns(con, "text", "subtitle_sentence_units")) == 0L) {
+    return(data.frame())
+  }
+  related_run_ids <- raw_data_admin_transcript_related_run_ids(con, pipeline_run_id)
+  run_placeholders <- paste(rep("?", length(related_run_ids)), collapse = ", ")
+  keys <- c("video_id", "talent_code", "subtitle_language", "subtitle_track_type",
+            "source_scope", "pipeline_version")
+  where <- paste(paste(keys, "IS NOT DISTINCT FROM ?"), collapse = " AND ")
+  DBI::dbGetQuery(con, paste(
+    "SELECT block_number, sentence_number, start_sec, end_sec, sentence_text,",
+    "source_alignment_status, timestamps_approximate",
+    "FROM text.subtitle_sentence_units WHERE pipeline_run_id IN (",
+    run_placeholders, ") AND", where,
+    "ORDER BY block_number, sentence_number, sentence_unit_key"
+  ), params = c(
+    as.list(related_run_ids),
+    lapply(keys, function(key) track[[key]][[1]])
+  ))
+}

@@ -246,6 +246,34 @@ assert_equal(
   "A transcript from another talent must not be returned."
 )
 
+assert_equal(attr(transcript, "subtitle_status"), "raw", "Raw fallback must be identified.")
+assert_equal(attr(cross_talent_transcript, "subtitle_status"), "missing", "Missing subtitles must be identified.")
+
+con <- DBI::dbConnect(duckdb::duckdb(), dbdir = fixture_path)
+DBI::dbExecute(con, paste(
+  "CREATE TABLE text.subtitle_sentence_units AS SELECT",
+  "talent_code, channel_id, video_id, 'full_track' AS source_scope,",
+  "1 AS block_number, 1 AS sentence_number, 6.0 AS start_sec,",
+  "'Cleaned sentence.' AS sentence_text FROM catalog.videos WHERE video_id = 'VIDEO_A'"
+))
+DBI::dbDisconnect(con, shutdown = TRUE)
+cleaned <- dashboard_load_individual_video_transcript(fixture_path, "T1", "VIDEO_A")
+assert_equal(attr(cleaned, "subtitle_status"), "cleaned", "Cleaned sentences should take precedence.")
+assert_equal(cleaned$dialogue[cleaned$source == "subtitle"], "Cleaned sentence.", "Raw subtitles must not be mixed into cleaned text.")
+assert_equal(cleaned$seconds[cleaned$source == "subtitle"], 6, "Cleaned timing must be preserved.")
+assert_equal(sum(cleaned$source == "chat"), 2L, "Cleaned transcripts must retain chat.")
+con <- DBI::dbConnect(duckdb::duckdb(), dbdir = fixture_path)
+DBI::dbExecute(con, "DELETE FROM text.subtitle_sentence_units")
+DBI::dbDisconnect(con, shutdown = TRUE)
+fallback <- dashboard_load_individual_video_transcript(fixture_path, "T1", "VIDEO_A")
+assert_equal(attr(fallback, "subtitle_status"), "raw", "An empty cleaned table must fall back to raw.")
+con <- DBI::dbConnect(duckdb::duckdb(), dbdir = fixture_path)
+DBI::dbExecute(con, "DELETE FROM text.subtitle_units WHERE video_id = 'VIDEO_A'")
+DBI::dbDisconnect(con, shutdown = TRUE)
+chat_only <- dashboard_load_individual_video_transcript(fixture_path, "T1", "VIDEO_A")
+assert_equal(attr(chat_only, "subtitle_status"), "missing", "Chat alone is not a video transcript.")
+assert_equal(nrow(chat_only), 2L, "Chat should remain available without subtitles.")
+
 cross_talent_history <- dashboard_load_individual_video_history(
   fixture_path,
   talent_code = "T1",
