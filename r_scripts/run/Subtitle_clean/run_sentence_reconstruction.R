@@ -4,6 +4,7 @@ library(readr)
 source(here("r_scripts", "lib", "clean_data", "clean_subtitles", "punctuation_client.R"))
 source(here("r_scripts", "lib", "clean_data", "clean_subtitles", "subtitle_units.R"))
 
+with_inference_machine({
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args) < 1L || args[[1]] %in% c("-h", "--help")) {
   stop(
@@ -29,7 +30,7 @@ talent_name <- if (length(args) >= 4L) args[[4]] else basename(dirname(subtitle_
 
 url <- Sys.getenv(
   "SUBTITLE_PUNCTUATION_URL",
-  unset = "http://192.168.1.165:8000/v1/punctuate"
+  unset = inference_punctuation_url()
 )
 timeout_sec <- as.numeric(Sys.getenv("SUBTITLE_PUNCTUATION_TIMEOUT_SEC", unset = "120"))
 target_words <- as.integer(Sys.getenv("SUBTITLE_BLOCK_TARGET_WORDS", unset = "175"))
@@ -52,3 +53,5 @@ message("Punctuation blocks: ", nrow(result$blocks))
 message("Sentence units: ", nrow(result$sentences))
 message("Wrote sentence Parquet: ", result$output_path)
 print(utils::head(result$sentences, 10L))
+
+})

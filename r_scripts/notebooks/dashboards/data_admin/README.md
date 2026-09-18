@@ -3,10 +3,10 @@
 This directory contains read-only internal dashboards for inspecting the unified
 talent lakehouse and its supporting operational artifacts.
 
-- `classification_dashboard/` monitors title-classification batches and data.
-- `raw_data_dashboard/` explores talent catalog data, analytics snapshots,
-  subtitles, chat logs, ingestion history, and data-quality signals.
+- `raw_data_dashboard/` is the single administration dashboard. It explores
+  talent catalog data, analytics snapshots, subtitles, chat logs, ingestion
+  history, data-quality signals, and title-classification batches and data.
 
-Both dashboards resolve the lakehouse with `talent_lakehouse_db_path()` and must
-remain read-only. They are administrative tools and should only be served behind
+The dashboard resolves the lakehouse with `talent_lakehouse_db_path()` and must
+remain read-only. It is an administrative tool and should only be served behind
 the authenticated internal reverse proxy.

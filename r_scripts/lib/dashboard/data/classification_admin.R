@@ -121,11 +121,13 @@ classification_admin_scan_runs <- function(run_root) {
     )
     candidates <- if (file.exists(candidate_path)) {
       tryCatch(
-        read.csv(
-          candidate_path,
-          stringsAsFactors = FALSE,
-          check.names = FALSE,
-          fileEncoding = "UTF-8"
+        suppressWarnings(
+          read.csv(
+            candidate_path,
+            stringsAsFactors = FALSE,
+            check.names = FALSE,
+            fileEncoding = "UTF-8"
+          )
         ),
         error = function(error) data.frame()
       )

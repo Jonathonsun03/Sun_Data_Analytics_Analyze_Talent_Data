@@ -301,6 +301,64 @@ deduplicate_caption_overlaps <- function(caption_text) {
   appended_text
 }
 
+deduplicate_rolling_caption_rows <- function(
+    work,
+    gap_tolerance_sec = 0.05,
+    min_overlap_words = 2L) {
+  if (nrow(work) == 0L) return(work)
+
+  # YouTube rolling captions repeat marked text in the immediately next window.
+  # Require markers, adjacent timestamps, and an exact multiword overlap so an
+  # ordinary repeated sentence in a later caption remains untouched.
+  cleaned_text <- work$text
+  for (video_id in unique(work$video_id)) {
+    video_rows <- which(work$video_id == video_id)
+    previous_text <- NULL
+    previous_end <- NA_real_
+
+    for (row_index in video_rows) {
+      text <- work$text[[row_index]]
+      words <- subtitle_word_locations(text)$word
+
+      if (!is.null(previous_text)) {
+        gap <- work$start_sec[[row_index]] - previous_end
+        previous_words <- subtitle_word_locations(previous_text)$word
+        overlap <- largest_exact_word_overlap(previous_words, words)
+        rolling_update <-
+          is.finite(gap) &&
+          abs(gap) <= gap_tolerance_sec &&
+          overlap >= min_overlap_words &&
+          stringr::str_detect(previous_text, stringr::fixed(">>")) &&
+          stringr::str_detect(text, stringr::fixed(">>"))
+
+        if (rolling_update && overlap == length(words)) {
+          cleaned_text[[row_index]] <- ""
+        } else if (rolling_update) {
+          locations <- subtitle_word_locations(text)
+          overlap_end <- locations$end[[overlap]]
+          next_word_start <- locations$start[[overlap + 1L]]
+          separator <- stringr::str_sub(
+            text,
+            overlap_end + 1L,
+            next_word_start - 1L
+          )
+          suffix <- stringr::str_squish(stringr::str_sub(text, next_word_start))
+          if (stringr::str_detect(separator, stringr::fixed(">>"))) {
+            suffix <- paste(">>", suffix)
+          }
+          cleaned_text[[row_index]] <- suffix
+        }
+      }
+
+      previous_text <- text
+      previous_end <- work$end_sec[[row_index]]
+    }
+  }
+
+  work$text <- cleaned_text
+  work
+}
+
 normalize_punctuation_model_input <- function(text) {
   text <- as.character(text)
   text <- stringr::str_replace_all(text, stringr::fixed(">>"), " ")
@@ -403,6 +461,11 @@ build_punctuation_blocks <- function(
     c("subtitle_language", "language", "lang"),
     required = FALSE
   )
+  source_key_col <- subtitle_pick_column(
+    df,
+    c("subtitle_unit_key", "source_record_key"),
+    required = FALSE
+  )
 
   language_values <- if (!is.null(subtitle_language)) {
     rep(as.character(subtitle_language[[1]]), nrow(df))
@@ -418,7 +481,12 @@ build_punctuation_blocks <- function(
     start_sec = suppressWarnings(as.numeric(df[[start_col]])),
     end_sec = suppressWarnings(as.numeric(df[[stop_col]])),
     text = stringr::str_squish(as.character(df[[text_col]])),
-    subtitle_language = language_values
+    subtitle_language = language_values,
+    subtitle_unit_key = if (is.na(source_key_col)) {
+      rep(NA_character_, nrow(df))
+    } else {
+      as.character(df[[source_key_col]])
+    }
   ) |>
     dplyr::filter(
       !is.na(.data$video_id),
@@ -428,7 +496,9 @@ build_punctuation_blocks <- function(
     ) |>
     dplyr::arrange(.data$video_id, .data$start_sec, .data$end_sec, .data$source_order)
 
-  work <- expand_speaker_turn_segments(work) |>
+  work <- deduplicate_rolling_caption_rows(work) |>
+    dplyr::filter(.data$text != "") |>
+    expand_speaker_turn_segments() |>
     dplyr::group_by(.data$video_id, .data$speaker_turn_id) |>
     dplyr::mutate(
       speaker_turn_marked = any(.data$speaker_turn_marked),
@@ -453,7 +523,8 @@ build_punctuation_blocks <- function(
     original_text = character(),
     model_input_text = character(),
     word_count = integer(),
-    subtitle_language = character()
+    subtitle_language = character(),
+    source_subtitle_unit_keys = list()
   )
   if (nrow(work) == 0L) return(empty_blocks)
 
@@ -482,7 +553,13 @@ build_punctuation_blocks <- function(
       original_text = original_text,
       model_input_text = model_input_text,
       word_count = subtitle_word_count(model_input_text),
-      subtitle_language = if (length(languages) == 0L) NA_character_ else languages[[1]]
+      subtitle_language = if (length(languages) == 0L) NA_character_ else languages[[1]],
+      source_subtitle_unit_keys = list(unique(
+        block_rows$subtitle_unit_key[
+          !is.na(block_rows$subtitle_unit_key) &
+            nzchar(block_rows$subtitle_unit_key)
+        ]
+      ))
     )
   }
 
@@ -525,7 +602,10 @@ build_punctuation_blocks <- function(
     }
   }
 
-  dplyr::bind_rows(blocks)
+  # Symbol-only captions (for example, [ __ ]) contain no sentence to restore.
+  # Filter after numbering so surviving blocks retain their checkpoint keys.
+  dplyr::bind_rows(blocks) |>
+    dplyr::filter(stringr::str_detect(.data$model_input_text, "[[:alnum:]]"))
 }
 
 split_punctuated_sentences <- function(text) {
@@ -539,8 +619,13 @@ split_punctuated_sentences <- function(text) {
   )
   sentences <- unlist(strsplit(marked, "\n", fixed = TRUE), use.names = FALSE)
   sentences <- stringr::str_squish(sentences)
+  sentences <- sentences[
+    !is.na(sentences) &
+      nzchar(sentences) &
+      stringr::str_detect(sentences, "[[:alnum:]]")
+  ]
   sentences <- vapply(sentences, capitalize_first_alphabetic, character(1), USE.NAMES = FALSE)
-  sentences[!is.na(sentences) & nzchar(sentences)]
+  sentences
 }
 
 empty_sentence_units <- function() {
@@ -556,7 +641,8 @@ empty_sentence_units <- function() {
     text = character(),
     punctuation_model = character(),
     timestamps_approximate = logical(),
-    timestamp_method = character()
+    timestamp_method = character(),
+    source_subtitle_unit_keys = list()
   )
 }
 
@@ -596,6 +682,13 @@ sentence_units_from_block <- function(block, punctuated_text, punctuation_model 
   }
   speaker_change <- rep(FALSE, length(sentences))
   speaker_change[[1]] <- speaker_turn_marked && turn_block_number == 1L
+  source_subtitle_unit_keys <- if (
+    "source_subtitle_unit_keys" %in% names(block)
+  ) {
+    as.character(block$source_subtitle_unit_keys[[1]])
+  } else {
+    character()
+  }
 
   tibble::tibble(
     video_id = as.character(block$video_id[[1]]),
@@ -609,18 +702,23 @@ sentence_units_from_block <- function(block, punctuated_text, punctuation_model 
     text = sentences,
     punctuation_model = as.character(punctuation_model[[1]]),
     timestamps_approximate = TRUE,
-    timestamp_method = "block_word_proportion"
+    timestamp_method = "block_word_proportion",
+    source_subtitle_unit_keys = rep(
+      list(source_subtitle_unit_keys),
+      length(sentences)
+    )
   )
 }
 
 reconstruct_sentence_units <- function(
     blocks,
-    url = "http://192.168.1.165:8000/v1/punctuate",
+    url = inference_punctuation_url(),
     timeout_sec = 120,
     allow_unknown_language = TRUE,
     punctuate_fn = punctuate_text) {
   if (nrow(blocks) == 0L) return(empty_sentence_units())
 
+  with_inference_machine({
   results <- vector("list", nrow(blocks))
   for (i in seq_len(nrow(blocks))) {
     block <- blocks[i, , drop = FALSE]
@@ -657,10 +755,12 @@ reconstruct_sentence_units <- function(
   if (nrow(sentences) == 0L) return(empty_sentence_units())
 
   sentences |>
-    dplyr::arrange(.data$video_id, .data$block_number, .data$sentence_number) |>
+    # Speaker blocks may overlap in time; retain stable order within each block.
+    dplyr::arrange(.data$video_id, .data$start_sec, .data$block_number, .data$sentence_number) |>
     dplyr::group_by(.data$video_id) |>
     dplyr::mutate(sentence_number = dplyr::row_number()) |>
     dplyr::ungroup()
+  })
 }
 
 write_sentence_units_parquet <- function(sentence_units, output_path) {
@@ -705,7 +805,7 @@ reconstruct_sentence_file <- function(
     talent_name = NULL,
     target_words = 175L,
     max_words = 200L,
-    url = "http://192.168.1.165:8000/v1/punctuate",
+    url = inference_punctuation_url(),
     timeout_sec = 120,
     allow_unknown_language = TRUE,
     punctuate_fn = punctuate_text) {

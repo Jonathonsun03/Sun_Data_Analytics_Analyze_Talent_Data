@@ -46,6 +46,13 @@ dashboard load; later filter changes continue to use the Apply filters button.
 Missing or invalid authorization leaves the control empty and does not fall
 back to the full talent catalog.
 
+`r_scripts/notebooks/dashboards/individual_videos/dashboard.qmd` uses the same
+session access context. Its video selector lists every catalog video for the
+authorized talent by title, and its analytics-history and full-transcript
+queries are constrained by both `talent_code` and `video_id`. The transcript
+view reads canonical streamer subtitles and chat messages without applying the
+analytics snapshot date filter.
+
 Each new Shiny session reloads the talent catalog from DuckDB so analytics
 snapshot bounds do not remain pinned to the long-running Quarto process's
 startup state. While a session remains open, its analytics freshness status refreshes

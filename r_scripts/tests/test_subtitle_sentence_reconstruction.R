@@ -86,6 +86,11 @@ assert_equal(
   c("I don't know.", "\"Really?\"", "Yes!"),
   "Sentence beginnings were not capitalized"
 )
+assert_equal(
+  split_punctuated_sentences("Have fun. “. I am ready."),
+  c("Have fun.", "I am ready."),
+  "Punctuation-only model fragments should not become sentence units"
+)
 
 captions <- tibble::tibble(
   VideoID = c(rep("video-a", 4), rep("video-b", 2)),
@@ -162,6 +167,35 @@ assert_equal(
   turn_blocks$model_input_text,
   c("intro words continue", "words continue now", "final words"),
   "Overlap cleanup crossed a speaker boundary or failed within a turn"
+)
+
+rolling_blocks <- build_punctuation_blocks(tibble::tibble(
+  video_id = "rolling-video",
+  start_sec = c(15.840, 17.830, 17.840, 19.190, 19.200),
+  end_sec = c(17.830, 17.840, 19.190, 19.200, 23.830),
+  text = c(
+    "It's fine. I got it. Uh\n>> guess I'll just uh",
+    ">> guess I'll just uh",
+    ">> guess I'll just uh\n>> go get a broom then.",
+    ">> go get a broom then.",
+    ">> go get a broom then.\n>> No, it's right back. It's a man. Um"
+  ),
+  subtitle_unit_key = paste0("rolling-source-", 1:5)
+), target_words = 100, max_words = 120)
+assert_equal(
+  rolling_blocks$model_input_text,
+  c(
+    "It's fine I got it Uh",
+    "guess I'll just uh",
+    "go get a broom then",
+    "No it's right back It's a man Um"
+  ),
+  "Rolling caption updates repeated phrases across artificial speaker turns"
+)
+assert_true(
+  !any(unlist(rolling_blocks$source_subtitle_unit_keys) %in%
+    c("rolling-source-2", "rolling-source-4")),
+  "Fully duplicated rolling caption rows should not enter sentence lineage"
 )
 assert_true(
   all(!duplicated(turn_blocks[, c("video_id", "speaker_turn_id", "block_number")])),
@@ -275,3 +309,18 @@ assert_true(
 )
 
 cat("subtitle sentence reconstruction tests passed\n")
+
+# Censor/punctuation-only turns are not inference units. Preserve later block
+# numbers so existing successful checkpoints still match after filtering.
+symbol_blocks <- build_punctuation_blocks(tibble::tibble(
+  video_id = "symbol-test",
+  start_sec = c(0, 1, 2, 3), end_sec = c(1, 2, 3, 4),
+  text = c(">> Hello world", ">> [ __ ]", ">> ___", ">> Welcome back"),
+  subtitle_unit_key = paste0("symbol-source-", 1:4)
+))
+assert_equal(symbol_blocks$block_number, c(1L, 4L), "Symbol filtering changed checkpoint block numbers")
+assert_equal(symbol_blocks$model_input_text, c("Hello world", "Welcome back"), "Symbol-only blocks were retained")
+assert_equal(nrow(build_punctuation_blocks(tibble::tibble(
+  video_id = "only-symbols", start_sec = 0, end_sec = 1, text = "[ __ ]"
+))), 0L, "All-symbol track produced inference blocks")
+cat("symbol-only block filtering tests passed\n")

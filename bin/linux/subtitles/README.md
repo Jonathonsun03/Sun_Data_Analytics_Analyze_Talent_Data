@@ -1,5 +1,131 @@
 # Subtitles Runner
 
+## Canonical DuckDB sentence backfill
+
+The maintained full-track sentence backfill reads canonical raw rows from
+`text.subtitle_units`, closes DuckDB, and runs all inference for that video.
+Each successful block is saved immediately to one persistent RDS checkpoint file
+per video. After inference, the runner opens DuckDB, rechecks the source checksum,
+and transactionally publishes completed checkpoints and sentence rows to
+`text.subtitle_sentence_units` with `source_scope = 'full_track'`.
+
+Inventory the work without model calls or database writes:
+
+```bash
+bin/linux/subtitles/run_subtitle_sentence_backfill.sh --dry-run
+```
+
+Run a one-video pilot:
+
+```bash
+bin/linux/subtitles/run_subtitle_sentence_backfill.sh \
+  --execute \
+  --video-id VIDEO_ID
+```
+
+Process a bounded number of videos that actually need work:
+
+```bash
+bin/linux/subtitles/run_subtitle_sentence_backfill.sh \
+  --execute \
+  --max-new-videos 10
+```
+
+The initial DuckDB query excludes tracks already current for the exact source
+checksum and pipeline version. `--max-videos` limits that filtered candidate
+list; with `--force`, it limits the unfiltered list. `--max-new-videos` remains
+the batch work limit, and the options can be combined.
+
+Before an executable batch processes its first video, it checks the inference
+API. A ready API skips wake-on-LAN. If the API is unavailable, the runner sends
+one wake packet and waits for the host, container, and API, stopping after the
+configured readiness timeout rather than polling indefinitely.
+
+The checked-in user-systemd timer runs 50 new videos daily at 07:00
+America/New_York. It sets `INFERENCE_MANAGE_CONTAINER=true`, because CT 106 may
+remain stopped after the physical host wakes. Automatic physical-host shutdown
+is off by default, so the daily backfill leaves the NLP host running when it
+finishes.
+
+Shutdown remains available as an explicit opt-in. Set the following environment
+variable for a manual run or add the same `Environment=` setting to a private
+systemd override:
+
+```bash
+INFERENCE_MACHINE_SHUTDOWN_GUARD_COMMAND='python3 /opt/sun-data/py_scripts/run/inference_shutdown_guard.py'
+```
+
+Install or refresh the default timer with:
+
+```bash
+mkdir -p "$HOME/.config/systemd/user"
+cp config/systemd/sun-data-subtitle-backfill.{service,timer} \
+  "$HOME/.config/systemd/user/"
+systemctl --user daemon-reload
+systemctl --user enable --now sun-data-subtitle-backfill.timer
+```
+
+Inspect the next run and recent output with:
+
+```bash
+systemctl --user list-timers sun-data-subtitle-backfill.timer
+journalctl --user -u sun-data-subtitle-backfill.service
+```
+
+The runner waits before DuckDB reads and completed-video publication while
+`<TALENT_DATALAKE_ROOT>/Logs/collection-active` exists. Set
+`COLLECTION_ACTIVE_MARKER` in both repositories only when the collection and
+analytics environments need an explicit shared path. The fixed polling interval
+is 15 seconds. Inference already in progress finishes without checking the
+marker; its DuckDB publication waits until collection removes the marker.
+
+The Bash file is only the command-line wrapper. Its R entrypoint is
+`r_scripts/run/Subtitle_clean/backfill_subtitle_sentences.R`; focused reusable
+functions live in `r_scripts/lib/subtitle_backfill/`. Their individual
+responsibilities and execution order are mapped in that directory's `README.md`.
+
+Start the complete backfill in a detached tmux session:
+
+```bash
+bin/linux/subtitles/start_subtitle_sentence_backfill_tmux.sh
+```
+
+The launcher prints the tmux session name and persistent DataLake log path.
+Use:
+
+```bash
+tmux attach -t subtitle-sentence-backfill
+```
+
+Detach without stopping the process with `Ctrl+B`, then `D`. Completed tracks
+are checksum- and pipeline-version-aware and are skipped on another run.
+Completed blocks for an interrupted track are also reused, so restarting the
+same command resumes rather than repeating successful FullStop requests.
+
+Failed blocks receive up to three attempts per run by default. Only successful
+responses are saved locally; restarting retries unfinished blocks. `--retry-failed`
+still resets exhausted legacy failed checkpoints already stored in DuckDB.
+Use `--force` only when intentionally rebuilding already-current tracks.
+
+The checkpoint directory defaults to
+`<Talent DataLake root>/Processed/subtitle_backfill_checkpoints/`, derived from the
+configured lakehouse path. Override it with `SUBTITLE_BACKFILL_CHECKPOINT_DIR` if
+needed; use a persistent directory outside the staging tree cleared by refresh.
+Each video has one hash-named `.rds` file containing its existing checkpoint rows
+and deterministic source/block keys. Writes replace that file atomically. Files
+remain after publication for recovery; DuckDB remains the authoritative store.
+
+No DuckDB reads or writes occur inside the per-video inference loop. The final
+save retries database lock conflicts up to 12 times with a fixed five-second
+sleep, using the existing helper. Other errors fail immediately. If retries are
+exhausted, keep the checkpoint file and rerun the same command: successful model
+calls are reused. Source changes prevent stale publication. The existing run-log
+updates still use short connections at the start and end of the overall run.
+
+DuckDB permits only one process that can write at a time. Close Quarto previews,
+interactive R sessions, or dashboards that hold the talent lakehouse open
+before starting the backfill.
+
 ## `run_subtitle_clean.sh`
 
 Wrapper script for:
@@ -57,7 +183,7 @@ bin/linux/subtitles/run_subtitle_clean.sh --talent-query "Avaritia"
 - `SUBTITLE_PUNCTUATION_ENABLED` (env var)
   - Enables the sentence reconstruction stage (default: `true`)
 - `SUBTITLE_PUNCTUATION_URL` (env var)
-  - Punctuation endpoint (default: `http://192.168.1.165:8000/v1/punctuate`)
+  - Punctuation endpoint (default: `http://192.168.1.173:8000/v1/punctuate`)
 - `SUBTITLE_PUNCTUATION_TIMEOUT_SEC` (env var)
   - Per-block HTTP timeout in seconds (default: `120`)
 - `SUBTITLE_BLOCK_TARGET_WORDS` / `SUBTITLE_BLOCK_MAX_WORDS` (env vars)

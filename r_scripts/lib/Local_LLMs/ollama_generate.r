@@ -1,9 +1,11 @@
+source(here::here("r_scripts", "lib", "utils", "inference_machine.R"))
+
 library(httr)
 library(jsonlite)
 
 ollama_generate <- function(prompt,
                             model = "mistral:latest",
-                            host  = "http://100.126.162.100:11434",
+                            host  = Sys.getenv("OLLAMA_HOST", "http://100.126.162.100:11434"),
                             temperature = 0.2,
                             timeout_s = 600) {
 
@@ -15,6 +17,8 @@ ollama_generate <- function(prompt,
     options = list(temperature = temperature)
   )
 
+  with_inference_machine({
+  ensure_inference_machine(url)
   resp <- httr::POST(url, body = body, encode = "json", httr::timeout(timeout_s))
 
   if (httr::http_error(resp)) {
@@ -24,6 +28,7 @@ ollama_generate <- function(prompt,
 
   out <- httr::content(resp, as = "parsed", type = "application/json", encoding = "UTF-8")
   out$response
+  })
 }
 
 chunk_text <- function(x, chunk_chars = 5000) {
@@ -34,11 +39,12 @@ chunk_text <- function(x, chunk_chars = 5000) {
 }
 
 summarize_chat <- function(snippet,
-                           host = "http://100.126.162.100:11434",
+                           host = Sys.getenv("OLLAMA_HOST", "http://100.126.162.100:11434"),
                            chunk_chars = 5000,
                            chunk_model = "phi:latest",
                            final_model = "mistral:latest") {
 
+  with_inference_machine({
   chunks <- chunk_text(snippet, chunk_chars = chunk_chars)
 
   chunk_summaries <- vapply(chunks, function(ch) {
@@ -64,4 +70,5 @@ summarize_chat <- function(snippet,
     temperature = 0.1,
     timeout_s = 900
   )
+  })
 }

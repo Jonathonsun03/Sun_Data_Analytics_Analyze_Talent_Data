@@ -9,12 +9,11 @@ notebook sources.
   - interactive and published dashboard notebooks
   - `dashboards/company_dashboard/dashboard.qmd` is the company-level Shiny
     dashboard for selecting a company, its talents, and an analytics date range
-  - `dashboards/data_admin/classification_dashboard/dashboard.qmd` is the
-    read-only Shiny operations view for title-classification runs, artifacts,
-    tags, and coverage
+  - `dashboards/individual_videos/dashboard.qmd` is the permission-scoped Shiny
+    dashboard for inspecting one video's metric history across daily snapshots
   - `dashboards/data_admin/raw_data_dashboard/dashboard.qmd` is the read-only
-    DuckDB explorer for talent analytics, subtitles, chat, ingestion history,
-    and data-quality checks
+    administration dashboard for raw talent data, cleaned-transcript processes,
+    and title-classification diagnostics
 - `models/`
   - model development, evaluation, diagnostics, and model explainers
   - group related notebooks by analytical family, such as `day_of_week/` or
@@ -25,6 +24,11 @@ notebook sources.
   - executable notebooks that validate repository or environment behavior
   - `title_classification_pipeline.qmd` documents the mixed R/Python title
     pipeline and runs read-only health checks against the unified DuckDB
+  - `tests/transcript_cleaning/pipeline_overview.qmd` documents the complete
+    subtitle-cleaning, FullStop sentence-reconstruction, DuckDB publication,
+    and backfill design
+  - `tests/transcript_cleaning/stream_example.qmd` and `short_example.qmd`
+    execute focused, real-data quality demonstrations for the two content types
 
 ## Boundaries
 

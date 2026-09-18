@@ -4,8 +4,8 @@
 
 This dashboard is the internal analytical source of truth for company-level and
 talent-level performance. It brings validated metrics, comparisons, content
-patterns, audience evidence, representative examples, and data-quality context
-into one place so those findings can support many downstream uses.
+patterns, audience evidence, video-level detail, and data-quality context into
+one place so those findings can support many downstream uses.
 
 ## Role boundary
 
@@ -31,14 +31,14 @@ or event proposals. Those downstream materials remain separate deliverables.
   video-page subscription events.
 - Reconcile company totals through a per-talent breakdown and snapshot-coverage
   table.
-- Analyze monthly publishing, talent-level weekday publishing, collaborations,
-  classified topics, and included references.
+- Analyze monthly publishing by content type, talent-level weekday publishing,
+  collaborations, classified topics, and included references.
 - Compare average, median, watch-time, retention, and video-page subscription
   performance by content type and topic.
 - Show talent contribution shares, content mix, collaboration-tagged share, and
   topic breadth.
-- Explore searchable video-level evidence and reproducibly selected
-  representative content.
+- Explore searchable video-level evidence with classifications, performance,
+  engagement measures, and source URLs.
 - Download company, talent, content, and video-level tables for downstream
   analysis or design.
 - Report fun statistics, metric definitions, source coverage, and unsupported
@@ -61,10 +61,9 @@ turning the dashboard into a bid packet:
 3. **Talent portfolio:** each talent's share of releases, views, watch time, and
    video-page subscription events, plus content mix, collaboration-tagged
    share, and topic breadth.
-4. **Content relevance:** topic, reference, format, and collaboration
-   performance with top-three-per-talent representative content selected by a
-   visible cumulative-view criterion.
-5. **Representative-content explorer:** searchable video details,
+4. **Content relevance:** topic, reference, format, and collaboration context
+   summarized from the latest title-classification results.
+5. **Video explorer:** searchable video details,
    classifications, observed performance, engagement measures, and source URLs.
 6. **Fun statistics:** continuous release days, common release day, busiest
    publishing month, topic breadth, and view milestones.

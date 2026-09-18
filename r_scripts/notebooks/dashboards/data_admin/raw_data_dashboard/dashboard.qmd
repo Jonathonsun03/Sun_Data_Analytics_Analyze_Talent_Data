@@ -1,5 +1,5 @@
 ---
-title: "Raw Talent Data Administration"
+title: "Talent Data Administration"
 format:
   dashboard:
     orientation: rows
@@ -26,6 +26,170 @@ execute:
   font-size: 0.80rem;
 }
 
+.transcript-workflow {
+  color: var(--bs-secondary-color);
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.transcript-processes-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 1rem;
+  align-items: stretch;
+  width: 100%;
+}
+
+.transcript-processes-layout > .transcript-browser-pane,
+.transcript-processes-layout > .transcript-detail-pane {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  padding: 1rem;
+}
+
+.transcript-processes-layout .html-fill-item {
+  flex: 0 0 auto;
+}
+
+.transcript-processes-layout .transcript-header-actions {
+  flex-direction: row;
+}
+
+.transcript-processes-layout .nav-tabs {
+  display: flex;
+  flex-direction: row;
+  gap: 1rem;
+}
+
+.transcript-processes-layout h3 {
+  font-size: 1rem;
+  margin: 0 0 1rem;
+}
+
+.transcript-detail-pane .tab-content {
+  max-height: 68vh;
+  overflow: auto;
+}
+
+@media (max-width: 900px) {
+  .transcript-processes-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.transcript-batch-summary,
+.transcript-video-metadata {
+  display: grid;
+  gap: 0.55rem 0.9rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.transcript-summary-item,
+.transcript-metadata-item {
+  min-width: 0;
+}
+
+.transcript-summary-label,
+.transcript-metadata-label {
+  color: var(--bs-secondary-color);
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.transcript-summary-value,
+.transcript-metadata-value {
+  display: block;
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+
+.transcript-summary-wide {
+  grid-column: 1 / -1;
+}
+
+.transcript-panel-divider {
+  border-top: 1px solid var(--bs-border-color);
+  margin: 0.85rem 0;
+}
+
+.transcript-video-heading {
+  margin-bottom: 0.8rem;
+}
+
+.transcript-video-heading h4 {
+  font-size: 1.12rem;
+  margin-bottom: 0.2rem;
+}
+
+.transcript-video-id {
+  color: var(--bs-secondary-color);
+  font-family: var(--bs-font-monospace);
+  font-size: 0.78rem;
+}
+
+.transcript-header-actions {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.transcript-header-actions > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.transcript-header-actions .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+#transcript_tracks table.dataTable td {
+  vertical-align: top;
+  white-space: normal;
+}
+
+.transcript-reading-list {
+  max-height: 68vh;
+  overflow-y: auto;
+  padding-right: 0.35rem;
+}
+
+.transcript-reading-row {
+  border-bottom: 1px solid var(--bs-border-color);
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  padding: 0.7rem 0.25rem;
+}
+
+.transcript-reading-time {
+  color: var(--bs-primary);
+  font-family: var(--bs-font-monospace);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.transcript-reading-text {
+  font-size: 0.96rem;
+  line-height: 1.5;
+}
+
+.transcript-empty-state {
+  color: var(--bs-secondary-color);
+  padding: 1.5rem 0.5rem;
+  text-align: center;
+}
+
 @media (max-width: 768px) {
   .dashboard-page .card,
   .dashboard-page .card:not(.bslib-value-box) {
@@ -39,6 +203,19 @@ execute:
 
   .dataTables_wrapper {
     font-size: 0.72rem;
+  }
+
+  .transcript-header-actions {
+    display: block;
+  }
+
+  .transcript-header-actions .btn {
+    margin-top: 0.5rem;
+  }
+
+  .transcript-reading-row {
+    gap: 0.35rem;
+    grid-template-columns: 1fr;
   }
 }
 </style>
@@ -84,15 +261,32 @@ source(
     "raw_data_admin.R"
   )
 )
+source(
+  here::here(
+    "r_scripts",
+    "lib",
+    "dashboard",
+    "data",
+    "classification_admin.R"
+  )
+)
 
 load_repo_env()
 raw_admin_database_path <- talent_lakehouse_db_path()
+admin_database_path <- raw_admin_database_path
+admin_run_root <- classification_admin_resolve_run_root()
 
 raw_admin_value <- function(value, fallback = "—") {
   if (length(value) == 0L || is.na(value[[1]]) || !nzchar(as.character(value[[1]]))) {
     return(fallback)
   }
   as.character(value[[1]])
+}
+
+raw_admin_values <- function(values, fallback = "—") {
+  values <- as.character(values)
+  values[is.na(values) | !nzchar(values)] <- fallback
+  values
 }
 
 raw_admin_time <- function(value) {
@@ -117,7 +311,37 @@ raw_admin_input <- function(value, fallback) {
   if (is.null(value) || length(value) == 0L) fallback else value
 }
 
-raw_admin_table <- function(data, page_length = 10L, filter = "top") {
+raw_admin_metadata_item <- function(label, value, wide = FALSE) {
+  tags$div(
+    class = paste(
+      "transcript-metadata-item",
+      if (isTRUE(wide)) "transcript-summary-wide" else ""
+    ),
+    tags$span(class = "transcript-metadata-label", label),
+    tags$span(class = "transcript-metadata-value", raw_admin_value(value))
+  )
+}
+
+raw_admin_timestamp <- function(value) {
+  if (length(value) == 0L || is.na(value[[1]])) return("—")
+  seconds <- suppressWarnings(as.numeric(value[[1]]))
+  if (is.na(seconds) || seconds < 0) return("—")
+  whole_seconds <- floor(seconds)
+  hours <- whole_seconds %/% 3600L
+  minutes <- (whole_seconds %% 3600L) %/% 60L
+  remaining_seconds <- whole_seconds %% 60L
+  if (hours > 0L) {
+    sprintf("%02d:%02d:%02d", hours, minutes, remaining_seconds)
+  } else {
+    sprintf("%02d:%02d", minutes, remaining_seconds)
+  }
+}
+
+raw_admin_table <- function(
+    data,
+    page_length = 10L,
+    filter = "top",
+    selection = "none") {
   if (nrow(data) == 0L) {
     data <- data.frame(message = "No rows are available for this view.")
     filter <- "none"
@@ -126,6 +350,7 @@ raw_admin_table <- function(data, page_length = 10L, filter = "top") {
     data,
     rownames = FALSE,
     filter = filter,
+    selection = selection,
     escape = TRUE,
     options = list(
       pageLength = page_length,
@@ -137,7 +362,7 @@ raw_admin_table <- function(data, page_length = 10L, filter = "top") {
 }
 
 raw_admin_empty_plot <- function(message) {
-  plotly::plot_ly() |>
+  plotly::plot_ly(type = "scatter", mode = "markers") |>
     plotly::layout(
       xaxis = list(visible = FALSE),
       yaxis = list(visible = FALSE),
@@ -151,38 +376,108 @@ raw_admin_empty_plot <- function(message) {
       ))
     )
 }
+
+admin_format_time <- function(value) {
+  if (length(value) == 0L) return("Not available")
+  value <- value[[1]]
+  if (is.na(value)) return("Not available")
+  if (!inherits(value, "POSIXt")) {
+    value <- classification_admin_parse_time(value)
+  }
+  if (is.na(value)) return("Not available")
+  format(value, "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")
+}
+
+admin_format_times <- function(values) {
+  parsed <- classification_admin_parse_time(values)
+  formatted <- format(parsed, "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")
+  formatted[is.na(parsed)] <- "Not available"
+  formatted
+}
+
+admin_value <- function(value, fallback = "—") {
+  if (length(value) == 0L || is.na(value[[1]]) || !nzchar(as.character(value[[1]]))) {
+    return(fallback)
+  }
+  as.character(value[[1]])
+}
+
+admin_value_box <- function(title, value) {
+  bslib::value_box(title = title, value = admin_value(value))
+}
+
+admin_empty_plot <- function(message) {
+  raw_admin_empty_plot(message)
+}
+
+admin_bar_plot <- function(data, label, value, x_title = "Titles") {
+  if (nrow(data) == 0L) return(admin_empty_plot("No data are available."))
+  data <- data[order(data[[value]], decreasing = FALSE), , drop = FALSE]
+  plotly::plot_ly(
+    data,
+    x = data[[value]],
+    y = stats::reorder(data[[label]], data[[value]]),
+    type = "bar",
+    orientation = "h",
+    text = data[[value]],
+    textposition = "auto",
+    hovertemplate = paste0("%{y}<br>", x_title, ": %{x:,}<extra></extra>")
+  ) |>
+    plotly::layout(
+      xaxis = list(title = x_title),
+      yaxis = list(title = ""),
+      margin = list(l = 100, r = 20, t = 10, b = 45)
+    )
+}
+
+admin_datatable <- function(data, page_length = 10L, filter = "top", scroll_x = TRUE) {
+  if (nrow(data) == 0L) {
+    data <- data.frame(message = "No rows matched the current selection.")
+    filter <- "none"
+  }
+  DT::datatable(
+    data,
+    rownames = FALSE,
+    filter = filter,
+    options = list(
+      pageLength = page_length,
+      scrollX = scroll_x,
+      autoWidth = TRUE,
+      dom = "tip"
+    )
+  )
+}
+
+admin_display_runs <- function(runs) {
+  if (nrow(runs) == 0L) return(data.frame())
+  runs |>
+    transmute(
+      run_id = .data$run_id,
+      status = .data$status,
+      created_utc = admin_format_times(.data$created_at),
+      titles = .data$title_count,
+      talents = .data$talents,
+      model = .data$model,
+      results_applied = .data$result_count,
+      unique_tags = .data$tag_count,
+      failed = .data$failed_count
+    )
+}
 ```
 
 # {.sidebar}
 
 ```{r}
-actionButton("refresh_data", "Refresh database", class = "btn-primary")
-
-checkboxInput(
-  "auto_refresh",
-  "Refresh every five minutes",
-  value = TRUE
-)
+actionButton("refresh_dashboard", "Refresh dashboard", class = "btn-primary")
 
 uiOutput("database_freshness")
 hr()
-uiOutput("relation_selector")
-uiOutput("talent_filter")
-textInput("video_filter", "Exact video ID", value = "")
-numericInput(
-  "row_limit",
-  "Maximum preview rows",
-  value = 500,
-  min = 25,
-  max = 5000,
-  step = 25
-)
-actionButton("load_preview", "Load preview")
+tags$strong("Title classification")
+br()
+uiOutput("run_selector")
+downloadButton("download_selected_run", "Download selected run")
 hr()
-helpText(
-  "Filters apply when the selected relation contains talent_code or video_id. ",
-  "All database connections are read-only."
-)
+helpText("Refresh applies to every page. All connections are read-only.")
 ```
 
 # Overview
@@ -265,9 +560,32 @@ DTOutput("health_checks")
 
 # Explore Relations
 
-Choose a relation and optional exact talent or video filter in the sidebar.
+Choose a relation and optional exact talent or video filter on this page.
 The preview is deliberately row-limited; the download contains the same rows
 shown in the current preview.
+
+## Row {height=22%}
+
+```{r}
+#| title: "Relation Preview Controls"
+fluidRow(
+  column(3, uiOutput("relation_selector")),
+  column(3, uiOutput("talent_filter")),
+  column(3, textInput("video_filter", "Exact video ID", value = "")),
+  column(
+    3,
+    numericInput(
+      "row_limit",
+      "Maximum preview rows",
+      value = 500,
+      min = 25,
+      max = 5000,
+      step = 25
+    ),
+    actionButton("load_preview", "Load preview")
+  )
+)
+```
 
 ## Row {height=18%}
 
@@ -298,7 +616,7 @@ div(
 )
 ```
 
-## Row {height=82%}
+## Row {height=60%}
 
 ```{r}
 #| title: "Relation Contents"
@@ -356,6 +674,61 @@ plotlyOutput("talent_coverage_plot", height = "100%")
 DTOutput("talent_coverage")
 ```
 
+# Transcript Processes {scrolling="true"}
+
+Choose a processing batch, review every recorded video attempt in that batch,
+then search by video ID, title, talent, or result. Times are UTC.
+
+```{r}
+#| title: "Browse and Inspect Transcripts"
+div(
+  class = "transcript-processes-layout",
+  div(
+    class = "transcript-browser-pane",
+    tags$h3("Batch and Videos"),
+    tags$p(
+      class = "transcript-workflow",
+      "Choose batch → Search/filter videos → Select video"
+    ),
+    selectInput(
+      "transcript_run",
+      "Processing batch",
+      choices = character(),
+      width = "100%"
+    ),
+    uiOutput("transcript_run_summary"),
+    tags$div(class = "transcript-panel-divider"),
+    textInput(
+      "transcript_batch_search",
+      "Search this batch",
+      value = "",
+      placeholder = "For example: 6dm9kUCCfhM, RIU5, or Failed",
+      width = "100%"
+    ),
+    uiOutput("transcript_search_summary"),
+    DTOutput("transcript_tracks", height = "auto", fill = FALSE)
+  ),
+  div(
+    class = "transcript-detail-pane",
+    tags$h3("Selected Video Transcript"),
+    div(
+      class = "transcript-header-actions",
+      uiOutput("selected_transcript_video"),
+      downloadButton("download_transcript", "Download full transcript CSV")
+    ),
+    tabsetPanel(
+      id = "transcript_view",
+      type = "tabs",
+      tabPanel("Reading View", uiOutput("transcript_reading")),
+      tabPanel(
+        "Audit / Table View",
+        DTOutput("transcript_sentences", height = "auto", fill = FALSE)
+      )
+    )
+  )
+)
+```
+
 # Recent Activity
 
 Relevant pipeline runs exclude classification, qualitative coding, and summary
@@ -376,16 +749,466 @@ DTOutput("recent_runs")
 DTOutput("recent_events")
 ```
 
+# Classification Overview
+
+The classification diagnostics report the newest traceable Batch run and
+current active-version coverage. Batch status reflects the scheduler's most
+recent check; this dashboard does not poll OpenAI directly.
+
+## Row {height=18%}
+
+```{r}
+#| title: "Current Run"
+uiOutput("latest_status")
+```
+
+```{r}
+#| title: "Titles in Run"
+uiOutput("latest_titles")
+```
+
+```{r}
+#| title: "Current Pending Titles"
+uiOutput("current_pending")
+```
+
+```{r}
+#| title: "Last Checked"
+uiOutput("latest_checked")
+```
+
+## Row {height=38%}
+
+```{r}
+#| title: "Titles by Talent in Latest Run"
+plotlyOutput("latest_talent_plot", height = "100%")
+```
+
+```{r}
+#| title: "Current Active-Version Coverage"
+plotlyOutput("classification_coverage_plot", height = "100%")
+```
+
+## Row {height=44%}
+
+```{r}
+#| title: "Recent Classification Runs"
+DTOutput("run_history")
+```
+
+# Classification Run Details
+
+Select a run in the sidebar to inspect its essential metrics, talents, tags,
+and titles.
+
+## Row {height=36%}
+
+```{r}
+#| title: "Selected Run Summary"
+DTOutput("selected_run_summary")
+```
+
+```{r}
+#| title: "Talent Membership"
+plotlyOutput("selected_run_talents", height = "100%")
+```
+
+```{r}
+#| title: "Tag Frequency"
+plotlyOutput("selected_run_tags", height = "100%")
+```
+
+## Row {height=64%}
+
+```{r}
+#| title: "Titles in Selected Run"
+DTOutput("selected_run_titles")
+```
+
+# Classification Results
+
+This page exposes all classification rows, including older migrated versions.
+
+## Row {height=28%}
+
+```{r}
+#| title: "Data Filters"
+uiOutput("classification_filters")
+```
+
+```{r}
+#| title: "Filtered Rows"
+uiOutput("filtered_count")
+```
+
+```{r}
+#| title: "Filtered Export"
+div(
+  class = "p-3",
+  downloadButton("download_filtered_results", "Download filtered data"),
+  tags$p(
+    class = "admin-note mt-3",
+    "The download includes all classification fields and lineage identifiers."
+  )
+)
+```
+
+## Row {height=72%}
+
+```{r}
+#| title: "All Classification Results"
+DTOutput("classification_results")
+```
+
+# Classification Topics & Tags
+
+Counts include every retained title version, not only the active version or
+most recent run.
+
+## Row {height=18%}
+
+```{r}
+#| title: "Topics"
+uiOutput("topic_inventory_count")
+```
+
+```{r}
+#| title: "Tags"
+uiOutput("tag_inventory_count")
+```
+
+## Row {height=41%}
+
+```{r}
+#| title: "All Topics"
+DTOutput("topic_inventory")
+```
+
+## Row {height=41%}
+
+```{r}
+#| title: "All Tags"
+DTOutput("tag_inventory")
+```
+
 ```{r}
 #| label: server
 #| context: server
 #| include: false
 
-raw_admin_snapshot <- reactive({
-  input$refresh_data
-  if (isTRUE(input$auto_refresh)) {
-    invalidateLater(5 * 60 * 1000, session)
+
+transcript_runs <- reactive({
+  input$refresh_dashboard
+  tryCatch(
+    raw_data_admin_transcript_runs(raw_admin_database_path),
+    error = function(error) {
+      validate(need(FALSE, paste("Transcript runs unavailable:", conditionMessage(error))))
+    }
+  )
+})
+
+observe({
+  runs <- transcript_runs()
+  if (nrow(runs) == 0L) return()
+  attempted <- vapply(
+    runs$error_summary,
+    raw_data_admin_transcript_run_metric,
+    numeric(1),
+    keys = c("attempted", "new_started", "examined")
+  )
+  attempt_label <- ifelse(
+    is.na(attempted),
+    "attempt count unavailable",
+    paste(format(attempted, big.mark = ",", trim = TRUE), "attempted")
+  )
+  choices <- stats::setNames(
+    runs$pipeline_run_id,
+    paste(
+      raw_admin_times(runs$started_at),
+      toupper(runs$status),
+      attempt_label,
+      sep = " • "
+    )
+  )
+  current <- isolate(input$transcript_run)
+  selected <- if (!is.null(current) && current %in% runs$pipeline_run_id) {
+    current
+  } else {
+    runs$pipeline_run_id[[1]]
   }
+  updateSelectInput(
+    session,
+    "transcript_run",
+    choices = choices,
+    selected = selected
+  )
+})
+
+selected_transcript_run <- reactive({
+  runs <- transcript_runs()
+  req(nrow(runs) > 0L)
+  run_id <- raw_admin_input(input$transcript_run, runs$pipeline_run_id[[1]])
+  if (!run_id %in% runs$pipeline_run_id) run_id <- runs$pipeline_run_id[[1]]
+  run <- runs[runs$pipeline_run_id == run_id, , drop = FALSE]
+  req(nrow(run) == 1L)
+  run
+})
+
+output$transcript_run_summary <- renderUI({
+  run <- selected_transcript_run()
+  details <- raw_data_admin_transcript_run_details(run$error_summary)
+  duration <- if (!is.na(run$duration_seconds[[1]])) {
+    paste(round(run$duration_seconds[[1]] / 60, 1), "minutes")
+  } else {
+    "Not recorded (batch may still be running or may have stopped unexpectedly)"
+  }
+  summary_item <- function(label, value, wide = FALSE) {
+    tags$div(
+      class = paste(
+        "transcript-summary-item",
+        if (isTRUE(wide)) "transcript-summary-wide" else ""
+      ),
+      tags$span(class = "transcript-summary-label", label),
+      tags$span(class = "transcript-summary-value", value)
+    )
+  }
+  tagList(
+    tags$div(
+      class = "transcript-batch-summary",
+      summary_item("Status", toupper(raw_admin_value(run$status))),
+      summary_item("Duration", duration),
+      summary_item("Started", raw_admin_time(run$started_at)),
+      summary_item("Finished", raw_admin_time(run$completed_at)),
+      summary_item("Batch counts", details$counts, wide = TRUE)
+    ),
+    if (!is.na(details$issues)) {
+      tags$details(
+        class = "admin-note mt-2",
+        tags$summary("Recorded issues"),
+        tags$p(details$issues)
+      )
+    }
+  )
+})
+
+transcript_tracks_all <- reactive({
+  run <- selected_transcript_run()
+  tryCatch(
+    raw_data_admin_transcript_tracks(raw_admin_database_path, run$pipeline_run_id[[1]]),
+    error = function(error) {
+      validate(need(FALSE, paste("Transcript records unavailable:", conditionMessage(error))))
+    }
+  )
+})
+
+transcript_tracks <- reactive({
+  raw_data_admin_filter_transcript_tracks(
+    transcript_tracks_all(),
+    raw_admin_input(input$transcript_batch_search, "")
+  )
+})
+
+output$transcript_search_summary <- renderUI({
+  total <- nrow(transcript_tracks_all())
+  shown <- nrow(transcript_tracks())
+  tags$p(
+    class = "admin-note",
+    paste0("Showing ", shown, " of ", total, " recorded videos in this batch.")
+  )
+})
+
+output$transcript_tracks <- renderDT({
+  tracks <- transcript_tracks()
+  if (nrow(tracks) == 0L) {
+    return(raw_admin_table(data.frame(message = "No matching videos."), filter = "none"))
+  }
+  talent_name <- raw_admin_values(tracks$talent_name)
+  talent_code <- raw_admin_values(tracks$talent_code)
+  talent <- ifelse(
+    talent_name == "—",
+    talent_code,
+    ifelse(talent_code == "—", talent_name, paste0(talent_name, " (", talent_code, ")"))
+  )
+  display <- data.frame(
+    Title = raw_admin_values(tracks$title, "Untitled video"),
+    Talent = talent,
+    Result = raw_admin_values(tracks$result),
+    Language = raw_admin_values(tracks$subtitle_language),
+    `Video ID` = raw_admin_values(tracks$video_id),
+    check.names = FALSE
+  )
+  DT::datatable(
+    display,
+    rownames = FALSE,
+    filter = "none",
+    selection = "single",
+    escape = TRUE,
+    class = "compact stripe hover row-border transcript-video-table",
+    options = list(
+      dom = "t",
+      ordering = FALSE,
+      paging = FALSE,
+      scrollY = "46vh",
+      scrollCollapse = TRUE,
+      autoWidth = FALSE,
+      columnDefs = list(
+        list(width = "38%", targets = 0L),
+        list(width = "24%", targets = 1L),
+        list(width = "14%", targets = 2L),
+        list(width = "10%", targets = 3L),
+        list(width = "14%", targets = 4L)
+      )
+    )
+  )
+})
+
+selected_transcript_track <- reactive({
+  tracks <- transcript_tracks()
+  selected <- input$transcript_tracks_rows_selected
+  req(length(selected) == 1L, selected >= 1L, selected <= nrow(tracks))
+  tracks[selected, , drop = FALSE]
+})
+
+output$selected_transcript_video <- renderUI({
+  tracks <- transcript_tracks()
+  selected <- input$transcript_tracks_rows_selected
+  if (nrow(tracks) == 0L) {
+    return(tags$p(
+      class = "transcript-empty-state",
+      "No videos match the current batch search."
+    ))
+  }
+  if (length(selected) != 1L || selected < 1L || selected > nrow(tracks)) {
+    return(tags$p(
+      class = "transcript-empty-state",
+      "Select one video on the left to inspect its transcript."
+    ))
+  }
+  track <- tracks[selected, , drop = FALSE]
+  talent_name <- raw_admin_value(track$talent_name)
+  talent_code <- raw_admin_value(track$talent_code)
+  talent <- if (talent_name == "—") {
+    talent_code
+  } else if (talent_code == "—") {
+    talent_name
+  } else {
+    paste0(talent_name, " (", talent_code, ")")
+  }
+  transcript_size <- paste(
+    raw_admin_value(track$sentences, "0"), "sentences •",
+    raw_admin_value(track$blocks, "0"), "blocks"
+  )
+  block_health <- paste(
+    raw_admin_value(track$failed_blocks, "0"), "failed •",
+    raw_admin_value(track$incomplete_blocks, "0"), "incomplete"
+  )
+  tagList(
+    tags$div(
+      class = "transcript-video-heading",
+      tags$h4(raw_admin_value(track$title, "Untitled video")),
+      tags$span(class = "transcript-video-id", raw_admin_value(track$video_id))
+    ),
+    tags$div(
+      class = "transcript-video-metadata",
+      raw_admin_metadata_item("Talent", talent),
+      raw_admin_metadata_item("Result", track$result),
+      raw_admin_metadata_item("Subtitle language", track$subtitle_language),
+      raw_admin_metadata_item("Track type", track$subtitle_track_type),
+      raw_admin_metadata_item("Transcript size", transcript_size),
+      raw_admin_metadata_item("Block health", block_health),
+      raw_admin_metadata_item("Source scope", track$source_scope),
+      raw_admin_metadata_item("Pipeline", track$pipeline_version),
+      raw_admin_metadata_item("Approximate alignment", track$approximate_alignment)
+    ),
+    if ("block_errors" %in% names(track) && !is.na(track$block_errors[[1]])) {
+      tags$details(
+        class = "admin-note mt-2",
+        tags$summary("Recorded processing error"),
+        tags$p(track$block_errors[[1]])
+      )
+    }
+  )
+})
+
+transcript_sentences <- reactive({
+  track <- selected_transcript_track()
+  tryCatch(
+    raw_data_admin_transcript_text(
+      raw_admin_database_path, selected_transcript_run()$pipeline_run_id[[1]],
+      track
+    ),
+    error = function(error) {
+      validate(need(FALSE, paste("Transcript text unavailable:", conditionMessage(error))))
+    }
+  )
+})
+
+output$transcript_reading <- renderUI({
+  selected <- input$transcript_tracks_rows_selected
+  validate(need(
+    length(selected) == 1L,
+    "Select one video on the left to view its transcript."
+  ))
+  sentences <- transcript_sentences()
+  validate(need(
+    nrow(sentences) > 0L,
+    "This video did not publish transcript text in the selected batch."
+  ))
+  rows <- lapply(seq_len(nrow(sentences)), function(index) {
+    approximate <- isTRUE(sentences$timestamps_approximate[[index]])
+    timestamp <- paste0(
+      if (approximate) "~" else "",
+      raw_admin_timestamp(sentences$start_sec[index]),
+      "–",
+      raw_admin_timestamp(sentences$end_sec[index])
+    )
+    audit_hint <- paste(
+      "Block", raw_admin_value(sentences$block_number[index]),
+      "• Sentence", raw_admin_value(sentences$sentence_number[index]),
+      "•", raw_admin_value(sentences$source_alignment_status[index])
+    )
+    tags$div(
+      class = "transcript-reading-row",
+      title = audit_hint,
+      tags$span(class = "transcript-reading-time", timestamp),
+      tags$span(
+        class = "transcript-reading-text",
+        raw_admin_value(sentences$sentence_text[index], "")
+      )
+    )
+  })
+  tags$div(class = "transcript-reading-list", rows)
+})
+
+output$transcript_sentences <- renderDT({
+  selected <- input$transcript_tracks_rows_selected
+  validate(need(
+    length(selected) == 1L,
+    "Select one video row in the batch table above to view its transcript."
+  ))
+  sentences <- transcript_sentences()
+  validate(need(
+    nrow(sentences) > 0L,
+    "This video did not publish transcript text in the selected batch."
+  ))
+  raw_admin_table(sentences, page_length = 25L)
+})
+
+output$download_transcript <- downloadHandler(
+  filename = function() "processed_transcript.csv",
+  content = function(file) {
+    text <- transcript_sentences()
+    validate(need(nrow(text) > 0L, "No published transcript to download."))
+    track <- selected_transcript_track()
+    metadata <- track[rep(1L, nrow(text)), c("video_id", "title", "talent_code", "talent_name")]
+    run_id <- selected_transcript_run()$pipeline_run_id[[1]]
+    utils::write.csv(cbind(pipeline_run_id = run_id, metadata, text),
+                     file, row.names = FALSE, na = "")
+  }
+)
+
+raw_admin_snapshot <- reactive({
+  input$refresh_dashboard
   withProgress(message = "Refreshing raw-data administration", value = 0, {
     incProgress(0.15, detail = "Inventorying relations")
     snapshot <- raw_data_admin_snapshot(raw_admin_database_path)
@@ -555,8 +1378,8 @@ output$coverage_plot <- renderPlotly({
     return(raw_admin_empty_plot("No talent coverage data available."))
   }
   long <- coverage |>
-    select(.data$talent_code, all_of(columns)) |>
-    pivot_longer(-.data$talent_code, names_to = "data_type", values_to = "videos")
+    select("talent_code", all_of(columns)) |>
+    pivot_longer(-all_of("talent_code"), names_to = "data_type", values_to = "videos")
   plotly::plot_ly(
     long,
     x = ~talent_code,
@@ -645,8 +1468,8 @@ output$talent_coverage_plot <- renderPlotly({
     return(raw_admin_empty_plot("No talent coverage data available."))
   }
   long <- coverage |>
-    select(.data$talent_code, all_of(columns)) |>
-    pivot_longer(-.data$talent_code, names_to = "data_type", values_to = "videos")
+    select("talent_code", all_of(columns)) |>
+    pivot_longer(-all_of("talent_code"), names_to = "data_type", values_to = "videos")
   plotly::plot_ly(
     long,
     x = ~talent_code,
@@ -687,4 +1510,336 @@ output$recent_events <- renderDT({
   }
   raw_admin_table(events, page_length = 15L)
 })
+
+admin_snapshot <- reactive({
+  input$refresh_dashboard
+  withProgress(message = "Refreshing classification operations", value = 0, {
+    incProgress(0.2, detail = "Reading run manifests")
+    snapshot <- classification_admin_load_snapshot(
+      database_path = admin_database_path,
+      run_root = admin_run_root
+    )
+    incProgress(0.8, detail = "Preparing dashboard data")
+    snapshot
+  })
+})
+
+latest_run <- reactive({
+  runs <- admin_snapshot()$runs
+  if (nrow(runs) == 0L) return(NULL)
+  runs[1, , drop = FALSE]
+})
+
+output$run_selector <- renderUI({
+  runs <- admin_snapshot()$runs
+  if (nrow(runs) == 0L) return(helpText("No traceable runs were found."))
+  choices <- stats::setNames(
+    runs$run_id,
+    paste(
+      format(runs$created_at, "%Y-%m-%d %H:%M UTC", tz = "UTC"),
+      runs$status,
+      runs$run_id,
+      sep = " • "
+    )
+  )
+  selected <- isolate(input$selected_run)
+  if (is.null(selected) || !selected %in% runs$run_id) selected <- runs$run_id[[1]]
+  selectInput("selected_run", "Inspect run", choices, selected = selected)
+})
+
+selected_run <- reactive({
+  runs <- admin_snapshot()$runs
+  req(nrow(runs) > 0L)
+  run_id <- input$selected_run
+  if (is.null(run_id) || !run_id %in% runs$run_id) run_id <- runs$run_id[[1]]
+  runs[runs$run_id == run_id, , drop = FALSE]
+})
+
+selected_run_results <- reactive({
+  run <- selected_run()
+  admin_snapshot()$results |>
+    filter(.data$pipeline_run_id == run$pipeline_run_id[[1]])
+})
+
+selected_run_candidates <- reactive({
+  run <- selected_run()
+  admin_snapshot()$candidates |>
+    filter(.data$run_id == run$run_id[[1]])
+})
+
+selected_run_combined <- reactive({
+  candidates <- selected_run_candidates()
+  results <- selected_run_results() |>
+    select(
+      pipeline_run_id,
+      video_id,
+      result_title = title,
+      topic,
+      language,
+      tags,
+      primary_reference,
+      referenced_entities,
+      confidence,
+      model,
+      profile_id,
+      classification_status,
+      collaborative_energy,
+      community_milestones,
+      interactive_entertainment,
+      meme_viral,
+      monetization,
+      narrative_serialization,
+      performance_artistry,
+      personality_conversation
+    )
+  candidates |>
+    left_join(results, by = c("pipeline_run_id", "video_id")) |>
+    select(-all_of("result_title"))
+})
+
+output$latest_status <- renderUI({
+  run <- latest_run()
+  admin_value_box("Latest run status", if (is.null(run)) NA else run$status)
+})
+
+output$latest_titles <- renderUI({
+  run <- latest_run()
+  admin_value_box("Titles in run", if (is.null(run)) NA else scales::comma(run$title_count))
+})
+
+output$current_pending <- renderUI({
+  pending <- sum(!admin_snapshot()$current_status$is_classified, na.rm = TRUE)
+  admin_value_box("Current pending titles", scales::comma(pending))
+})
+
+output$latest_checked <- renderUI({
+  run <- latest_run()
+  checked <- if (is.null(run) || is.na(run$last_checked_at[[1]])) {
+    NA_character_
+  } else {
+    format(run$last_checked_at[[1]], "%b %d, %H:%M UTC", tz = "UTC")
+  }
+  admin_value_box("Last checked", checked)
+})
+
+output$latest_talent_plot <- renderPlotly({
+  run <- latest_run()
+  if (is.null(run)) return(admin_empty_plot("No run data are available."))
+  counts <- admin_snapshot()$candidates |>
+    filter(.data$run_id == run$run_id[[1]]) |>
+    count(.data$talent_code, name = "titles")
+  admin_bar_plot(counts, "talent_code", "titles")
+})
+
+output$classification_coverage_plot <- renderPlotly({
+  counts <- admin_snapshot()$current_status |>
+    count(.data$classification_status, name = "titles")
+  admin_bar_plot(counts, "classification_status", "titles")
+})
+
+output$run_history <- renderDT({
+  admin_datatable(admin_display_runs(admin_snapshot()$runs), page_length = 10L)
+})
+
+output$selected_run_summary <- renderDT({
+  run <- selected_run()
+  summary <- data.frame(
+    metric = c(
+      "Status", "Created", "Model", "Title version", "Titles", "Talents",
+      "API requests", "Results applied", "Unique tags", "Failed responses"
+    ),
+    value = c(
+      run$status, admin_format_time(run$created_at), run$model,
+      run$title_version_id, scales::comma(run$title_count), run$talent_count,
+      scales::comma(run$request_count), scales::comma(run$result_count),
+      run$tag_count, run$failed_count
+    )
+  )
+  admin_datatable(summary, page_length = 15L, filter = "none")
+})
+
+output$selected_run_talents <- renderPlotly({
+  counts <- selected_run_candidates() |>
+    count(.data$talent_code, name = "titles")
+  admin_bar_plot(counts, "talent_code", "titles")
+})
+
+output$selected_run_tags <- renderPlotly({
+  tags <- classification_admin_tag_rows(selected_run_results()) |>
+    count(.data$tag, name = "titles", sort = TRUE) |>
+    slice_head(n = 20L)
+  if (nrow(tags) == 0L) {
+    return(admin_empty_plot("Tags appear after this run is applied."))
+  }
+  admin_bar_plot(tags, "tag", "titles")
+})
+
+output$selected_run_titles <- renderDT({
+  data <- selected_run_combined() |>
+    select(
+      video_id,
+      talent_code,
+      title = title_raw,
+      content_type,
+      published_at,
+      topic,
+      tags,
+      confidence,
+      personality_conversation,
+      classification_status,
+      model
+    )
+  admin_datatable(data, page_length = 15L)
+})
+
+output$classification_filters <- renderUI({
+  results <- admin_snapshot()$results
+  choice_values <- function(values) {
+    values <- as.character(values)
+    sort(unique(values[!is.na(values) & nzchar(values)]))
+  }
+  fluidRow(
+    column(3, selectizeInput("data_talents", "Talent", choice_values(results$talent_code), multiple = TRUE)),
+    column(3, selectizeInput("data_versions", "Title version", choice_values(results$title_version_id), multiple = TRUE)),
+    column(3, selectizeInput("data_topics", "Topic", choice_values(results$topic), multiple = TRUE)),
+    column(3, selectizeInput("data_tags", "Tag", choices = NULL, multiple = TRUE))
+  )
+})
+
+observe({
+  results <- admin_snapshot()$results
+  updateSelectizeInput(
+    session,
+    "data_tags",
+    choices = sort(unique(unlist(results$tag_values, use.names = FALSE))),
+    server = TRUE
+  )
+})
+
+filtered_results <- reactive({
+  results <- admin_snapshot()$results
+  if (length(input$data_talents) > 0L) results <- results |> filter(.data$talent_code %in% input$data_talents)
+  if (length(input$data_versions) > 0L) results <- results |> filter(.data$title_version_id %in% input$data_versions)
+  if (length(input$data_topics) > 0L) results <- results |> filter(.data$topic %in% input$data_topics)
+  if (length(input$data_tags) > 0L) {
+    keep <- vapply(results$tag_values, function(values) all(input$data_tags %in% values), logical(1))
+    results <- results[keep, , drop = FALSE]
+  }
+  results
+})
+
+filtered_results_export <- reactive({
+  filtered_results() |>
+    mutate(
+      run = ifelse(
+        is.na(.data$pipeline_run_id),
+        paste0("legacy-untracked/", .data$title_version_id),
+        .data$pipeline_run_id
+    )
+    ) |>
+    select(
+      run,
+      video_id,
+      talent_code,
+      talent_name,
+      title,
+      title_version_id,
+      model,
+      topic,
+      language,
+      tags,
+      primary_reference,
+      referenced_entities,
+      confidence,
+      classification_status,
+      profile_id,
+      collaborative_energy,
+      community_milestones,
+      interactive_entertainment,
+      meme_viral,
+      monetization,
+      narrative_serialization,
+      performance_artistry,
+      personality_conversation,
+      created_at
+    )
+})
+
+topic_inventory <- reactive({
+  admin_snapshot()$results |>
+    filter(!is.na(.data$topic), nzchar(.data$topic)) |>
+    group_by(.data$topic) |>
+    summarise(
+      uses = dplyr::n(), unique_titles = n_distinct(.data$video_id),
+      talents = n_distinct(.data$talent_code),
+      title_versions = n_distinct(.data$title_version_id), .groups = "drop"
+    ) |>
+    arrange(desc(.data$unique_titles), .data$topic)
+})
+
+tag_inventory <- reactive({
+  admin_snapshot()$tags |>
+    filter(!is.na(.data$tag), nzchar(.data$tag)) |>
+    group_by(.data$tag) |>
+    summarise(
+      uses = dplyr::n(), unique_titles = n_distinct(.data$video_id),
+      talents = n_distinct(.data$talent_code),
+      title_versions = n_distinct(.data$title_version_id), .groups = "drop"
+    ) |>
+    arrange(desc(.data$unique_titles), .data$tag)
+})
+
+output$filtered_count <- renderUI({
+  admin_value_box("Filtered classification rows", scales::comma(nrow(filtered_results())))
+})
+
+output$classification_results <- renderDT({
+  data <- filtered_results_export() |>
+    select(
+      video_id,
+      talent_code,
+      title,
+      title_version_id,
+      model,
+      topic,
+      tags,
+      confidence,
+      personality_conversation,
+      classification_status
+    )
+  admin_datatable(data, page_length = 15L)
+})
+
+output$topic_inventory_count <- renderUI({
+  admin_value_box("Distinct topics", scales::comma(nrow(topic_inventory())))
+})
+
+output$tag_inventory_count <- renderUI({
+  admin_value_box("Distinct tags", scales::comma(nrow(tag_inventory())))
+})
+
+output$topic_inventory <- renderDT({
+  admin_datatable(topic_inventory(), page_length = 15L)
+})
+
+output$tag_inventory <- renderDT({
+  admin_datatable(tag_inventory(), page_length = 15L)
+})
+
+output$download_selected_run <- downloadHandler(
+  filename = function() paste0(selected_run()$run_id[[1]], "_titles.csv"),
+  content = function(path) {
+    write.csv(
+      selected_run_combined() |> select(-dplyr::any_of("tag_values")),
+      path, row.names = FALSE, na = "", fileEncoding = "UTF-8"
+    )
+  }
+)
+
+output$download_filtered_results <- downloadHandler(
+  filename = function() paste0("title_classifications_", format(Sys.Date(), "%Y%m%d"), ".csv"),
+  content = function(path) {
+    write.csv(filtered_results_export(), path, row.names = FALSE, na = "", fileEncoding = "UTF-8")
+  }
+)
 ```

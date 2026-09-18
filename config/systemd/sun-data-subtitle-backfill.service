@@ -1,0 +1,12 @@
+[Unit]
+Description=Backfill subtitle sentences for up to 50 new videos
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+Environment=RENV_CONFIG_AUTOLOADER_ENABLED=FALSE
+Environment=INFERENCE_MANAGE_CONTAINER=true
+ExecStart=%h/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/bin/linux/subtitles/run_subtitle_sentence_backfill.sh --execute --max-new-videos 50
+TimeoutStartSec=infinity
