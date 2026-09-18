@@ -13,11 +13,26 @@ It also includes title-classification run, artifact, result, topic, tag, and
 active-version coverage diagnostics. Qualitative coding, normalization,
 compatibility, and legacy relations remain excluded.
 
-The dashboard provides relation-level inventory and recency, safe row-limited
-previews, talent and video filters, CSV downloads of the displayed preview,
-column completeness and approximate cardinality, numeric summaries, talent
-coverage, relationship and lineage checks, recent ingestion activity, and the
-full former classification operations view.
+The dashboard is one Quarto/Shiny application with three navigation domains:
+
+- **Data** combines freshness, relation inventory, health checks, talent
+  coverage, safe row-limited relation previews, and on-demand descriptive
+  profiles.
+- **Processing** combines the transcript batch browser with recent pipeline and
+  ingestion activity.
+- **Classification** combines current coverage, run inspection, retained
+  results, and topic/tag inventories.
+
+All three domains share one process, one read-only lakehouse connection pattern,
+and one refresh toolbar. Controls are located with the view they affect; the
+classification run selector is not presented as a global data filter.
+
+Relation previews capture the relation, filters, and row limit at load time.
+Their summary cards and CSV name remain tied to that loaded state, and export is
+unavailable after controls change until the preview is loaded again. Talent and
+video filters are disabled when the selected relation does not contain the
+corresponding key. Descriptive profiles have their own relation selector and do
+not scan a relation until explicitly requested.
 
 ## Run locally
 

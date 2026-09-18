@@ -22,6 +22,34 @@ execute:
   font-size: 0.86rem;
 }
 
+.admin-global-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  width: 100%;
+}
+
+.admin-global-toolbar .form-group {
+  margin-bottom: 0;
+}
+
+.admin-refresh-status {
+  align-items: center;
+  color: var(--bs-secondary-color);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
+  gap: 0.35rem 1rem;
+}
+
+.admin-section-heading {
+  border-bottom: 1px solid var(--bs-border-color);
+  font-size: 1.15rem;
+  margin: 1.1rem 0 0.5rem;
+  padding-bottom: 0.35rem;
+}
+
 .dataTables_wrapper {
   font-size: 0.80rem;
 }
@@ -311,6 +339,14 @@ raw_admin_input <- function(value, fallback) {
   if (is.null(value) || length(value) == 0L) fallback else value
 }
 
+raw_admin_disabled_input <- function(input) {
+  tags$fieldset(
+    disabled = "disabled",
+    style = "border: 0; margin: 0; padding: 0;",
+    input
+  )
+}
+
 raw_admin_metadata_item <- function(label, value, wide = FALSE) {
   tags$div(
     class = paste(
@@ -435,6 +471,9 @@ admin_datatable <- function(data, page_length = 10L, filter = "top", scroll_x = 
     data <- data.frame(message = "No rows matched the current selection.")
     filter <- "none"
   }
+  names(data) <- tools::toTitleCase(
+    gsub("_", " ", names(data), fixed = TRUE)
+  )
   DT::datatable(
     data,
     rownames = FALSE,
@@ -465,22 +504,18 @@ admin_display_runs <- function(runs) {
 }
 ```
 
-# {.sidebar}
+# {.toolbar}
 
 ```{r}
-actionButton("refresh_dashboard", "Refresh dashboard", class = "btn-primary")
-
-uiOutput("database_freshness")
-hr()
-tags$strong("Title classification")
-br()
-uiOutput("run_selector")
-downloadButton("download_selected_run", "Download selected run")
-hr()
-helpText("Refresh applies to every page. All connections are read-only.")
+div(
+  class = "admin-global-toolbar",
+  actionButton("refresh_dashboard", "Refresh dashboard", class = "btn-primary"),
+  uiOutput("database_freshness"),
+  tags$span(class = "admin-note", "Read-only administration")
+)
 ```
 
-# Overview
+# Data {scrolling="true"}
 
 The overview inventories the in-scope talent catalog, analytics, subtitle,
 chat, and operational relations. Counts and timestamps come directly from the
@@ -527,7 +562,7 @@ plotlyOutput("coverage_plot", height = "100%")
 DTOutput("relation_inventory")
 ```
 
-# Data Health
+<h2 class="admin-section-heading">Data Health</h2>
 
 These checks focus on broken catalog relationships, missing lineage, blank text,
 invalid count metrics, unresolved collection failures, and failed relevant
@@ -558,7 +593,7 @@ uiOutput("passing_count")
 DTOutput("health_checks")
 ```
 
-# Explore Relations
+<h2 class="admin-section-heading">Explore Relations</h2>
 
 Choose a relation and optional exact talent or video filter on this page.
 The preview is deliberately row-limited; the download contains the same rows
@@ -571,7 +606,7 @@ shown in the current preview.
 fluidRow(
   column(3, uiOutput("relation_selector")),
   column(3, uiOutput("talent_filter")),
-  column(3, textInput("video_filter", "Exact video ID", value = "")),
+  column(3, uiOutput("video_filter")),
   column(
     3,
     numericInput(
@@ -590,7 +625,7 @@ fluidRow(
 ## Row {height=18%}
 
 ```{r}
-#| title: "Selected Relation"
+#| title: "Loaded Relation"
 uiOutput("selected_relation_name")
 ```
 
@@ -608,10 +643,10 @@ uiOutput("selected_relation_columns")
 #| title: "Preview Export"
 div(
   class = "p-3",
-  downloadButton("download_preview", "Download preview CSV"),
+  uiOutput("preview_download"),
   tags$p(
     class = "admin-note mt-3",
-    "The export respects the relation, filters, and row limit."
+    textOutput("preview_load_status", inline = TRUE)
   )
 )
 ```
@@ -623,7 +658,7 @@ div(
 DTOutput("relation_preview")
 ```
 
-# Descriptive Statistics
+<h2 class="admin-section-heading">Descriptive Statistics</h2>
 
 Column profiles report nulls and approximate distinct counts. Numeric summaries
 report minimum, mean, median, and maximum. Profiling can scan a large relation,
@@ -635,7 +670,8 @@ so it only reruns when requested.
 #| title: "Profile Controls"
 div(
   class = "p-3",
-  actionButton("profile_relation", "Profile selected relation", class = "btn-primary"),
+  uiOutput("profile_relation_selector"),
+  actionButton("profile_relation_action", "Profile selected relation", class = "btn-primary"),
   tags$span(class = "admin-note ms-3", textOutput("profiled_relation", inline = TRUE))
 )
 ```
@@ -654,7 +690,7 @@ DTOutput("column_profile")
 DTOutput("numeric_profile")
 ```
 
-# Talent Coverage
+<h2 class="admin-section-heading">Talent Coverage</h2>
 
 This page compares catalog membership with analytics, subtitle, and chat
 coverage for each talent. Zeroes can be valid when a source does not apply, but
@@ -674,10 +710,12 @@ plotlyOutput("talent_coverage_plot", height = "100%")
 DTOutput("talent_coverage")
 ```
 
-# Transcript Processes {scrolling="true"}
+# Processing {scrolling="true"}
 
-Choose a processing batch, review every recorded video attempt in that batch,
-then search by video ID, title, talent, or result. Times are UTC.
+The processing workspace combines transcript inspection with recent pipeline
+and ingestion activity. Choose a processing batch, review every recorded video
+attempt in that batch, then search by video ID, title, talent, or result. Times
+are UTC.
 
 ```{r}
 #| title: "Browse and Inspect Transcripts"
@@ -729,7 +767,7 @@ div(
 )
 ```
 
-# Recent Activity
+<h2 class="admin-section-heading">Recent Activity</h2>
 
 Relevant pipeline runs exclude classification, qualitative coding, and summary
 generation. Ingestion events are retained when their destination is in
@@ -749,7 +787,7 @@ DTOutput("recent_runs")
 DTOutput("recent_events")
 ```
 
-# Classification Overview
+# Classification {scrolling="true"}
 
 The classification diagnostics report the newest traceable Batch run and
 current active-version coverage. Batch status reflects the scheduler's most
@@ -796,10 +834,26 @@ plotlyOutput("classification_coverage_plot", height = "100%")
 DTOutput("run_history")
 ```
 
-# Classification Run Details
+<h2 class="admin-section-heading">Classification Run Details</h2>
 
-Select a run in the sidebar to inspect its essential metrics, talents, tags,
+Select a run below to inspect its essential metrics, talents, tags,
 and titles.
+
+## Row {height=16%}
+
+```{r}
+#| title: "Run Controls"
+fluidRow(
+  column(8, uiOutput("run_selector")),
+  column(
+    4,
+    div(
+      class = "p-3",
+      downloadButton("download_selected_run", "Download selected run")
+    )
+  )
+)
+```
 
 ## Row {height=36%}
 
@@ -825,7 +879,7 @@ plotlyOutput("selected_run_tags", height = "100%")
 DTOutput("selected_run_titles")
 ```
 
-# Classification Results
+<h2 class="admin-section-heading">Classification Results</h2>
 
 This page exposes all classification rows, including older migrated versions.
 
@@ -860,7 +914,7 @@ div(
 DTOutput("classification_results")
 ```
 
-# Classification Topics & Tags
+<h2 class="admin-section-heading">Classification Topics &amp; Tags</h2>
 
 Counts include every retained title version, not only the active version or
 most recent run.
@@ -1219,20 +1273,14 @@ raw_admin_snapshot <- reactive({
 
 output$database_freshness <- renderUI({
   snapshot <- raw_admin_snapshot()
-  htmltools::tagList(
-    tags$small(
-      class = "text-muted",
-      paste("Dashboard refreshed", raw_admin_time(snapshot$refreshed_at))
-    ),
-    tags$br(),
-    tags$small(
-      class = "text-muted",
-      paste("DuckDB modified", raw_admin_time(snapshot$database_modified_at))
-    ),
-    tags$br(),
-    tags$small(
-      class = "text-muted admin-path",
-      snapshot$database_path
+  tags$div(
+    class = "admin-refresh-status",
+    tags$span(paste("Refreshed", raw_admin_time(snapshot$refreshed_at))),
+    tags$span(paste("DuckDB modified", raw_admin_time(snapshot$database_modified_at))),
+    tags$span(
+      class = "admin-path",
+      title = snapshot$database_path,
+      basename(snapshot$database_path)
     )
   )
 })
@@ -1251,18 +1299,6 @@ output$relation_selector <- renderUI({
   selectInput("selected_relation", "Explore relation", choices, selected = selected)
 })
 
-output$talent_filter <- renderUI({
-  coverage <- raw_admin_snapshot()$talent_coverage
-  choices <- c(
-    "All talents" = "",
-    stats::setNames(
-      coverage$talent_code,
-      paste(coverage$talent_code, coverage$talent_name, sep = " • ")
-    )
-  )
-  selectizeInput("selected_talent", "Exact talent", choices, selected = "")
-})
-
 selected_relation_metadata <- reactive({
   relations <- raw_admin_snapshot()$relations
   relation <- input$selected_relation
@@ -1272,40 +1308,115 @@ selected_relation_metadata <- reactive({
   relations[relations$relation == relation, , drop = FALSE]
 })
 
-preview_data <- eventReactive(
-  input$load_preview,
-  {
-    metadata <- selected_relation_metadata()
-    withProgress(message = "Loading relation preview", value = 0.4, {
-      data <- raw_data_admin_preview(
-        database_path = raw_admin_database_path,
-        relation = metadata$relation[[1]],
-        talent_code = raw_admin_input(input$selected_talent, ""),
-        video_id = raw_admin_input(input$video_filter, ""),
-        limit = raw_admin_input(input$row_limit, 500L)
-      )
-      incProgress(0.6)
-      data
-    })
-  },
-  ignoreNULL = FALSE
-)
+selected_relation_columns <- reactive({
+  metadata <- selected_relation_metadata()
+  con <- raw_data_admin_connect(raw_admin_database_path)
+  on.exit(raw_data_admin_disconnect(con), add = TRUE)
+  resolved <- raw_data_admin_resolve_relation(con, metadata$relation[[1]])
+  resolved$columns$column_name
+})
 
-profile_data <- eventReactive(
-  input$profile_relation,
-  {
-    metadata <- selected_relation_metadata()
-    withProgress(message = "Profiling selected relation", value = 0.2, {
-      profile <- raw_data_admin_profile(
-        raw_admin_database_path,
-        metadata$relation[[1]]
-      )
-      incProgress(0.8)
-      list(relation = metadata$relation[[1]], profile = profile)
-    })
-  },
-  ignoreNULL = FALSE
-)
+output$talent_filter <- renderUI({
+  supported <- "talent_code" %in% selected_relation_columns()
+  if (!supported) {
+    return(raw_admin_disabled_input(selectInput(
+      "selected_talent",
+      "Exact talent (not available for this relation)",
+      choices = c("Not applicable" = "")
+    )))
+  }
+  coverage <- raw_admin_snapshot()$talent_coverage
+  choices <- c(
+    "All talents" = "",
+    stats::setNames(
+      coverage$talent_code,
+      paste(coverage$talent_code, coverage$talent_name, sep = " • ")
+    )
+  )
+  selected <- isolate(raw_admin_input(input$selected_talent, ""))
+  if (!selected %in% unname(choices)) selected <- ""
+  selectizeInput("selected_talent", "Exact talent", choices, selected = selected)
+})
+
+output$video_filter <- renderUI({
+  supported <- "video_id" %in% selected_relation_columns()
+  value <- isolate(raw_admin_input(input$video_filter, ""))
+  input <- textInput(
+    "video_filter",
+    if (supported) "Exact video ID" else "Exact video ID (not available for this relation)",
+    value = if (supported) value else ""
+  )
+  if (supported) input else raw_admin_disabled_input(input)
+})
+
+output$profile_relation_selector <- renderUI({
+  relations <- raw_admin_snapshot()$relations
+  choices <- stats::setNames(
+    relations$relation,
+    paste(relations$domain, relations$relation, sep = " • ")
+  )
+  selected <- isolate(input$profile_relation)
+  if (is.null(selected) || !selected %in% relations$relation) {
+    selected <- selected_relation_metadata()$relation[[1]]
+  }
+  selectInput("profile_relation", "Profile relation", choices, selected = selected)
+})
+
+preview_state <- reactiveVal(NULL)
+
+observeEvent(input$load_preview, {
+  metadata <- selected_relation_metadata()
+  state <- withProgress(message = "Loading relation preview", value = 0.4, {
+    data <- raw_data_admin_preview(
+      database_path = raw_admin_database_path,
+      relation = metadata$relation[[1]],
+      talent_code = raw_admin_input(input$selected_talent, ""),
+      video_id = raw_admin_input(input$video_filter, ""),
+      limit = raw_admin_input(input$row_limit, 500L)
+    )
+    incProgress(0.6)
+    list(
+      metadata = metadata,
+      talent_code = raw_admin_input(input$selected_talent, ""),
+      video_id = raw_admin_input(input$video_filter, ""),
+      limit = raw_admin_input(input$row_limit, 500L),
+      data = data
+    )
+  })
+  preview_state(state)
+}, ignoreInit = TRUE)
+
+profile_state <- reactiveVal(NULL)
+
+observeEvent(input$profile_relation_action, {
+  req(input$profile_relation)
+  relations <- raw_admin_snapshot()$relations
+  metadata <- relations[
+    relations$relation == input$profile_relation,
+    ,
+    drop = FALSE
+  ]
+  req(nrow(metadata) == 1L)
+  state <- withProgress(message = "Profiling selected relation", value = 0.2, {
+    profile <- raw_data_admin_profile(
+      raw_admin_database_path,
+      metadata$relation[[1]]
+    )
+    incProgress(0.8)
+    list(relation = metadata$relation[[1]], profile = profile)
+  })
+  profile_state(state)
+}, ignoreInit = TRUE)
+
+preview_controls_changed <- reactive({
+  state <- preview_state()
+  if (is.null(state)) return(TRUE)
+  current_relation <- selected_relation_metadata()$relation[[1]]
+  !identical(current_relation, state$metadata$relation[[1]]) ||
+    !identical(raw_admin_input(input$selected_talent, ""), state$talent_code) ||
+    !identical(raw_admin_input(input$video_filter, ""), state$video_id) ||
+    !identical(as.numeric(raw_admin_input(input$row_limit, 500L)), as.numeric(state$limit))
+})
 
 output$relation_count <- renderUI({
   raw_admin_value_box("In-scope relations", nrow(raw_admin_snapshot()$relations))
@@ -1379,7 +1490,15 @@ output$coverage_plot <- renderPlotly({
   }
   long <- coverage |>
     select("talent_code", all_of(columns)) |>
-    pivot_longer(-all_of("talent_code"), names_to = "data_type", values_to = "videos")
+    pivot_longer(-all_of("talent_code"), names_to = "data_type", values_to = "videos") |>
+    mutate(
+      data_type = dplyr::recode(
+        .data$data_type,
+        videos_with_analytics = "Analytics",
+        videos_with_subtitles = "Subtitles",
+        videos_with_chat = "Chat"
+      )
+    )
   plotly::plot_ly(
     long,
     x = ~talent_code,
@@ -1400,62 +1519,147 @@ output$coverage_plot <- renderPlotly({
 output$relation_inventory <- renderDT({
   data <- raw_admin_snapshot()$relations |>
     transmute(
-      .data$domain,
-      .data$relation,
-      type = .data$table_type,
-      rows = .data$row_count,
-      columns = .data$column_count,
-      recency_field = .data$recency_column,
-      earliest = .data$earliest_value,
-      latest = .data$latest_value,
-      .data$description
+      Domain = .data$domain,
+      Relation = .data$relation,
+      Type = .data$table_type,
+      Rows = .data$row_count,
+      Columns = .data$column_count,
+      `Recency field` = .data$recency_column,
+      Earliest = .data$earliest_value,
+      Latest = .data$latest_value,
+      Description = .data$description
     )
   raw_admin_table(data, page_length = 20L)
 })
 
 output$health_checks <- renderDT({
-  checks <- raw_admin_snapshot()$health_checks
-  raw_admin_table(checks, page_length = 20L)
+  checks <- raw_admin_snapshot()$health_checks |>
+    transmute(
+      Status = .data$status,
+      Severity = .data$severity,
+      Check = .data$check_name,
+      `Affected rows` = .data$affected_rows,
+      Relation = .data$relation,
+      Details = .data$details
+    )
+  raw_admin_table(checks, page_length = 20L) |>
+    DT::formatStyle(
+      "Status",
+      color = DT::styleEqual(
+        c("Critical", "Review", "Unavailable", "Pass"),
+        c("#842029", "#664d03", "#41464b", "#0f5132")
+      ),
+      backgroundColor = DT::styleEqual(
+        c("Critical", "Review", "Unavailable", "Pass"),
+        c("#f8d7da", "#fff3cd", "#e2e3e5", "#d1e7dd")
+      ),
+      fontWeight = "600"
+    )
 })
 
 output$selected_relation_name <- renderUI({
-  raw_admin_value_box("Selected relation", selected_relation_metadata()$relation)
+  state <- preview_state()
+  raw_admin_value_box(
+    "Loaded relation",
+    if (is.null(state)) "Not loaded" else state$metadata$relation
+  )
 })
 
 output$selected_relation_rows <- renderUI({
+  state <- preview_state()
   raw_admin_value_box(
     "Relation rows",
-    scales::comma(selected_relation_metadata()$row_count)
+    if (is.null(state)) "—" else scales::comma(state$metadata$row_count)
   )
 })
 
 output$selected_relation_columns <- renderUI({
-  raw_admin_value_box("Relation columns", selected_relation_metadata()$column_count)
+  state <- preview_state()
+  raw_admin_value_box(
+    "Relation columns",
+    if (is.null(state)) "—" else state$metadata$column_count
+  )
 })
 
 output$relation_preview <- renderDT({
-  raw_admin_table(preview_data(), page_length = 25L)
+  state <- preview_state()
+  if (is.null(state)) {
+    return(raw_admin_table(
+      data.frame(message = "Choose preview controls, then select Load preview."),
+      page_length = 25L,
+      filter = "none"
+    ))
+  }
+  raw_admin_table(state$data, page_length = 25L)
+})
+
+output$preview_load_status <- renderText({
+  state <- preview_state()
+  if (is.null(state)) {
+    return("Load a preview before exporting data.")
+  }
+  if (preview_controls_changed()) {
+    "Controls have changed. Load the preview again before exporting the new selection."
+  } else {
+    "The export matches the loaded relation, filters, and row limit."
+  }
+})
+
+output$preview_download <- renderUI({
+  state <- preview_state()
+  if (is.null(state) || preview_controls_changed()) {
+    return(raw_admin_disabled_input(actionButton(
+      "download_preview_disabled",
+      "Download preview CSV"
+    )))
+  }
+  downloadButton("download_preview", "Download preview CSV")
 })
 
 output$download_preview <- downloadHandler(
   filename = function() {
-    paste0(gsub("[.]", "_", selected_relation_metadata()$relation), "_preview.csv")
+    state <- preview_state()
+    req(!is.null(state))
+    paste0(gsub("[.]", "_", state$metadata$relation[[1]]), "_preview.csv")
   },
   content = function(file) {
-    utils::write.csv(preview_data(), file, row.names = FALSE, na = "")
+    state <- preview_state()
+    req(!is.null(state))
+    utils::write.csv(state$data, file, row.names = FALSE, na = "")
   }
 )
 
 output$profiled_relation <- renderText({
-  paste("Current profile:", profile_data()$relation)
+  state <- profile_state()
+  if (is.null(state)) {
+    "No relation has been profiled in this session."
+  } else {
+    paste("Current profile:", state$relation)
+  }
 })
 
 output$column_profile <- renderDT({
-  raw_admin_table(profile_data()$profile$columns, page_length = 25L)
+  state <- profile_state()
+  if (is.null(state)) {
+    return(raw_admin_table(
+      data.frame(message = "Choose a relation and select Profile selected relation."),
+      page_length = 25L,
+      filter = "none"
+    ))
+  }
+  raw_admin_table(state$profile$columns, page_length = 25L)
 })
 
 output$numeric_profile <- renderDT({
-  raw_admin_table(profile_data()$profile$numeric, page_length = 25L)
+  state <- profile_state()
+  if (is.null(state)) {
+    return(raw_admin_table(
+      data.frame(message = "Choose a relation and select Profile selected relation."),
+      page_length = 25L,
+      filter = "none"
+    ))
+  }
+  raw_admin_table(state$profile$numeric, page_length = 25L)
 })
 
 output$talent_coverage_plot <- renderPlotly({
@@ -1469,7 +1673,15 @@ output$talent_coverage_plot <- renderPlotly({
   }
   long <- coverage |>
     select("talent_code", all_of(columns)) |>
-    pivot_longer(-all_of("talent_code"), names_to = "data_type", values_to = "videos")
+    pivot_longer(-all_of("talent_code"), names_to = "data_type", values_to = "videos") |>
+    mutate(
+      data_type = dplyr::recode(
+        .data$data_type,
+        videos_with_analytics = "Analytics",
+        videos_with_subtitles = "Subtitles",
+        videos_with_chat = "Chat"
+      )
+    )
   plotly::plot_ly(
     long,
     x = ~talent_code,
@@ -1487,7 +1699,11 @@ output$talent_coverage_plot <- renderPlotly({
 })
 
 output$talent_coverage <- renderDT({
-  raw_admin_table(raw_admin_snapshot()$talent_coverage, page_length = 25L)
+  coverage <- raw_admin_snapshot()$talent_coverage
+  names(coverage) <- tools::toTitleCase(
+    gsub("_", " ", names(coverage), fixed = TRUE)
+  )
+  raw_admin_table(coverage, page_length = 25L)
 })
 
 output$recent_runs <- renderDT({
@@ -1499,6 +1715,9 @@ output$recent_runs <- renderDT({
         completed_at = raw_admin_times(.data$completed_at)
       )
   }
+  names(runs) <- tools::toTitleCase(
+    gsub("_", " ", names(runs), fixed = TRUE)
+  )
   raw_admin_table(runs, page_length = 15L)
 })
 
@@ -1508,6 +1727,9 @@ output$recent_events <- renderDT({
     events <- events |>
       mutate(event_at = raw_admin_times(.data$event_at))
   }
+  names(events) <- tools::toTitleCase(
+    gsub("_", " ", names(events), fixed = TRUE)
+  )
   raw_admin_table(events, page_length = 15L)
 })
 
@@ -1633,7 +1855,12 @@ output$latest_talent_plot <- renderPlotly({
 
 output$classification_coverage_plot <- renderPlotly({
   counts <- admin_snapshot()$current_status |>
-    count(.data$classification_status, name = "titles")
+    count(.data$classification_status, name = "titles") |>
+    mutate(
+      classification_status = tools::toTitleCase(
+        gsub("_", " ", .data$classification_status, fixed = TRUE)
+      )
+    )
   admin_bar_plot(counts, "classification_status", "titles")
 })
 
@@ -1702,7 +1929,10 @@ output$classification_filters <- renderUI({
     column(3, selectizeInput("data_talents", "Talent", choice_values(results$talent_code), multiple = TRUE)),
     column(3, selectizeInput("data_versions", "Title version", choice_values(results$title_version_id), multiple = TRUE)),
     column(3, selectizeInput("data_topics", "Topic", choice_values(results$topic), multiple = TRUE)),
-    column(3, selectizeInput("data_tags", "Tag", choices = NULL, multiple = TRUE))
+    column(
+      3,
+      selectizeInput("data_tags", "Tags (match all selected)", choices = NULL, multiple = TRUE)
+    )
   )
 })
 
