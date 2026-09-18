@@ -13,15 +13,26 @@ It also includes title-classification run, artifact, result, topic, tag, and
 active-version coverage diagnostics. Qualitative coding, normalization,
 compatibility, and legacy relations remain excluded.
 
-The dashboard is one Quarto/Shiny application with three navigation domains:
+The dashboard is one Quarto/Shiny application with three primary navigation
+domains. Each domain has a horizontal secondary tab strip so only one focused
+administrative view is shown at a time:
 
-- **Data** combines freshness, relation inventory, health checks, talent
-  coverage, safe row-limited relation previews, and on-demand descriptive
-  profiles.
-- **Processing** combines the transcript batch browser with recent pipeline and
-  ingestion activity.
-- **Classification** combines current coverage, run inspection, retained
-  results, and topic/tag inventories.
+- **Data** contains Summary, Health Checks, Coverage, Explore Relations, and
+  Descriptive Profiles.
+- **Processing** contains Summary, Transcript Processes, and Pipeline Activity.
+- **Classification** contains Summary, Runs, Results, and Topics & Tags.
+
+The Summary view in each domain is deliberately concise. Detailed tables,
+filters, and downloads live in the corresponding secondary view rather than
+being stacked into one long dashboard page. The Data summary avoids duplicating
+the relation inventory: it shows active talents, catalog videos, checks needing
+review, and one coverage visualization. Responsive CSS grids keep metric cards,
+controls, and plots aligned on desktop and stack them on narrow screens. The
+secondary tab strip scrolls horizontally on mobile rather than becoming a long
+vertical list. The strip uses Shiny input selectors and mutually exclusive
+conditional panels instead of nested Bootstrap tabs; this prevents inactive
+tables and plots from occupying or clipping the active view. Visible Plotly and
+DataTables widgets are resized after a secondary-view change.
 
 All three domains share one process, one read-only lakehouse connection pattern,
 and one refresh toolbar. Controls are located with the view they affect; the
@@ -31,7 +42,11 @@ Relation previews capture the relation, filters, and row limit at load time.
 Their summary cards and CSV name remain tied to that loaded state, and export is
 unavailable after controls change until the preview is loaded again. Talent and
 video filters are disabled when the selected relation does not contain the
-corresponding key. Descriptive profiles have their own relation selector and do
+corresponding key. Explore Relations uses a compact master/detail workspace: a
+selectable, vertically scrolling relation browser stays beside the filters and a
+tall preview table on wider screens, then stacks above it on narrow screens.
+Descriptive Profiles keeps its selector in a compact toolbar and presents its
+two vertically scrolling result tables side by side when space permits. It does
 not scan a relation until explicitly requested.
 
 ## Run locally
@@ -62,7 +77,7 @@ reverse proxy and do not expose port `3840` directly to the public internet.
 
 ## Daily transcript processing
 
-The **Transcript Processes** page defaults to the newest recorded
+The **Processing → Transcript Processes** view defaults to the newest recorded
 `subtitle_sentence_backfill` batch and offers the 100 most recent batches.
 It shows UTC start/end times, elapsed processing duration, run status, readable
 batch counts, and recorded issues from `ops.pipeline_runs`. Batch counts label

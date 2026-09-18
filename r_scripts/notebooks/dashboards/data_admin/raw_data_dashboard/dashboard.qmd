@@ -43,11 +43,364 @@ execute:
   gap: 0.35rem 1rem;
 }
 
-.admin-section-heading {
+.admin-domain-nav {
+  display: block !important;
+  height: auto !important;
+  min-width: 0;
+  overflow: visible;
+  width: 100%;
+}
+
+.admin-view-switch {
+  display: block !important;
+  flex: none !important;
+  height: auto !important;
+  margin-bottom: 1rem;
+  min-width: 0;
+}
+
+.admin-view-switch .shiny-input-container {
+  display: block !important;
+  height: auto !important;
+  margin-bottom: 0;
+  width: 100% !important;
+}
+
+.admin-view-switch .shiny-options-group {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-view-switch .radio-inline {
+  margin: 0 !important;
+  padding: 0;
+  position: relative;
+  white-space: nowrap;
+}
+
+.admin-view-switch input[type="radio"] {
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.admin-view-switch input[type="radio"] + span {
+  border: 1px solid transparent;
+  border-radius: var(--bs-border-radius-pill, 50rem);
+  color: var(--bs-primary);
+  cursor: pointer;
+  display: block;
+  padding: 0.4rem 0.75rem;
+}
+
+.admin-view-switch input[type="radio"]:checked + span {
+  background: var(--bs-primary);
+  color: #fff;
+}
+
+.admin-view-switch input[type="radio"]:focus-visible + span {
+  box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
+}
+
+.admin-view-panel,
+.admin-view-panel > * {
+  height: auto !important;
+  min-width: 0;
+  width: 100%;
+}
+
+.admin-view-panel,
+.admin-domain-panel,
+.admin-panel-intro {
+  display: block !important;
+}
+
+.admin-view-panel > *,
+.admin-domain-panel > * {
+  flex: none !important;
+}
+
+.admin-domain-panel {
+  padding: 0.15rem 0.25rem 1rem;
+}
+
+.admin-panel-intro {
   border-bottom: 1px solid var(--bs-border-color);
-  font-size: 1.15rem;
-  margin: 1.1rem 0 0.5rem;
-  padding-bottom: 0.35rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+}
+
+.admin-panel-intro h2 {
+  font-size: 1.25rem;
+  margin: 0 0 0.35rem;
+}
+
+.admin-panel-intro p {
+  color: var(--bs-secondary-color);
+  margin: 0;
+  max-width: 78rem;
+}
+
+.admin-domain-panel > .card {
+  margin-bottom: 1rem;
+}
+
+.admin-domain-panel .card-body > :last-child {
+  margin-bottom: 0;
+}
+
+.admin-metric-grid,
+.admin-control-grid,
+.admin-visual-grid,
+.admin-results-grid {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  min-width: 0;
+}
+
+.admin-metric-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+}
+
+.admin-control-grid {
+  align-items: end;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+}
+
+.admin-visual-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+}
+
+.admin-results-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+}
+
+.admin-metric-grid > *,
+.admin-control-grid > *,
+.admin-visual-grid > *,
+.admin-results-grid > * {
+  min-width: 0;
+}
+
+.admin-metric-grid > .shiny-html-output {
+  display: flex;
+}
+
+.admin-metric-grid .bslib-value-box {
+  flex: 1 1 auto;
+  height: auto !important;
+  min-height: 7.5rem;
+  overflow: hidden;
+}
+
+.admin-metric-grid > .card {
+  height: auto !important;
+  min-height: 7.5rem;
+}
+
+.admin-metric-grid .value-box-value {
+  font-size: clamp(1.6rem, 3vw, 2.5rem);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.admin-control-action {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.admin-control-action .btn {
+  width: 100%;
+}
+
+.admin-control-grid .shiny-input-container {
+  margin-bottom: 0;
+  width: 100% !important;
+}
+
+.admin-relation-explorer {
+  align-items: start;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(20rem, 0.9fr) minmax(0, 2.1fr);
+  min-width: 0;
+}
+
+.admin-relation-browser,
+.admin-relation-detail,
+.admin-profile-pane {
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  min-width: 0;
+  padding: 1rem;
+}
+
+.admin-relation-browser {
+  overflow: visible;
+}
+
+.admin-relation-detail {
+  min-height: 72vh;
+}
+
+.admin-pane-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 0.9rem;
+}
+
+.admin-pane-heading h3 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.admin-pane-heading p {
+  color: var(--bs-secondary-color);
+  font-size: 0.82rem;
+  margin: 0.25rem 0 0;
+}
+
+.admin-pane-heading .btn {
+  white-space: nowrap;
+}
+
+.admin-relation-browser .shiny-input-container,
+.admin-preview-controls .shiny-input-container,
+.admin-profile-toolbar .shiny-input-container {
+  margin-bottom: 0;
+  width: 100% !important;
+}
+
+.admin-relation-browser .selectize-dropdown,
+.admin-profile-toolbar .selectize-dropdown {
+  z-index: 1100;
+}
+
+.admin-relation-browser .selectize-input,
+.admin-profile-toolbar .selectize-input {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-relation-browser .selectize-dropdown .option,
+.admin-profile-toolbar .selectize-dropdown .option {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.admin-relation-inventory {
+  margin-top: 1rem;
+  min-width: 0;
+}
+
+.admin-preview-controls {
+  align-items: end;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 0.9rem;
+  min-width: 0;
+}
+
+.admin-preview-load {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.admin-preview-load .btn {
+  width: 100%;
+}
+
+.admin-preview-status-grid {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: minmax(0, 2fr) repeat(2, minmax(7rem, 1fr));
+  margin-bottom: 0.65rem;
+  min-width: 0;
+}
+
+.admin-compact-stat {
+  background: var(--bs-tertiary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  min-width: 0;
+  padding: 0.65rem 0.75rem;
+}
+
+.admin-compact-stat-label {
+  color: var(--bs-secondary-color);
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.admin-compact-stat-value {
+  display: block;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.admin-preview-status {
+  color: var(--bs-secondary-color);
+  font-size: 0.82rem;
+  margin: 0 0 0.75rem;
+}
+
+#relation_inventory table.dataTable td,
+#relation_preview table.dataTable td,
+#column_profile table.dataTable td,
+#numeric_profile table.dataTable td {
+  vertical-align: top;
+  white-space: normal;
+}
+
+.admin-profile-toolbar {
+  align-items: end;
+  display: grid;
+  gap: 0.75rem 1rem;
+  grid-template-columns: minmax(18rem, 2fr) minmax(12rem, 1fr);
+  margin-bottom: 1rem;
+}
+
+.admin-profile-toolbar .btn {
+  width: 100%;
+}
+
+.admin-profile-status {
+  color: var(--bs-secondary-color);
+  font-size: 0.82rem;
+  grid-column: 1 / -1;
+}
+
+.admin-profile-layout {
+  align-items: start;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 3fr) minmax(18rem, 2fr);
+  min-width: 0;
+}
+
+.admin-profile-pane h3 {
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
 }
 
 .dataTables_wrapper {
@@ -104,6 +457,25 @@ execute:
 }
 
 @media (max-width: 900px) {
+  .admin-relation-explorer,
+  .admin-profile-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-preview-controls,
+  .admin-preview-status-grid,
+  .admin-profile-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-profile-status {
+    grid-column: auto;
+  }
+
+  .admin-relation-detail {
+    min-height: 0;
+  }
+
   .transcript-processes-layout {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -219,6 +591,24 @@ execute:
 }
 
 @media (max-width: 768px) {
+  .admin-global-toolbar {
+    align-items: flex-start;
+  }
+
+  .admin-refresh-status {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .admin-domain-panel {
+    padding-inline: 0;
+  }
+
+  .admin-results-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .dashboard-page .card,
   .dashboard-page .card:not(.bslib-value-box) {
     height: auto !important;
@@ -247,6 +637,36 @@ execute:
   }
 }
 </style>
+
+<script>
+(function() {
+  function resizeVisibleAdminWidgets() {
+    window.dispatchEvent(new Event("resize"));
+
+    if (window.Plotly && window.Plotly.Plots) {
+      document
+        .querySelectorAll(".admin-view-panel .js-plotly-plot")
+        .forEach(function(plot) {
+          if (plot.offsetParent !== null && plot._fullLayout) {
+            window.Plotly.Plots.resize(plot);
+          }
+        });
+    }
+
+    if (window.jQuery && window.jQuery.fn.dataTable) {
+      window.jQuery.fn.dataTable
+        .tables({ visible: true, api: true })
+        .columns.adjust();
+    }
+  }
+
+  document.addEventListener("change", function(event) {
+    if (!event.target.matches(".admin-view-switch input[type='radio']")) return;
+    window.setTimeout(resizeVisibleAdminWidgets, 0);
+    window.setTimeout(resizeVisibleAdminWidgets, 120);
+  });
+})();
+</script>
 
 ```{r}
 #| label: setup
@@ -377,10 +797,22 @@ raw_admin_table <- function(
     data,
     page_length = 10L,
     filter = "top",
-    selection = "none") {
+    selection = "none",
+    scroll_y = NULL,
+    dom = "tip") {
   if (nrow(data) == 0L) {
     data <- data.frame(message = "No rows are available for this view.")
     filter <- "none"
+  }
+  options <- list(
+    pageLength = page_length,
+    scrollX = TRUE,
+    autoWidth = TRUE,
+    dom = dom
+  )
+  if (!is.null(scroll_y)) {
+    options$scrollY <- scroll_y
+    options$scrollCollapse <- TRUE
   }
   DT::datatable(
     data,
@@ -388,12 +820,7 @@ raw_admin_table <- function(
     filter = filter,
     selection = selection,
     escape = TRUE,
-    options = list(
-      pageLength = page_length,
-      scrollX = TRUE,
-      autoWidth = TRUE,
-      dom = "tip"
-    )
+    options = options
   )
 }
 
@@ -440,6 +867,68 @@ admin_value <- function(value, fallback = "—") {
 
 admin_value_box <- function(title, value) {
   bslib::value_box(title = title, value = admin_value(value))
+}
+
+admin_panel_intro <- function(title = NULL, description = NULL) {
+  if (is.null(title) && is.null(description)) return(NULL)
+  tags$div(
+    class = "admin-panel-intro",
+    if (!is.null(title)) tags$h2(title),
+    if (!is.null(description)) tags$p(description)
+  )
+}
+
+admin_panel <- function(title = NULL, description = NULL, ...) {
+  tags$div(
+    class = "admin-domain-panel",
+    admin_panel_intro(title, description),
+    ...
+  )
+}
+
+admin_card <- function(title, ..., class = NULL) {
+  bslib::card(
+    class = class,
+    fill = FALSE,
+    bslib::card_header(title),
+    bslib::card_body(...)
+  )
+}
+
+admin_compact_stat <- function(label, value) {
+  tags$div(
+    class = "admin-compact-stat",
+    tags$span(class = "admin-compact-stat-label", label),
+    tags$span(class = "admin-compact-stat-value", raw_admin_value(value))
+  )
+}
+
+admin_relation_choices <- function(relations) {
+  groups <- split(seq_len(nrow(relations)), relations$domain)
+  lapply(groups, function(index) {
+    stats::setNames(relations$relation[index], relations$relation[index])
+  })
+}
+
+admin_view_switch <- function(id, choices, selected) {
+  tags$div(
+    class = "admin-view-switch",
+    radioButtons(
+      id,
+      label = NULL,
+      choices = choices,
+      selected = selected,
+      inline = TRUE,
+      width = "100%"
+    )
+  )
+}
+
+admin_view_panel <- function(input_id, value, ...) {
+  conditionalPanel(
+    sprintf("input['%s'] === '%s'", input_id, value),
+    tags$div(class = "admin-view-panel", ...)
+  )
 }
 
 admin_empty_plot <- function(message) {
@@ -517,432 +1006,406 @@ div(
 
 # Data {scrolling="true"}
 
-The overview inventories the in-scope talent catalog, analytics, subtitle,
-chat, and operational relations. Counts and timestamps come directly from the
-unified lakehouse.
-
-## Row {height=18%}
-
 ```{r}
-#| title: "Scoped Relations"
-uiOutput("relation_count")
-```
-
-```{r}
-#| title: "Active Talents"
-uiOutput("active_talent_count")
-```
-
-```{r}
-#| title: "Catalog Videos"
-uiOutput("video_count")
-```
-
-```{r}
-#| title: "Checks Needing Review"
-uiOutput("issue_count")
-```
-
-## Row {height=40%}
-
-```{r}
-#| title: "Rows by Relation"
-plotlyOutput("relation_rows_plot", height = "100%")
-```
-
-```{r}
-#| title: "Videos with Analytics, Subtitles, or Chat"
-plotlyOutput("coverage_plot", height = "100%")
-```
-
-## Row {height=42%}
-
-```{r}
-#| title: "Relation Inventory and Recency"
-DTOutput("relation_inventory")
-```
-
-<h2 class="admin-section-heading">Data Health</h2>
-
-These checks focus on broken catalog relationships, missing lineage, blank text,
-invalid count metrics, unresolved collection failures, and failed relevant
-pipeline runs. A nonzero result is a signal to investigate, not an automatic
-repair instruction.
-
-## Row {height=18%}
-
-```{r}
-#| title: "Critical Checks"
-uiOutput("critical_count")
-```
-
-```{r}
-#| title: "Warnings"
-uiOutput("warning_count")
-```
-
-```{r}
-#| title: "Passing Checks"
-uiOutput("passing_count")
-```
-
-## Row {height=82%}
-
-```{r}
-#| title: "Health Check Results"
-DTOutput("health_checks")
-```
-
-<h2 class="admin-section-heading">Explore Relations</h2>
-
-Choose a relation and optional exact talent or video filter on this page.
-The preview is deliberately row-limited; the download contains the same rows
-shown in the current preview.
-
-## Row {height=22%}
-
-```{r}
-#| title: "Relation Preview Controls"
-fluidRow(
-  column(3, uiOutput("relation_selector")),
-  column(3, uiOutput("talent_filter")),
-  column(3, uiOutput("video_filter")),
-  column(
-    3,
-    numericInput(
-      "row_limit",
-      "Maximum preview rows",
-      value = 500,
-      min = 25,
-      max = 5000,
-      step = 25
+tags$div(
+  class = "admin-domain-nav",
+  admin_view_switch(
+    "data_admin_view",
+    c(
+      "Summary" = "summary",
+      "Health Checks" = "health",
+      "Coverage" = "coverage",
+      "Explore Relations" = "relations",
+      "Descriptive Profiles" = "profiles"
     ),
-    actionButton("load_preview", "Load preview")
+    selected = "summary"
+  ),
+  admin_view_panel(
+    "data_admin_view",
+    "summary",
+      admin_panel(
+        title = NULL,
+        description = NULL,
+        tags$div(
+          class = "admin-metric-grid",
+          uiOutput("active_talent_count"),
+          uiOutput("video_count"),
+          uiOutput("issue_count")
+        ),
+        admin_card(
+          "Videos with Analytics, Subtitles, or Chat",
+          plotlyOutput("coverage_plot", height = "320px")
+        )
+      )
+  ),
+  admin_view_panel(
+    "data_admin_view",
+    "health",
+      admin_panel(
+        title = NULL,
+        description = paste(
+          "Review broken catalog relationships, missing lineage, blank text,",
+          "invalid counts, collection failures, and failed relevant pipelines."
+        ),
+        tags$div(
+          class = "admin-metric-grid",
+          uiOutput("critical_count"),
+          uiOutput("warning_count"),
+          uiOutput("passing_count")
+        ),
+        admin_card("Health Check Results", DTOutput("health_checks"))
+      )
+  ),
+  admin_view_panel(
+    "data_admin_view",
+    "coverage",
+      admin_panel(
+        title = NULL,
+        description = paste(
+          "Compare catalog membership with analytics, subtitle, and chat coverage",
+          "for each talent. Zeroes may be valid, but make gaps easy to spot."
+        ),
+        admin_card(
+          "Distinct Videos by Available Data Type",
+          plotlyOutput("talent_coverage_plot", height = "320px")
+        ),
+        admin_card("Talent Coverage Detail", DTOutput("talent_coverage"))
+      )
+  ),
+  admin_view_panel(
+    "data_admin_view",
+    "relations",
+      admin_panel(
+        title = NULL,
+        description = paste(
+          "Choose a relation on the left, apply any supported filters, then load",
+          "a row-limited preview. Exports always match the loaded preview."
+        ),
+        tags$div(
+          class = "admin-relation-explorer",
+          tags$div(
+            class = "admin-relation-browser",
+            tags$div(
+              class = "admin-pane-heading",
+              tags$div(
+                tags$h3("Relation Browser"),
+                tags$p("Select from the list or choose a row below.")
+              )
+            ),
+            uiOutput("relation_selector"),
+            tags$div(
+              class = "admin-relation-inventory",
+              DTOutput("relation_inventory", height = "auto", fill = FALSE)
+            )
+          ),
+          tags$div(
+            class = "admin-relation-detail",
+            tags$div(
+              class = "admin-pane-heading",
+              tags$div(
+                tags$h3("Relation Preview"),
+                tags$p("The table uses the full available height and scrolls internally.")
+              ),
+              uiOutput("preview_download")
+            ),
+            tags$div(
+              class = "admin-preview-controls",
+              uiOutput("talent_filter"),
+              uiOutput("video_filter"),
+              tags$div(
+                class = "admin-preview-load",
+                numericInput(
+                  "row_limit",
+                  "Maximum preview rows",
+                  value = 500,
+                  min = 25,
+                  max = 5000,
+                  step = 25
+                ),
+                actionButton("load_preview", "Load preview", class = "btn-primary")
+              )
+            ),
+            tags$div(
+              class = "admin-preview-status-grid",
+              uiOutput("selected_relation_name"),
+              uiOutput("selected_relation_rows"),
+              uiOutput("selected_relation_columns")
+            ),
+            tags$p(
+              class = "admin-preview-status",
+              textOutput("preview_load_status", inline = TRUE)
+            ),
+            DTOutput("relation_preview", height = "auto", fill = FALSE)
+          )
+        )
+      )
+  ),
+  admin_view_panel(
+    "data_admin_view",
+    "profiles",
+      admin_panel(
+        title = NULL,
+        description = paste(
+          "Profile nulls, approximate distinct values, and numeric distributions",
+          "on demand so large relations are not scanned during routine browsing."
+        ),
+        tags$div(
+          class = "admin-profile-toolbar",
+          uiOutput("profile_relation_selector"),
+          actionButton(
+            "profile_relation_action",
+            "Profile selected relation",
+            class = "btn-primary"
+          ),
+          tags$div(
+            class = "admin-profile-status",
+            textOutput("profiled_relation", inline = TRUE)
+          )
+        ),
+        tags$div(
+          class = "admin-profile-layout",
+          tags$div(
+            class = "admin-profile-pane",
+            tags$h3("Column Completeness and Cardinality"),
+            DTOutput("column_profile", height = "auto", fill = FALSE)
+          ),
+          tags$div(
+            class = "admin-profile-pane",
+            tags$h3("Numeric Summary"),
+            DTOutput("numeric_profile", height = "auto", fill = FALSE)
+          )
+        )
+      )
   )
 )
-```
-
-## Row {height=18%}
-
-```{r}
-#| title: "Loaded Relation"
-uiOutput("selected_relation_name")
-```
-
-```{r}
-#| title: "Relation Rows"
-uiOutput("selected_relation_rows")
-```
-
-```{r}
-#| title: "Relation Columns"
-uiOutput("selected_relation_columns")
-```
-
-```{r}
-#| title: "Preview Export"
-div(
-  class = "p-3",
-  uiOutput("preview_download"),
-  tags$p(
-    class = "admin-note mt-3",
-    textOutput("preview_load_status", inline = TRUE)
-  )
-)
-```
-
-## Row {height=60%}
-
-```{r}
-#| title: "Relation Contents"
-DTOutput("relation_preview")
-```
-
-<h2 class="admin-section-heading">Descriptive Statistics</h2>
-
-Column profiles report nulls and approximate distinct counts. Numeric summaries
-report minimum, mean, median, and maximum. Profiling can scan a large relation,
-so it only reruns when requested.
-
-## Row {height=14%}
-
-```{r}
-#| title: "Profile Controls"
-div(
-  class = "p-3",
-  uiOutput("profile_relation_selector"),
-  actionButton("profile_relation_action", "Profile selected relation", class = "btn-primary"),
-  tags$span(class = "admin-note ms-3", textOutput("profiled_relation", inline = TRUE))
-)
-```
-
-## Row {height=43%}
-
-```{r}
-#| title: "Column Completeness and Cardinality"
-DTOutput("column_profile")
-```
-
-## Row {height=43%}
-
-```{r}
-#| title: "Numeric Summary"
-DTOutput("numeric_profile")
-```
-
-<h2 class="admin-section-heading">Talent Coverage</h2>
-
-This page compares catalog membership with analytics, subtitle, and chat
-coverage for each talent. Zeroes can be valid when a source does not apply, but
-they make gaps easy to spot.
-
-## Row {height=42%}
-
-```{r}
-#| title: "Distinct Videos by Available Data Type"
-plotlyOutput("talent_coverage_plot", height = "100%")
-```
-
-## Row {height=58%}
-
-```{r}
-#| title: "Talent Coverage Detail"
-DTOutput("talent_coverage")
 ```
 
 # Processing {scrolling="true"}
 
-The processing workspace combines transcript inspection with recent pipeline
-and ingestion activity. Choose a processing batch, review every recorded video
-attempt in that batch, then search by video ID, title, talent, or result. Times
-are UTC.
-
 ```{r}
-#| title: "Browse and Inspect Transcripts"
-div(
-  class = "transcript-processes-layout",
-  div(
-    class = "transcript-browser-pane",
-    tags$h3("Batch and Videos"),
-    tags$p(
-      class = "transcript-workflow",
-      "Choose batch → Search/filter videos → Select video"
+tags$div(
+  class = "admin-domain-nav",
+  admin_view_switch(
+    "processing_admin_view",
+    c(
+      "Summary" = "summary",
+      "Transcript Processes" = "transcripts",
+      "Pipeline Activity" = "activity"
     ),
-    selectInput(
-      "transcript_run",
-      "Processing batch",
-      choices = character(),
-      width = "100%"
-    ),
-    uiOutput("transcript_run_summary"),
-    tags$div(class = "transcript-panel-divider"),
-    textInput(
-      "transcript_batch_search",
-      "Search this batch",
-      value = "",
-      placeholder = "For example: 6dm9kUCCfhM, RIU5, or Failed",
-      width = "100%"
-    ),
-    uiOutput("transcript_search_summary"),
-    DTOutput("transcript_tracks", height = "auto", fill = FALSE)
+    selected = "summary"
   ),
-  div(
-    class = "transcript-detail-pane",
-    tags$h3("Selected Video Transcript"),
-    div(
-      class = "transcript-header-actions",
-      uiOutput("selected_transcript_video"),
-      downloadButton("download_transcript", "Download full transcript CSV")
-    ),
-    tabsetPanel(
-      id = "transcript_view",
-      type = "tabs",
-      tabPanel("Reading View", uiOutput("transcript_reading")),
-      tabPanel(
-        "Audit / Table View",
-        DTOutput("transcript_sentences", height = "auto", fill = FALSE)
+  admin_view_panel(
+    "processing_admin_view",
+    "summary",
+    admin_panel(
+      "Processing Summary",
+      paste(
+        "The latest transcript batch and recent pipeline state at a glance.",
+        "Open a focused view when something requires investigation."
+      ),
+      tags$div(
+        class = "admin-metric-grid",
+        uiOutput("processing_latest_status"),
+        uiOutput("processing_latest_started"),
+        uiOutput("processing_latest_attempted"),
+        uiOutput("processing_failed_runs")
       )
+    )
+  ),
+  admin_view_panel(
+    "processing_admin_view",
+    "transcripts",
+    admin_panel(
+      "Browse and Inspect Transcripts",
+      paste(
+        "Choose a processing batch, review every recorded video attempt, then",
+        "search by video ID, title, talent, or result. Times are UTC."
+      ),
+      div(
+        class = "transcript-processes-layout",
+        div(
+          class = "transcript-browser-pane",
+          tags$h3("Batch and Videos"),
+          tags$p(
+            class = "transcript-workflow",
+            "Choose batch → Search/filter videos → Select video"
+          ),
+          selectInput(
+            "transcript_run",
+            "Processing batch",
+            choices = character(),
+            width = "100%"
+          ),
+          uiOutput("transcript_run_summary"),
+          tags$div(class = "transcript-panel-divider"),
+          textInput(
+            "transcript_batch_search",
+            "Search this batch",
+            value = "",
+            placeholder = "For example: 6dm9kUCCfhM, RIU5, or Failed",
+            width = "100%"
+          ),
+          uiOutput("transcript_search_summary"),
+          DTOutput("transcript_tracks", height = "auto", fill = FALSE)
+        ),
+        div(
+          class = "transcript-detail-pane",
+          tags$h3("Selected Video Transcript"),
+          div(
+            class = "transcript-header-actions",
+            uiOutput("selected_transcript_video"),
+            downloadButton("download_transcript", "Download full transcript CSV")
+          ),
+          tabsetPanel(
+            id = "transcript_view",
+            type = "tabs",
+            tabPanel("Reading View", uiOutput("transcript_reading")),
+            tabPanel(
+              "Audit / Table View",
+              DTOutput("transcript_sentences", height = "auto", fill = FALSE)
+            )
+          )
+        )
+      )
+    )
+  ),
+  admin_view_panel(
+    "processing_admin_view",
+    "activity",
+    admin_panel(
+      "Recent Pipeline Activity",
+      paste(
+        "Relevant pipeline runs exclude classification, qualitative coding, and",
+        "summary generation. Ingestion events are limited to administered schemas."
+      ),
+      admin_card("Recent Relevant Pipeline Runs", DTOutput("recent_runs")),
+      admin_card("Recent Ingestion Events", DTOutput("recent_events"))
     )
   )
 )
-```
-
-<h2 class="admin-section-heading">Recent Activity</h2>
-
-Relevant pipeline runs exclude classification, qualitative coding, and summary
-generation. Ingestion events are retained when their destination is in
-`catalog`, `clean`, `analytics`, or `text`.
-
-## Row {height=48%}
-
-```{r}
-#| title: "Recent Relevant Pipeline Runs"
-DTOutput("recent_runs")
-```
-
-## Row {height=52%}
-
-```{r}
-#| title: "Recent Ingestion Events"
-DTOutput("recent_events")
 ```
 
 # Classification {scrolling="true"}
 
-The classification diagnostics report the newest traceable Batch run and
-current active-version coverage. Batch status reflects the scheduler's most
-recent check; this dashboard does not poll OpenAI directly.
-
-## Row {height=18%}
-
 ```{r}
-#| title: "Current Run"
-uiOutput("latest_status")
-```
-
-```{r}
-#| title: "Titles in Run"
-uiOutput("latest_titles")
-```
-
-```{r}
-#| title: "Current Pending Titles"
-uiOutput("current_pending")
-```
-
-```{r}
-#| title: "Last Checked"
-uiOutput("latest_checked")
-```
-
-## Row {height=38%}
-
-```{r}
-#| title: "Titles by Talent in Latest Run"
-plotlyOutput("latest_talent_plot", height = "100%")
-```
-
-```{r}
-#| title: "Current Active-Version Coverage"
-plotlyOutput("classification_coverage_plot", height = "100%")
-```
-
-## Row {height=44%}
-
-```{r}
-#| title: "Recent Classification Runs"
-DTOutput("run_history")
-```
-
-<h2 class="admin-section-heading">Classification Run Details</h2>
-
-Select a run below to inspect its essential metrics, talents, tags,
-and titles.
-
-## Row {height=16%}
-
-```{r}
-#| title: "Run Controls"
-fluidRow(
-  column(8, uiOutput("run_selector")),
-  column(
-    4,
-    div(
-      class = "p-3",
-      downloadButton("download_selected_run", "Download selected run")
+tags$div(
+  class = "admin-domain-nav",
+  admin_view_switch(
+    "classification_admin_view",
+    c(
+      "Summary" = "summary",
+      "Runs" = "runs",
+      "Results" = "results",
+      "Topics & Tags" = "topics_tags"
+    ),
+    selected = "summary"
+  ),
+  admin_view_panel(
+    "classification_admin_view",
+    "summary",
+    admin_panel(
+      "Classification Summary",
+      paste(
+        "The newest traceable Batch run and current active-version coverage.",
+        "Status reflects the scheduler's last check; no direct polling occurs."
+      ),
+      tags$div(
+        class = "admin-metric-grid",
+        uiOutput("latest_status"),
+        uiOutput("latest_titles"),
+        uiOutput("current_pending"),
+        uiOutput("latest_checked")
+      ),
+      tags$div(
+        class = "admin-visual-grid",
+        admin_card(
+          "Titles by Talent in Latest Run",
+          plotlyOutput("latest_talent_plot", height = "320px")
+        ),
+        admin_card(
+          "Current Active-Version Coverage",
+          plotlyOutput("classification_coverage_plot", height = "320px")
+        )
+      )
+    )
+  ),
+  admin_view_panel(
+    "classification_admin_view",
+    "runs",
+    admin_panel(
+      "Classification Runs",
+      "Review run history, then select a run to inspect its metrics and contents.",
+      admin_card("Recent Classification Runs", DTOutput("run_history")),
+      admin_card(
+        "Run Controls",
+        tags$div(
+          class = "admin-control-grid",
+          tags$div(uiOutput("run_selector")),
+          tags$div(
+            class = "admin-control-action",
+            downloadButton("download_selected_run", "Download selected run")
+          )
+        )
+      ),
+      admin_card("Selected Run Summary", DTOutput("selected_run_summary")),
+      tags$div(
+        class = "admin-visual-grid",
+        admin_card(
+          "Talent Membership",
+          plotlyOutput("selected_run_talents", height = "320px")
+        ),
+        admin_card(
+          "Tag Frequency",
+          plotlyOutput("selected_run_tags", height = "320px")
+        )
+      ),
+      admin_card("Titles in Selected Run", DTOutput("selected_run_titles"))
+    )
+  ),
+  admin_view_panel(
+    "classification_admin_view",
+    "results",
+    admin_panel(
+      "Classification Results",
+      "Inspect all retained classification rows, including older migrated versions.",
+      tags$div(
+        class = "admin-results-grid",
+        admin_card("Data Filters", uiOutput("classification_filters")),
+        uiOutput("filtered_count"),
+        admin_card(
+          "Filtered Export",
+          downloadButton("download_filtered_results", "Download filtered data"),
+          tags$p(
+            class = "admin-note mt-3",
+            paste(
+              "The download includes all classification fields and lineage",
+              "identifiers."
+            )
+          )
+        )
+      ),
+      admin_card("All Classification Results", DTOutput("classification_results"))
+    )
+  ),
+  admin_view_panel(
+    "classification_admin_view",
+    "topics_tags",
+    admin_panel(
+      "Classification Topics & Tags",
+      paste(
+        "Counts include every retained title version, not only the active version",
+        "or most recent run."
+      ),
+      tags$div(
+        class = "admin-metric-grid",
+        uiOutput("topic_inventory_count"),
+        uiOutput("tag_inventory_count")
+      ),
+      admin_card("All Topics", DTOutput("topic_inventory")),
+      admin_card("All Tags", DTOutput("tag_inventory"))
     )
   )
 )
-```
-
-## Row {height=36%}
-
-```{r}
-#| title: "Selected Run Summary"
-DTOutput("selected_run_summary")
-```
-
-```{r}
-#| title: "Talent Membership"
-plotlyOutput("selected_run_talents", height = "100%")
-```
-
-```{r}
-#| title: "Tag Frequency"
-plotlyOutput("selected_run_tags", height = "100%")
-```
-
-## Row {height=64%}
-
-```{r}
-#| title: "Titles in Selected Run"
-DTOutput("selected_run_titles")
-```
-
-<h2 class="admin-section-heading">Classification Results</h2>
-
-This page exposes all classification rows, including older migrated versions.
-
-## Row {height=28%}
-
-```{r}
-#| title: "Data Filters"
-uiOutput("classification_filters")
-```
-
-```{r}
-#| title: "Filtered Rows"
-uiOutput("filtered_count")
-```
-
-```{r}
-#| title: "Filtered Export"
-div(
-  class = "p-3",
-  downloadButton("download_filtered_results", "Download filtered data"),
-  tags$p(
-    class = "admin-note mt-3",
-    "The download includes all classification fields and lineage identifiers."
-  )
-)
-```
-
-## Row {height=72%}
-
-```{r}
-#| title: "All Classification Results"
-DTOutput("classification_results")
-```
-
-<h2 class="admin-section-heading">Classification Topics &amp; Tags</h2>
-
-Counts include every retained title version, not only the active version or
-most recent run.
-
-## Row {height=18%}
-
-```{r}
-#| title: "Topics"
-uiOutput("topic_inventory_count")
-```
-
-```{r}
-#| title: "Tags"
-uiOutput("tag_inventory_count")
-```
-
-## Row {height=41%}
-
-```{r}
-#| title: "All Topics"
-DTOutput("topic_inventory")
-```
-
-## Row {height=41%}
-
-```{r}
-#| title: "All Tags"
-DTOutput("tag_inventory")
 ```
 
 ```{r}
@@ -1271,6 +1734,46 @@ raw_admin_snapshot <- reactive({
   })
 })
 
+output$processing_latest_status <- renderUI({
+  runs <- transcript_runs()
+  status <- if (nrow(runs) == 0L) "No recorded batches" else toupper(runs$status[[1]])
+  raw_admin_value_box("Latest transcript batch", status)
+})
+
+output$processing_latest_started <- renderUI({
+  runs <- transcript_runs()
+  started <- if (nrow(runs) == 0L) "Not available" else raw_admin_time(runs$started_at[[1]])
+  raw_admin_value_box("Latest batch started", started)
+})
+
+output$processing_latest_attempted <- renderUI({
+  runs <- transcript_runs()
+  attempted <- if (nrow(runs) == 0L) {
+    NA_real_
+  } else {
+    raw_data_admin_transcript_run_metric(
+      runs$error_summary[[1]],
+      c("attempted", "new_started", "examined")
+    )
+  }
+  value <- if (is.na(attempted)) {
+    "Not available"
+  } else {
+    format(attempted, big.mark = ",", trim = TRUE)
+  }
+  raw_admin_value_box("Videos attempted", value)
+})
+
+output$processing_failed_runs <- renderUI({
+  runs <- raw_admin_snapshot()$recent_runs
+  failures <- if (nrow(runs) == 0L || !"status" %in% names(runs)) {
+    0L
+  } else {
+    sum(grepl("fail|error", runs$status, ignore.case = TRUE), na.rm = TRUE)
+  }
+  raw_admin_value_box("Failed recent pipelines", failures)
+})
+
 output$database_freshness <- renderUI({
   snapshot <- raw_admin_snapshot()
   tags$div(
@@ -1287,10 +1790,7 @@ output$database_freshness <- renderUI({
 
 output$relation_selector <- renderUI({
   relations <- raw_admin_snapshot()$relations
-  choices <- stats::setNames(
-    relations$relation,
-    paste(relations$domain, relations$relation, sep = " • ")
-  )
+  choices <- admin_relation_choices(relations)
   selected <- isolate(input$selected_relation)
   if (is.null(selected) || !selected %in% relations$relation) {
     preferred <- "analytics.video_latest_performance"
@@ -1330,7 +1830,7 @@ output$talent_filter <- renderUI({
     "All talents" = "",
     stats::setNames(
       coverage$talent_code,
-      paste(coverage$talent_code, coverage$talent_name, sep = " • ")
+      paste0(coverage$talent_name, " (", coverage$talent_code, ")")
     )
   )
   selected <- isolate(raw_admin_input(input$selected_talent, ""))
@@ -1351,10 +1851,7 @@ output$video_filter <- renderUI({
 
 output$profile_relation_selector <- renderUI({
   relations <- raw_admin_snapshot()$relations
-  choices <- stats::setNames(
-    relations$relation,
-    paste(relations$domain, relations$relation, sep = " • ")
-  )
+  choices <- admin_relation_choices(relations)
   selected <- isolate(input$profile_relation)
   if (is.null(selected) || !selected %in% relations$relation) {
     selected <- selected_relation_metadata()$relation[[1]]
@@ -1418,10 +1915,6 @@ preview_controls_changed <- reactive({
     !identical(as.numeric(raw_admin_input(input$row_limit, 500L)), as.numeric(state$limit))
 })
 
-output$relation_count <- renderUI({
-  raw_admin_value_box("In-scope relations", nrow(raw_admin_snapshot()$relations))
-})
-
 output$active_talent_count <- renderUI({
   coverage <- raw_admin_snapshot()$talent_coverage
   raw_admin_value_box("Active talents", scales::comma(sum(coverage$active, na.rm = TRUE)))
@@ -1455,28 +1948,6 @@ output$warning_count <- renderUI({
 output$passing_count <- renderUI({
   checks <- raw_admin_snapshot()$health_checks
   raw_admin_value_box("Passing checks", sum(checks$status == "Pass"))
-})
-
-output$relation_rows_plot <- renderPlotly({
-  relations <- raw_admin_snapshot()$relations |>
-    filter(!is.na(.data$row_count), .data$row_count > 0) |>
-    arrange(.data$row_count)
-  if (nrow(relations) == 0L) return(raw_admin_empty_plot("No relation counts available."))
-  plotly::plot_ly(
-    relations,
-    x = ~row_count,
-    y = ~stats::reorder(relation, row_count),
-    color = ~domain,
-    type = "bar",
-    orientation = "h",
-    hovertemplate = "%{y}<br>%{x:,} rows<extra></extra>"
-  ) |>
-    plotly::layout(
-      xaxis = list(title = "Rows", type = "log"),
-      yaxis = list(title = ""),
-      legend = list(orientation = "h"),
-      margin = list(l = 205, r = 20, t = 10, b = 50)
-    )
 })
 
 output$coverage_plot <- renderPlotly({
@@ -1516,20 +1987,38 @@ output$coverage_plot <- renderPlotly({
     )
 })
 
-output$relation_inventory <- renderDT({
-  data <- raw_admin_snapshot()$relations |>
+relation_inventory_data <- reactive({
+  raw_admin_snapshot()$relations |>
+    arrange(.data$domain, .data$relation) |>
     transmute(
+      relation_key = .data$relation,
       Domain = .data$domain,
-      Relation = .data$relation,
-      Type = .data$table_type,
-      Rows = .data$row_count,
-      Columns = .data$column_count,
-      `Recency field` = .data$recency_column,
-      Earliest = .data$earliest_value,
-      Latest = .data$latest_value,
-      Description = .data$description
+      Relation = sub("^[^.]+[.]", "", .data$relation),
+      Rows = .data$row_count
     )
-  raw_admin_table(data, page_length = 20L)
+})
+
+output$relation_inventory <- renderDT({
+  data <- relation_inventory_data() |>
+    select(-all_of("relation_key"))
+  raw_admin_table(
+    data,
+    page_length = 20L,
+    filter = "none",
+    selection = "single",
+    scroll_y = "46vh"
+  )
+})
+
+observeEvent(input$relation_inventory_rows_selected, {
+  selected <- input$relation_inventory_rows_selected
+  data <- relation_inventory_data()
+  if (length(selected) != 1L || selected < 1L || selected > nrow(data)) return()
+  updateSelectInput(
+    session,
+    "selected_relation",
+    selected = data$relation_key[[selected]]
+  )
 })
 
 output$health_checks <- renderDT({
@@ -1559,7 +2048,7 @@ output$health_checks <- renderDT({
 
 output$selected_relation_name <- renderUI({
   state <- preview_state()
-  raw_admin_value_box(
+  admin_compact_stat(
     "Loaded relation",
     if (is.null(state)) "Not loaded" else state$metadata$relation
   )
@@ -1567,7 +2056,7 @@ output$selected_relation_name <- renderUI({
 
 output$selected_relation_rows <- renderUI({
   state <- preview_state()
-  raw_admin_value_box(
+  admin_compact_stat(
     "Relation rows",
     if (is.null(state)) "—" else scales::comma(state$metadata$row_count)
   )
@@ -1575,7 +2064,7 @@ output$selected_relation_rows <- renderUI({
 
 output$selected_relation_columns <- renderUI({
   state <- preview_state()
-  raw_admin_value_box(
+  admin_compact_stat(
     "Relation columns",
     if (is.null(state)) "—" else state$metadata$column_count
   )
@@ -1587,10 +2076,11 @@ output$relation_preview <- renderDT({
     return(raw_admin_table(
       data.frame(message = "Choose preview controls, then select Load preview."),
       page_length = 25L,
-      filter = "none"
+      filter = "none",
+      scroll_y = "52vh"
     ))
   }
-  raw_admin_table(state$data, page_length = 25L)
+  raw_admin_table(state$data, page_length = 25L, scroll_y = "52vh")
 })
 
 output$preview_load_status <- renderText({
@@ -1644,10 +2134,15 @@ output$column_profile <- renderDT({
     return(raw_admin_table(
       data.frame(message = "Choose a relation and select Profile selected relation."),
       page_length = 25L,
-      filter = "none"
+      filter = "none",
+      scroll_y = "56vh"
     ))
   }
-  raw_admin_table(state$profile$columns, page_length = 25L)
+  raw_admin_table(
+    state$profile$columns,
+    page_length = 25L,
+    scroll_y = "56vh"
+  )
 })
 
 output$numeric_profile <- renderDT({
@@ -1656,10 +2151,15 @@ output$numeric_profile <- renderDT({
     return(raw_admin_table(
       data.frame(message = "Choose a relation and select Profile selected relation."),
       page_length = 25L,
-      filter = "none"
+      filter = "none",
+      scroll_y = "56vh"
     ))
   }
-  raw_admin_table(state$profile$numeric, page_length = 25L)
+  raw_admin_table(
+    state$profile$numeric,
+    page_length = 25L,
+    scroll_y = "56vh"
+  )
 })
 
 output$talent_coverage_plot <- renderPlotly({
@@ -1925,13 +2425,31 @@ output$classification_filters <- renderUI({
     values <- as.character(values)
     sort(unique(values[!is.na(values) & nzchar(values)]))
   }
-  fluidRow(
-    column(3, selectizeInput("data_talents", "Talent", choice_values(results$talent_code), multiple = TRUE)),
-    column(3, selectizeInput("data_versions", "Title version", choice_values(results$title_version_id), multiple = TRUE)),
-    column(3, selectizeInput("data_topics", "Topic", choice_values(results$topic), multiple = TRUE)),
-    column(
-      3,
-      selectizeInput("data_tags", "Tags (match all selected)", choices = NULL, multiple = TRUE)
+  tags$div(
+    class = "admin-control-grid",
+    selectizeInput(
+      "data_talents",
+      "Talent",
+      choice_values(results$talent_code),
+      multiple = TRUE
+    ),
+    selectizeInput(
+      "data_versions",
+      "Title version",
+      choice_values(results$title_version_id),
+      multiple = TRUE
+    ),
+    selectizeInput(
+      "data_topics",
+      "Topic",
+      choice_values(results$topic),
+      multiple = TRUE
+    ),
+    selectizeInput(
+      "data_tags",
+      "Tags (match all selected)",
+      choices = NULL,
+      multiple = TRUE
     )
   )
 })
