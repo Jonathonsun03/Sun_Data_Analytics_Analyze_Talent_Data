@@ -19,24 +19,45 @@ administrative view is shown at a time:
 
 - **Data** contains Summary, Health Checks, Coverage, Explore Relations, and
   Descriptive Profiles.
-- **Processing** contains Summary, Transcript Processes, and Pipeline Activity.
+- **Processing** contains Summary, Transcript Processes, Transcript Lookup, and
+  Pipeline Activity.
 - **Classification** contains Summary, Runs, Results, and Topics & Tags.
 
 The Summary view in each domain is deliberately concise. Detailed tables,
 filters, and downloads live in the corresponding secondary view rather than
 being stacked into one long dashboard page. The Data summary avoids duplicating
 the relation inventory: it shows active talents, catalog videos, checks needing
-review, and one coverage visualization. Responsive CSS grids keep metric cards,
-controls, and plots aligned on desktop and stack them on narrow screens. The
+review, the completion time of the latest successful source-data extraction,
+and one coverage visualization. Responsive CSS grids keep metric cards, controls,
+and plots aligned on desktop and stack them on narrow screens. The
 secondary tab strip scrolls horizontally on mobile rather than becoming a long
 vertical list. The strip uses Shiny input selectors and mutually exclusive
 conditional panels instead of nested Bootstrap tabs; this prevents inactive
 tables and plots from occupying or clipping the active view. Visible Plotly and
 DataTables widgets are resized after a secondary-view change.
 
+The Processing summary reports only the latest recorded source-data pull: its
+`ops.pipeline_runs.started_at` timestamp and whether its terminal status was
+successful. Collection, ingestion, scraping, extraction, download, fetch, pull,
+sync, and YouTube pipeline names qualify; downstream reconstruction, backfill,
+cleaning, analysis, classification, and publication jobs do not. A running pull
+is shown as not yet complete rather than successful.
+
+Dashboard startup pins the R process locale to `C.UTF-8` when available, with
+`C` as a guaranteed fallback. It also updates `LANG`, `LC_ALL`, and `LC_CTYPE`
+inside the dashboard process so package calls that restore the environment
+locale do not repeatedly emit `Sys.setlocale()` warnings.
+
 All three domains share one process, one read-only lakehouse connection pattern,
 and one refresh toolbar. Controls are located with the view they affect; the
 classification run selector is not presented as a global data filter.
+
+The Classification Runs view keeps its run selector and download control in a
+full-width toolbar. Below it, a compact, vertically scrolling run-history table
+occupies the narrower browser pane and the selected run's summary, plots, and
+title table occupy the wider detail pane. Selecting a history row updates the
+run selector, and changing the selector updates the highlighted row. The panes
+stack on narrow screens.
 
 Relation previews capture the relation, filters, and row limit at load time.
 Their summary cards and CSV name remain tied to that loaded state, and export is
@@ -79,7 +100,7 @@ reverse proxy and do not expose port `3840` directly to the public internet.
 
 The **Processing → Transcript Processes** view defaults to the newest recorded
 `subtitle_sentence_backfill` batch and offers the 100 most recent batches.
-It shows UTC start/end times, elapsed processing duration, run status, readable
+It shows Eastern Time start/end times, elapsed processing duration, run status, readable
 batch counts, and recorded issues from `ops.pipeline_runs`. Batch counts label
 the backlog at the start separately from the per-run limit and the number of
 videos actually attempted. Legacy run summaries are translated from their old
@@ -124,9 +145,29 @@ newer text for a selected run. Missing processing tables and empty batches show
 empty states; database query errors are surfaced within the transcript page.
 All access remains read-only.
 
+All dashboard timestamps are displayed in the `America/New_York` time zone and
+include the applicable `EST` or `EDT` abbreviation. Database timestamps and
+downloaded raw values remain unchanged in UTC for lineage and audit consistency.
+
 Validate the query behavior with:
 
 ```bash
 RENV_CONFIG_AUTOLOADER_ENABLED=FALSE \
   Rscript --vanilla r_scripts/tests/test_raw_data_admin_transcripts.R
 ```
+
+## Transcript lookup
+
+The **Processing → Transcript Lookup** view searches all retained cleaned
+sentence transcripts independently of processing batches. An exact video ID or
+case-insensitive title fragment returns every matching language, track type,
+source scope, pipeline version, and publication run in
+`text.subtitle_sentence_units`. Selecting one variant opens its complete clean
+text in three synchronized views: grouped speaker turns, sentence reading, and
+an audit table with the retained lineage fields. The selected variant can also
+be exported to CSV.
+
+Speaker-turn groupings prefer `inferred_speaker_turn_id` and fall back to the
+source-caption `speaker_turn_id`. They identify stored conversational
+boundaries, not verified speaker identities, so the interface labels them as
+numbered turns rather than assigning people or names.

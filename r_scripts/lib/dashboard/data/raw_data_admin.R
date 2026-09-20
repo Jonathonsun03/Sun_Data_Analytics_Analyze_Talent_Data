@@ -74,7 +74,8 @@ raw_data_admin_pipeline_condition <- function(column = "pipeline_name") {
   paste0(
     "REGEXP_MATCHES(LOWER(COALESCE(", column, ", '')), '",
     "analytics|subscriber|subtitle|chat|youtube|video|talent|catalog|",
-    "ingest|text|geograph|demograph|monetary|performance') ",
+    "ingest|collect|scrap|crawl|extract|download|fetch|pull|sync|text|",
+    "geograph|demograph|monetary|performance') ",
     "AND NOT REGEXP_MATCHES(LOWER(COALESCE(", column, ", '')), ",
     "'classif|qualitative|summary')"
   )
@@ -274,13 +275,97 @@ raw_data_admin_is_relevant_pipeline <- function(pipeline_name) {
   included <- grepl(
     paste(
       "analytics|subscriber|subtitle|chat|youtube|video|talent|catalog|",
-      "ingest|text|geograph|demograph|monetary|performance",
+      "ingest|collect|scrap|crawl|extract|download|fetch|pull|sync|text|",
+      "geograph|demograph|monetary|performance",
       sep = ""
     ),
     pipeline_name
   )
   excluded <- grepl("classif|qualitative|summary", pipeline_name)
   included & !excluded
+}
+
+raw_data_admin_is_data_pull_pipeline <- function(pipeline_name) {
+  pipeline_name <- tolower(ifelse(is.na(pipeline_name), "", pipeline_name))
+  included <- grepl(
+    paste(
+      "collect|collector|ingest|scrap|crawl|extract|download|fetch|pull|sync|",
+      "youtube",
+      sep = ""
+    ),
+    pipeline_name
+  )
+  downstream <- grepl(
+    paste(
+      "subtitle_sentence|reconstruct|backfill|classif|qualitative|summary|",
+      "normaliz|profile|analysis|clean|publish|replay",
+      sep = ""
+    ),
+    pipeline_name
+  )
+  included & !downstream
+}
+
+raw_data_admin_latest_data_pull <- function(runs) {
+  required <- c("pipeline_name", "started_at", "status")
+  if (nrow(runs) == 0L || !all(required %in% names(runs))) {
+    return(data.frame())
+  }
+  pulls <- runs[
+    raw_data_admin_is_data_pull_pipeline(runs$pipeline_name),
+    ,
+    drop = FALSE
+  ]
+  if (nrow(pulls) == 0L) return(pulls)
+  pulls <- pulls[order(pulls$started_at, decreasing = TRUE), , drop = FALSE]
+  pulls[1L, , drop = FALSE]
+}
+
+raw_data_admin_data_pull_succeeded <- function(status) {
+  status <- tolower(trimws(ifelse(is.na(status), "", as.character(status))))
+  status %in% c(
+    "complete",
+    "completed",
+    "success",
+    "successful",
+    "succeeded",
+    "published"
+  )
+}
+
+raw_data_admin_latest_healthy_data_pull <- function(runs) {
+  required <- c("pipeline_name", "started_at", "status")
+  if (nrow(runs) == 0L || !all(required %in% names(runs))) {
+    return(data.frame())
+  }
+  pulls <- runs[
+    raw_data_admin_is_data_pull_pipeline(runs$pipeline_name) &
+      raw_data_admin_data_pull_succeeded(runs$status),
+    ,
+    drop = FALSE
+  ]
+  if (nrow(pulls) == 0L) return(pulls)
+  pulls <- pulls[order(pulls$started_at, decreasing = TRUE), , drop = FALSE]
+  pulls[1L, , drop = FALSE]
+}
+
+raw_data_admin_data_pull_runs <- function(con) {
+  if (nrow(raw_data_admin_columns(con, "ops", "pipeline_runs")) == 0L) {
+    return(data.frame())
+  }
+  runs <- DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT pipeline_run_id, pipeline_name, started_at, completed_at,",
+      "status, error_summary FROM ops.pipeline_runs",
+      "ORDER BY started_at DESC"
+    )
+  )
+  runs[
+    raw_data_admin_is_data_pull_pipeline(runs$pipeline_name),
+    ,
+    drop = FALSE
+  ]
 }
 
 raw_data_admin_recent_runs <- function(con, limit = 100L) {
@@ -660,6 +745,7 @@ raw_data_admin_snapshot <- function(database_path = NULL) {
   con <- raw_data_admin_connect(database_path)
   on.exit(raw_data_admin_disconnect(con), add = TRUE)
   relation_catalog <- raw_data_admin_relation_catalog(con)
+  data_pull_runs <- raw_data_admin_data_pull_runs(con)
   list(
     database_path = database_path,
     database_bytes = as.numeric(file.info(database_path)$size),
@@ -669,7 +755,9 @@ raw_data_admin_snapshot <- function(database_path = NULL) {
     health_checks = raw_data_admin_health_checks(con, relation_catalog),
     recent_runs = raw_data_admin_recent_runs(con),
     recent_events = raw_data_admin_recent_events(con),
-    talent_coverage = raw_data_admin_talent_coverage(con, relation_catalog)
+    talent_coverage = raw_data_admin_talent_coverage(con, relation_catalog),
+    latest_data_pull = raw_data_admin_latest_data_pull(data_pull_runs),
+    latest_healthy_data_pull = raw_data_admin_latest_healthy_data_pull(data_pull_runs)
   )
 }
 
@@ -1031,6 +1119,227 @@ raw_data_admin_filter_transcript_tracks <- function(tracks, search = "") {
     )
   }))
   tracks[matches, , drop = FALSE]
+}
+
+raw_data_admin_clean_transcript_tracks <- function(
+    database_path,
+    search,
+    limit = 200L) {
+  search <- if (is.null(search) || length(search) == 0L || is.na(search[[1]])) {
+    ""
+  } else {
+    trimws(as.character(search[[1]]))
+  }
+  if (!nzchar(search)) return(data.frame())
+
+  limit <- max(1L, min(as.integer(limit), 500L))
+  con <- raw_data_admin_connect(database_path)
+  on.exit(raw_data_admin_disconnect(con), add = TRUE)
+  sentence_columns <- raw_data_admin_columns(
+    con,
+    "text",
+    "subtitle_sentence_units"
+  )$column_name
+  if (length(sentence_columns) == 0L) return(data.frame())
+
+  has_videos <- nrow(raw_data_admin_columns(con, "catalog", "videos")) > 0L
+  has_talents <- nrow(raw_data_admin_columns(con, "catalog", "talents")) > 0L
+  video_join <- if (has_videos) {
+    paste(
+      "LEFT JOIN catalog.videos AS video",
+      "ON sentence.video_id = video.video_id",
+      "AND sentence.talent_code IS NOT DISTINCT FROM video.talent_code"
+    )
+  } else {
+    ""
+  }
+  talent_join <- if (has_talents) {
+    paste(
+      "LEFT JOIN catalog.talents AS talent",
+      "ON sentence.talent_code IS NOT DISTINCT FROM talent.talent_code"
+    )
+  } else {
+    ""
+  }
+  title_select <- if (has_videos) {
+    "MAX(video.title) AS title"
+  } else {
+    "NULL::VARCHAR AS title"
+  }
+  talent_select <- if (has_talents) {
+    "MAX(talent.talent_name) AS talent_name"
+  } else {
+    "NULL::VARCHAR AS talent_name"
+  }
+  title_condition <- if (has_videos) {
+    "OR strpos(lower(COALESCE(video.title, '')), lower(?)) > 0"
+  } else {
+    ""
+  }
+  speaker_expression <- if ("inferred_speaker_turn_id" %in% sentence_columns) {
+    if ("speaker_turn_id" %in% sentence_columns) {
+      "COALESCE(sentence.inferred_speaker_turn_id, sentence.speaker_turn_id)"
+    } else {
+      "sentence.inferred_speaker_turn_id"
+    }
+  } else if ("speaker_turn_id" %in% sentence_columns) {
+    "sentence.speaker_turn_id"
+  } else {
+    NULL
+  }
+  speaker_select <- if (is.null(speaker_expression)) {
+    "NULL::BIGINT AS speaker_turns"
+  } else {
+    paste0("COUNT(DISTINCT ", speaker_expression, ") AS speaker_turns")
+  }
+  cleaned_select <- if ("created_at" %in% sentence_columns) {
+    "MAX(sentence.created_at) AS cleaned_at"
+  } else {
+    "NULL::TIMESTAMP AS cleaned_at"
+  }
+  params <- if (has_videos) {
+    list(search, search, search)
+  } else {
+    list(search, search)
+  }
+
+  DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT sentence.video_id,", title_select, ", sentence.talent_code,",
+      talent_select, ", sentence.subtitle_language,",
+      "sentence.subtitle_track_type, sentence.source_scope,",
+      "sentence.pipeline_version, sentence.pipeline_run_id,",
+      "COUNT(*) AS sentences,", speaker_select, ",",
+      "MIN(sentence.start_sec) AS starts_at,",
+      "MAX(sentence.end_sec) AS ends_at,", cleaned_select,
+      "FROM text.subtitle_sentence_units AS sentence",
+      video_join,
+      talent_join,
+      "WHERE sentence.video_id = ?", title_condition,
+      "GROUP BY sentence.video_id, sentence.talent_code,",
+      "sentence.subtitle_language, sentence.subtitle_track_type,",
+      "sentence.source_scope, sentence.pipeline_version,",
+      "sentence.pipeline_run_id",
+      "ORDER BY CASE WHEN sentence.video_id = ? THEN 0 ELSE 1 END,",
+      "cleaned_at DESC NULLS LAST, title, sentence.video_id,",
+      "sentence.subtitle_language, sentence.subtitle_track_type",
+      "LIMIT", limit
+    ),
+    params = params
+  )
+}
+
+raw_data_admin_clean_transcript_text <- function(database_path, track) {
+  con <- raw_data_admin_connect(database_path)
+  on.exit(raw_data_admin_disconnect(con), add = TRUE)
+  available <- raw_data_admin_columns(
+    con,
+    "text",
+    "subtitle_sentence_units"
+  )$column_name
+  if (length(available) == 0L) return(data.frame())
+
+  keys <- c(
+    "video_id",
+    "talent_code",
+    "subtitle_language",
+    "subtitle_track_type",
+    "source_scope",
+    "pipeline_version",
+    "pipeline_run_id"
+  )
+  required <- c(
+    "sentence_unit_key",
+    "block_number",
+    "sentence_number",
+    "inferred_speaker_turn_id",
+    "speaker_turn_id",
+    "speaker_change",
+    "start_sec",
+    "end_sec",
+    "sentence_text",
+    "source_alignment_status",
+    "timestamps_approximate",
+    "timestamp_method",
+    "source_sequence_start",
+    "source_sequence_end",
+    "punctuation_model",
+    "source_checksum_sha256",
+    "pipeline_version",
+    "pipeline_run_id",
+    "created_at"
+  )
+  selected <- intersect(required, available)
+  where <- paste(paste0("sentence.", keys, " IS NOT DISTINCT FROM ?"), collapse = " AND ")
+  order_columns <- intersect(
+    c("block_number", "sentence_number", "sentence_unit_key"),
+    available
+  )
+  order_sql <- paste(paste0("sentence.", order_columns), collapse = ", ")
+  DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT",
+      paste(paste0("sentence.", selected), collapse = ", "),
+      "FROM text.subtitle_sentence_units AS sentence WHERE",
+      where,
+      "ORDER BY",
+      order_sql
+    ),
+    params = lapply(keys, function(key) track[[key]][[1]])
+  )
+}
+
+raw_data_admin_transcript_turns <- function(sentences) {
+  empty <- data.frame(
+    turn_number = integer(),
+    speaker_turn_id = integer(),
+    start_sec = numeric(),
+    end_sec = numeric(),
+    sentence_count = integer(),
+    transcript = character(),
+    stringsAsFactors = FALSE
+  )
+  if (nrow(sentences) == 0L || !"sentence_text" %in% names(sentences)) {
+    return(empty)
+  }
+
+  inferred <- if ("inferred_speaker_turn_id" %in% names(sentences)) {
+    suppressWarnings(as.integer(sentences$inferred_speaker_turn_id))
+  } else {
+    rep(NA_integer_, nrow(sentences))
+  }
+  source <- if ("speaker_turn_id" %in% names(sentences)) {
+    suppressWarnings(as.integer(sentences$speaker_turn_id))
+  } else {
+    rep(NA_integer_, nrow(sentences))
+  }
+  effective <- ifelse(is.na(inferred), source, inferred)
+  for (index in seq_along(effective)) {
+    if (is.na(effective[[index]])) {
+      effective[[index]] <- if (index == 1L) 1L else effective[[index - 1L]]
+    }
+  }
+  group <- cumsum(c(TRUE, effective[-1L] != effective[-length(effective)]))
+  groups <- split(seq_len(nrow(sentences)), group)
+
+  do.call(rbind, lapply(seq_along(groups), function(turn_number) {
+    index <- groups[[turn_number]]
+    start <- suppressWarnings(as.numeric(sentences$start_sec[index]))
+    end <- suppressWarnings(as.numeric(sentences$end_sec[index]))
+    text <- trimws(as.character(sentences$sentence_text[index]))
+    text <- text[!is.na(text) & nzchar(text)]
+    data.frame(
+      turn_number = turn_number,
+      speaker_turn_id = effective[index[[1]]],
+      start_sec = if (all(is.na(start))) NA_real_ else min(start, na.rm = TRUE),
+      end_sec = if (all(is.na(end))) NA_real_ else max(end, na.rm = TRUE),
+      sentence_count = length(index),
+      transcript = paste(text, collapse = " "),
+      stringsAsFactors = FALSE
+    )
+  }))
 }
 
 raw_data_admin_transcript_text <- function(database_path, pipeline_run_id, track) {

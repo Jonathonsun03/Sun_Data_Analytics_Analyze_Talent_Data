@@ -43,6 +43,40 @@ stopifnot(
   is.na(current_details$issues)
 )
 
+pull_runs <- data.frame(
+  pipeline_run_id = c("classification", "backfill", "collection", "ingestion"),
+  pipeline_name = c(
+    "title_classification",
+    "subtitle_sentence_backfill",
+    "source_data_collection",
+    "analytics_ingestion"
+  ),
+  started_at = as.POSIXct(
+    c(
+      "2026-09-13 00:00:00",
+      "2026-09-12 00:00:00",
+      "2026-09-11 00:00:00",
+      "2026-09-10 00:00:00"
+    ),
+    tz = "UTC"
+  ),
+  status = c("completed", "completed", "failed", "completed"),
+  stringsAsFactors = FALSE
+)
+latest_pull <- raw_data_admin_latest_data_pull(pull_runs)
+latest_healthy_pull <- raw_data_admin_latest_healthy_data_pull(pull_runs)
+stopifnot(
+  nrow(latest_pull) == 1L,
+  latest_pull$pipeline_run_id[[1]] == "collection",
+  nrow(latest_healthy_pull) == 1L,
+  latest_healthy_pull$pipeline_run_id[[1]] == "ingestion",
+  !raw_data_admin_data_pull_succeeded(latest_pull$status[[1]]),
+  raw_data_admin_data_pull_succeeded("completed"),
+  raw_data_admin_data_pull_succeeded("SUCCESS"),
+  !raw_data_admin_data_pull_succeeded("running"),
+  nrow(raw_data_admin_latest_data_pull(data.frame())) == 0L
+)
+
 local({
   path <- tempfile(fileext = ".duckdb")
   on.exit(unlink(path), add = TRUE)
@@ -69,7 +103,9 @@ local({
     "('new', 'subtitle_sentence_backfill', '2026-09-11', '2026-09-11 00:03:00', 'failed', 'failed=1'),",
     "('new-publication', 'subtitle_sentence_reconstruction', '2026-09-11 00:01:00',",
     "'2026-09-11 00:01:30', 'completed', NULL),",
-    "('other', 'title_classification', '2026-09-12', NULL, 'running', NULL)"
+    "('other', 'title_classification', '2026-09-12', NULL, 'running', NULL),",
+    "('pull', 'source_data_collection', '2026-09-12 01:00:00',",
+    "'2026-09-12 01:05:00', 'completed', NULL)"
   ))
   DBI::dbExecute(con, paste(
     "CREATE TABLE text.subtitle_sentence_units AS SELECT",
@@ -115,6 +151,12 @@ local({
     raw_data_admin_transcript_related_run_ids(con, "new"),
     c("new", "new-publication")
   ))
+  data_pull_runs <- raw_data_admin_data_pull_runs(con)
+  stopifnot(
+    nrow(data_pull_runs) == 1L,
+    data_pull_runs$pipeline_run_id[[1]] == "pull",
+    raw_data_admin_data_pull_succeeded(data_pull_runs$status[[1]])
+  )
   DBI::dbDisconnect(con, shutdown = TRUE)
   tracks <- raw_data_admin_transcript_tracks(path, "new")
   stopifnot(nrow(tracks) == 3L, tracks$failed_blocks[tracks$video_id == "v2"] == 1)
@@ -156,6 +198,57 @@ local({
     nrow(raw_data_admin_filter_transcript_tracks(attempt_tracks, "v2")) == 1L,
     nrow(raw_data_admin_filter_transcript_tracks(attempt_tracks, "talent one")) == 2L,
     nrow(raw_data_admin_filter_transcript_tracks(attempt_tracks, "unavailable")) == 1L
+  )
+
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = path)
+  DBI::dbExecute(
+    con,
+    "ALTER TABLE text.subtitle_sentence_units ADD COLUMN speaker_turn_id BIGINT"
+  )
+  DBI::dbExecute(
+    con,
+    "ALTER TABLE text.subtitle_sentence_units ADD COLUMN speaker_change BOOLEAN"
+  )
+  DBI::dbExecute(
+    con,
+    "ALTER TABLE text.subtitle_sentence_units ADD COLUMN inferred_speaker_turn_id BIGINT"
+  )
+  DBI::dbExecute(
+    con,
+    paste(
+      "UPDATE text.subtitle_sentence_units SET",
+      "speaker_turn_id = CASE WHEN sentence_unit_key = 'key' THEN 2 ELSE 1 END,",
+      "speaker_change = sentence_unit_key IN ('first', 'key'),",
+      "inferred_speaker_turn_id = CASE WHEN sentence_unit_key = 'key' THEN 2 ELSE 1 END"
+    )
+  )
+  DBI::dbDisconnect(con, shutdown = TRUE)
+
+  clean_tracks <- raw_data_admin_clean_transcript_tracks(path, "proof")
+  stopifnot(
+    nrow(clean_tracks) == 3L,
+    all(clean_tracks$video_id == "v1"),
+    all(clean_tracks$title == "Proof <script>"),
+    nrow(raw_data_admin_clean_transcript_tracks(path, "v1")) == 3L,
+    nrow(raw_data_admin_clean_transcript_tracks(path, "Failed video")) == 0L,
+    nrow(raw_data_admin_clean_transcript_tracks(path, "")) == 0L
+  )
+  clean_track <- clean_tracks[
+    clean_tracks$pipeline_run_id == "new-publication" &
+      clean_tracks$subtitle_language == "en",
+    ,
+    drop = FALSE
+  ]
+  clean_text <- raw_data_admin_clean_transcript_text(path, clean_track)
+  stopifnot(
+    identical(clean_text$sentence_text, c("First sentence.", "Second sentence.")),
+    identical(clean_text$inferred_speaker_turn_id, c(1, 2))
+  )
+  turns <- raw_data_admin_transcript_turns(clean_text)
+  stopifnot(
+    nrow(turns) == 2L,
+    identical(turns$turn_number, 1:2),
+    identical(turns$transcript, c("First sentence.", "Second sentence."))
   )
 })
 cat("Transcript administration checks passed.\n")
