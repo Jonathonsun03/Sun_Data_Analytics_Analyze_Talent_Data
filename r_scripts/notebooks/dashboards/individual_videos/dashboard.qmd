@@ -421,7 +421,14 @@ This is the full available transcript for the selected video. For live videos,
 streamer subtitles and chat messages are merged by their video timestamp. The
 analytics snapshot date range does not filter this page.
 
-## Row
+## Row {height=28%}
+
+```{r}
+#| title: "Chat Activity and Streamer Dialogue"
+plotlyOutput("transcript_activity_plot", height = "100%")
+```
+
+## Row {height=72%}
 
 ```{r}
 #| title: "Full Video Transcript"
@@ -586,6 +593,21 @@ video_transcript <- reactive({
     talent_code = input$talent,
     video_id = input$video
   )
+})
+
+output$transcript_activity_plot <- plotly::renderPlotly({
+  selected <- selected_video_row()
+  plot <- dashboard_individual_video_transcript_activity_plot(
+    video_transcript(),
+    duration_seconds = selected$duration_seconds[[1]]
+  )
+  validate(
+    need(
+      inherits(plot, "plotly"),
+      "No timestamped chat or streamer dialogue is available for this video."
+    )
+  )
+  plot
 })
 
 observe({
@@ -870,7 +892,11 @@ output$transcript_notice <- renderUI({
   htmltools::div(
     class = if (identical(status, "cleaned")) "alert alert-info" else "alert alert-warning",
     role = "status",
-    message
+    message,
+    htmltools::tags$br(),
+    htmltools::tags$small(
+      "The chart groups events into one-minute windows. Streamer dialogue coverage uses subtitle start and end timestamps."
+    )
   )
 })
 

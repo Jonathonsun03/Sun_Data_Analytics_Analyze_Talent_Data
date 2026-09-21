@@ -235,6 +235,29 @@ assert_equal(
   "Transcript display timestamps are incorrect."
 )
 
+activity_input <- tibble::tribble(
+  ~source, ~seconds, ~end_seconds,
+  "subtitle", 5, 25,
+  "subtitle", 20, 40,
+  "chat", 10, NA_real_,
+  "chat", 15, NA_real_,
+  "chat", 75, NA_real_
+)
+activity <- dashboard_individual_video_transcript_activity(
+  activity_input,
+  duration_seconds = 120
+)
+assert_equal(
+  activity$chat_messages_per_minute,
+  c(2, 1, 0),
+  "Chat activity should be counted by video minute, including empty minutes."
+)
+assert_equal(
+  activity$streamer_dialogue_seconds_per_minute,
+  c(35, 0, 0),
+  "Overlapping subtitle intervals should not be counted twice."
+)
+
 cross_talent_transcript <- dashboard_load_individual_video_transcript(
   fixture_path,
   talent_code = "T1",

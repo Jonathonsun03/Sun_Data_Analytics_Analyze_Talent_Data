@@ -39,6 +39,12 @@ speaker, video-relative timestamp, and dialogue. Transcript loading is scoped
 to the authorized talent and video and is independent of the analytics
 snapshot date range.
 
+Above the table, one dual-axis time-series chart groups the selected video's
+transcript data into one-minute windows. Its left axis shows chat messages per
+minute; its right axis shows non-overlapping streamer subtitle coverage in
+seconds per minute. This lets a viewer compare chat peaks with sustained
+streamer dialogue while preserving their native units.
+
 ## Authorization
 
 The dashboard uses the shared fail-closed authorization helpers in

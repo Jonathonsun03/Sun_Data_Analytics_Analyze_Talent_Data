@@ -41,6 +41,179 @@ dashboard_individual_video_transcript_table <- function(transcript) {
     )
 }
 
+dashboard_individual_video_transcript_activity <- function(
+  transcript,
+  duration_seconds = NULL,
+  bin_seconds = 60
+) {
+  required_columns <- c("source", "seconds", "end_seconds")
+  if (is.null(transcript) ||
+      !all(required_columns %in% names(transcript)) ||
+      !is.numeric(bin_seconds) || length(bin_seconds) != 1L ||
+      !is.finite(bin_seconds) || bin_seconds <= 0) {
+    return(tibble::tibble())
+  }
+
+  starts <- suppressWarnings(as.numeric(transcript$seconds))
+  ends <- suppressWarnings(as.numeric(transcript$end_seconds))
+  observed_end <- c(starts, ends)
+  observed_end <- observed_end[is.finite(observed_end) & observed_end >= 0]
+  duration_seconds <- if (length(duration_seconds) > 0) {
+    suppressWarnings(as.numeric(duration_seconds[[1]]))
+  } else {
+    NA_real_
+  }
+  if (is.finite(duration_seconds) && duration_seconds >= 0) {
+    observed_end <- c(observed_end, duration_seconds)
+  }
+  if (length(observed_end) == 0) {
+    return(tibble::tibble())
+  }
+
+  max_seconds <- max(observed_end)
+  bin_start <- seq(0, floor(max_seconds / bin_seconds) * bin_seconds, by = bin_seconds)
+  activity <- tibble::tibble(
+    minute_start = bin_start,
+    minute_end = bin_start + bin_seconds,
+    chat_messages_per_minute = 0,
+    streamer_dialogue_seconds_per_minute = 0
+  )
+
+  chat_seconds <- starts[
+    transcript$source == "chat" & is.finite(starts) & starts >= 0
+  ]
+  if (length(chat_seconds) > 0) {
+    chat_bin <- pmin(
+      floor(chat_seconds / bin_seconds) + 1L,
+      nrow(activity)
+    )
+    counts <- tabulate(chat_bin, nbins = nrow(activity))
+    activity$chat_messages_per_minute <- as.numeric(counts) * (60 / bin_seconds)
+  }
+
+  subtitle_rows <- transcript$source == "subtitle" &
+    is.finite(starts) & starts >= 0 & is.finite(ends) & ends > starts
+  intervals <- data.frame(start = starts[subtitle_rows], end = ends[subtitle_rows])
+  if (nrow(intervals) == 0) {
+    return(activity)
+  }
+
+  intervals <- intervals[order(intervals$start, intervals$end), , drop = FALSE]
+  merged_intervals <- list()
+  current_start <- intervals$start[[1]]
+  current_end <- intervals$end[[1]]
+  if (nrow(intervals) > 1L) {
+    for (index in seq.int(2L, nrow(intervals))) {
+      if (intervals$start[[index]] <= current_end) {
+        current_end <- max(current_end, intervals$end[[index]])
+      } else {
+        merged_intervals[[length(merged_intervals) + 1L]] <- c(current_start, current_end)
+        current_start <- intervals$start[[index]]
+        current_end <- intervals$end[[index]]
+      }
+    }
+  }
+  merged_intervals[[length(merged_intervals) + 1L]] <- c(current_start, current_end)
+  merged_intervals <- do.call(rbind, merged_intervals)
+
+  activity$streamer_dialogue_seconds_per_minute <- vapply(
+    seq_len(nrow(activity)),
+    function(index) {
+      sum(pmax(
+        0,
+        pmin(merged_intervals[, 2], activity$minute_end[[index]]) -
+          pmax(merged_intervals[, 1], activity$minute_start[[index]])
+      ))
+    },
+    numeric(1)
+  )
+  activity
+}
+
+dashboard_individual_video_transcript_activity_plot <- function(
+  transcript,
+  duration_seconds = NULL
+) {
+  activity <- dashboard_individual_video_transcript_activity(
+    transcript,
+    duration_seconds = duration_seconds
+  )
+  if (nrow(activity) == 0 || !requireNamespace("plotly", quietly = TRUE)) {
+    return(NULL)
+  }
+
+  activity <- activity %>%
+    dplyr::mutate(
+      time_label = dashboard_individual_video_format_timecode(.data$minute_start),
+      chat_tooltip = paste0(
+        "Time: ", .data$time_label,
+        "<br>Chat messages: ", scales::number(.data$chat_messages_per_minute, accuracy = 0.1),
+        " per minute"
+      ),
+      dialogue_tooltip = paste0(
+        "Time: ", .data$time_label,
+        "<br>Streamer dialogue: ", scales::number(
+          .data$streamer_dialogue_seconds_per_minute,
+          accuracy = 0.1
+        ),
+        " seconds in this minute"
+      )
+    )
+
+  tick_values <- unique(c(0, pretty(range(activity$minute_start), n = 8)))
+  tick_values <- tick_values[
+    is.finite(tick_values) &
+      tick_values >= min(activity$minute_start) &
+      tick_values <= max(activity$minute_start)
+  ]
+
+  plot <- plotly::plot_ly(activity, x = ~minute_start)
+  plot <- plotly::add_lines(
+    plot,
+    y = ~chat_messages_per_minute,
+    name = "Chat messages / minute",
+    line = list(color = sun_data_brand_colors()[["orange"]], width = 2),
+    text = ~chat_tooltip,
+    hovertemplate = "%{text}<extra></extra>",
+    yaxis = "y"
+  )
+  plot <- plotly::add_lines(
+    plot,
+    y = ~streamer_dialogue_seconds_per_minute,
+    name = "Streamer dialogue coverage",
+    line = list(color = sun_data_brand_colors()[["blue"]], width = 2),
+    text = ~dialogue_tooltip,
+    hovertemplate = "%{text}<extra></extra>",
+    yaxis = "y2"
+  )
+  plot <- plotly::layout(
+    plot,
+    xaxis = list(
+      title = "Video time",
+      tickmode = "array",
+      tickvals = tick_values,
+      ticktext = dashboard_individual_video_format_timecode(tick_values),
+      automargin = TRUE
+    ),
+    yaxis = list(
+      title = "Chat messages per minute",
+      rangemode = "tozero",
+      automargin = TRUE
+    ),
+    yaxis2 = list(
+      title = "Streamer dialogue (seconds per minute)",
+      overlaying = "y",
+      side = "right",
+      range = c(0, 60),
+      automargin = TRUE
+    ),
+    legend = list(orientation = "h", x = 0, y = 1.12),
+    margin = list(l = 70, r = 75, b = 55, t = 45),
+    hovermode = "x unified"
+  )
+  plotly::config(plot, responsive = TRUE, displaylogo = FALSE)
+}
+
 dashboard_individual_video_value_box <- function(title, value, note = NULL) {
   displayed_value <- if (is.null(note)) {
     value

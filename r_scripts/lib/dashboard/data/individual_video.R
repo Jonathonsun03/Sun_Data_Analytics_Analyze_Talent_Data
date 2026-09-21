@@ -135,11 +135,21 @@ dashboard_load_individual_video_transcript <- function(
   subtitles <- data.frame()
   subtitle_status <- "missing"
   if (DBI::dbExistsTable(con, DBI::Id(schema = "text", table = "subtitle_sentence_units"))) {
+    sentence_columns <- DBI::dbListFields(
+      con,
+      DBI::Id(schema = "text", table = "subtitle_sentence_units")
+    )
+    sentence_end_select <- if ("end_sec" %in% sentence_columns) {
+      "subtitle.end_sec AS end_seconds,"
+    } else {
+      "CAST(NULL AS DOUBLE) AS end_seconds,"
+    }
     subtitles <- DBI::dbGetQuery(
       con,
       paste(
         "SELECT channel.channel_name AS speaker,",
         "  subtitle.start_sec AS timestamp_raw,",
+        sentence_end_select,
         "  subtitle.sentence_text AS dialogue,",
         "  ROW_NUMBER() OVER (ORDER BY subtitle.block_number, subtitle.sentence_number) AS source_order",
         "FROM text.subtitle_sentence_units AS subtitle",
@@ -161,12 +171,22 @@ dashboard_load_individual_video_transcript <- function(
   }
 
   if (nrow(subtitles) == 0) {
+    subtitle_columns <- DBI::dbListFields(
+      con,
+      DBI::Id(schema = "text", table = "subtitle_units")
+    )
+    subtitle_end_select <- if ("subtitle_end" %in% subtitle_columns) {
+      "subtitle.subtitle_end AS timestamp_end_raw,"
+    } else {
+      "CAST(NULL AS VARCHAR) AS timestamp_end_raw,"
+    }
     subtitles <- DBI::dbGetQuery(
       con,
       paste(
         "SELECT",
         "  channel.channel_name AS speaker,",
         "  subtitle.subtitle_start AS timestamp_raw,",
+        subtitle_end_select,
         "  subtitle.subtitle_text AS dialogue,",
         "  subtitle.sequence_number AS source_order",
         "FROM text.subtitle_units AS subtitle",
@@ -218,6 +238,11 @@ dashboard_load_individual_video_transcript <- function(
       } else {
         dashboard_individual_video_timecode_seconds(.data$timestamp_raw)
       },
+      end_seconds = if (subtitle_status == "cleaned") {
+        suppressWarnings(as.numeric(.data$end_seconds))
+      } else {
+        dashboard_individual_video_timecode_seconds(.data$timestamp_end_raw)
+      },
       dialogue = as.character(.data$dialogue),
       source_order = as.numeric(.data$source_order)
     )
@@ -226,6 +251,7 @@ dashboard_load_individual_video_transcript <- function(
       source = "chat",
       speaker = as.character(.data$speaker),
       seconds = suppressWarnings(as.numeric(.data$seconds)),
+      end_seconds = NA_real_,
       dialogue = as.character(.data$dialogue),
       source_order = as.numeric(.data$source_order)
     )
@@ -247,7 +273,7 @@ dashboard_load_individual_video_transcript <- function(
       .data$source_order
     ) %>%
     dplyr::select(dplyr::all_of(c(
-      "speaker", "seconds", "dialogue", "source", "source_order"
+      "speaker", "seconds", "end_seconds", "dialogue", "source", "source_order"
     )))
   attr(transcript, "subtitle_status") <- subtitle_status
   transcript
