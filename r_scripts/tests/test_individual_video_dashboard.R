@@ -257,6 +257,16 @@ assert_equal(
   c(35, 0, 0),
   "Overlapping subtitle intervals should not be counted twice."
 )
+assert_equal(
+  dashboard_individual_video_transcript_target_row(activity_input, 21),
+  5L,
+  "A chart click should target the first transcript row at or after its time."
+)
+assert_equal(
+  dashboard_individual_video_transcript_target_row(activity_input, 121),
+  5L,
+  "A click after the final transcript row should target the final row."
+)
 
 cross_talent_transcript <- dashboard_load_individual_video_transcript(
   fixture_path,

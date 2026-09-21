@@ -44,6 +44,9 @@ transcript data into one-minute windows. Its left axis shows chat messages per
 minute; its right axis shows non-overlapping streamer subtitle coverage in
 seconds per minute. This lets a viewer compare chat peaks with sustained
 streamer dialogue while preserving their native units.
+Clicking a chart point returns the transcript table to chronological order,
+opens the page containing the first line at or after that video time, and
+briefly highlights that line.
 
 ## Authorization
 

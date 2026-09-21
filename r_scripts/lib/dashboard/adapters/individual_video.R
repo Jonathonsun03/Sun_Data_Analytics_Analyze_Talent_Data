@@ -166,22 +166,39 @@ dashboard_individual_video_transcript_activity_plot <- function(
       tick_values >= min(activity$minute_start) &
       tick_values <= max(activity$minute_start)
   ]
+  chat_max <- max(activity$chat_messages_per_minute, na.rm = TRUE)
+  chat_axis_max <- if (is.finite(chat_max) && chat_max > 0) {
+    chat_max * 1.1
+  } else {
+    1
+  }
+  dialogue_axis_max <- 60 * 1.1
 
-  plot <- plotly::plot_ly(activity, x = ~minute_start)
-  plot <- plotly::add_lines(
+  plot <- plotly::plot_ly(
+    activity,
+    x = ~minute_start,
+    source = "transcript_activity"
+  )
+  plot <- plotly::add_trace(
     plot,
     y = ~chat_messages_per_minute,
+    type = "scatter",
+    mode = "lines+markers",
     name = "Chat messages / minute",
     line = list(color = sun_data_brand_colors()[["orange"]], width = 2),
+    marker = list(color = sun_data_brand_colors()[["orange"]], size = 5),
     text = ~chat_tooltip,
     hovertemplate = "%{text}<extra></extra>",
     yaxis = "y"
   )
-  plot <- plotly::add_lines(
+  plot <- plotly::add_trace(
     plot,
     y = ~streamer_dialogue_seconds_per_minute,
+    type = "scatter",
+    mode = "lines+markers",
     name = "Streamer dialogue coverage",
     line = list(color = sun_data_brand_colors()[["blue"]], width = 2),
+    marker = list(color = sun_data_brand_colors()[["blue"]], size = 5),
     text = ~dialogue_tooltip,
     hovertemplate = "%{text}<extra></extra>",
     yaxis = "y2"
@@ -197,14 +214,14 @@ dashboard_individual_video_transcript_activity_plot <- function(
     ),
     yaxis = list(
       title = "Chat messages per minute",
-      rangemode = "tozero",
+      range = c(0, chat_axis_max),
       automargin = TRUE
     ),
     yaxis2 = list(
       title = "Streamer dialogue (seconds per minute)",
       overlaying = "y",
       side = "right",
-      range = c(0, 60),
+      range = c(0, dialogue_axis_max),
       automargin = TRUE
     ),
     legend = list(orientation = "h", x = 0, y = 1.12),
@@ -212,6 +229,27 @@ dashboard_individual_video_transcript_activity_plot <- function(
     hovermode = "x unified"
   )
   plotly::config(plot, responsive = TRUE, displaylogo = FALSE)
+}
+
+dashboard_individual_video_transcript_target_row <- function(transcript, seconds) {
+  if (is.null(transcript) || nrow(transcript) == 0 ||
+      !"seconds" %in% names(transcript)) {
+    return(NA_integer_)
+  }
+
+  seconds <- if (length(seconds) > 0) {
+    suppressWarnings(as.numeric(seconds[[1]]))
+  } else {
+    NA_real_
+  }
+  timestamps <- suppressWarnings(as.numeric(transcript$seconds))
+  valid <- which(is.finite(timestamps) & timestamps >= 0)
+  if (!is.finite(seconds) || length(valid) == 0) {
+    return(NA_integer_)
+  }
+
+  later <- valid[timestamps[valid] >= seconds]
+  if (length(later) > 0) later[[1]] else valid[[length(valid)]]
 }
 
 dashboard_individual_video_value_box <- function(title, value, note = NULL) {

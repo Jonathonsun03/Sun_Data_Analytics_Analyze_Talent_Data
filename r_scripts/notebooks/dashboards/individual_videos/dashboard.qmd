@@ -84,6 +84,10 @@ execute:
   white-space: normal;
 }
 
+#video_transcript tr.transcript-time-highlight td {
+  background-color: rgba(255, 193, 7, 0.3) !important;
+}
+
 .plot-builder-statistics {
   border-top: 1px solid rgba(0, 0, 0, 0.14);
   margin-top: 1rem;
@@ -196,6 +200,30 @@ execute:
   }
 }
 </style>
+
+<script>
+Shiny.addCustomMessageHandler("scrollTranscriptToTime", function(message) {
+  const tableElement = $("#video_transcript table.dataTable");
+  if (!$.fn.dataTable.isDataTable(tableElement)) return;
+
+  const table = tableElement.DataTable();
+  const targetRowIndex = Number(message.rowIndex);
+  if (!Number.isInteger(targetRowIndex) || targetRowIndex < 0) return;
+
+  const targetPage = Math.floor(targetRowIndex / table.page.len());
+  const rowOnPage = targetRowIndex % table.page.len();
+  table.one("draw", function() {
+    const row = $(table.row(rowOnPage).node());
+    if (row.length === 0) return;
+    row.addClass("transcript-time-highlight");
+    row.get(0).scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(function() {
+      row.removeClass("transcript-time-highlight");
+    }, 1800);
+  });
+  table.search("").order([]).page(targetPage).draw(false);
+});
+</script>
 
 ```{r}
 #| label: setup
@@ -610,6 +638,24 @@ output$transcript_activity_plot <- plotly::renderPlotly({
   plot
 })
 
+observeEvent(
+  plotly::event_data("plotly_click", source = "transcript_activity"),
+  {
+    click <- plotly::event_data("plotly_click", source = "transcript_activity")
+    target_row <- dashboard_individual_video_transcript_target_row(
+      video_transcript(),
+      click$x[[1]]
+    )
+    if (!is.na(target_row)) {
+      session$sendCustomMessage(
+        "scrollTranscriptToTime",
+        list(rowIndex = target_row - 1L)
+      )
+    }
+  },
+  ignoreInit = TRUE
+)
+
 observe({
   history <- video_history_raw()
   available_metrics <- individual_video_metric_definitions$metric[
@@ -909,6 +955,7 @@ output$video_transcript <- DT::renderDataTable({
   transcript <- dashboard_individual_video_transcript_table(video_transcript())
   # Explicitly clear the widget instead of leaving its previous DOM on validation failure.
   if (nrow(transcript) == 0) return(NULL)
+  transcript$TimestampSeconds <- video_transcript()$seconds
   DTSettings(
     transcript,
     class = "display stripe hover compact",
@@ -916,11 +963,13 @@ output$video_transcript <- DT::renderDataTable({
     filter = "none",
     options = list(
       pageLength = 50,
+      order = list(),
       autoWidth = FALSE,
       columnDefs = list(
         list(targets = 0, width = "15%"),
         list(targets = 1, width = "10%"),
-        list(targets = 2, width = "75%")
+        list(targets = 2, width = "75%"),
+        list(targets = 3, visible = FALSE, searchable = FALSE)
       )
     ),
     rownames = FALSE
