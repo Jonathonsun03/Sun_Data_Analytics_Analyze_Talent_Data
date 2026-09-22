@@ -39,6 +39,18 @@ This directory contains the repository's maintained R code.
   - renderers live under `r_scripts/run/bundles/`
 - Qualitative coding
   - canonical schema, publishing, and analysis interfaces are documented below
+- Viewer activity and cross-talent chatter profiles
+  - `r_scripts/run/publish_viewer_activity.R` refreshes the derived
+    `analysis.viewer_video_activity`, `analysis.viewer_profiles`,
+    `analysis.global_viewer_profiles`, and optional
+    `analysis.company_viewer_profiles` relations from canonical chat data
+  - the refresh is atomic, records its execution in `ops.pipeline_runs`, and
+    defaults to a read-only dry run
+  - global profiles use the stable YouTube `user_id` across every talent;
+    optional company membership comes from `config/dashboard/company_talents.csv`
+  - `r_scripts/notebooks/tests/sna_overall/overall_chatter_profiles.qmd`
+    audits the stored metadata and builds a bounded all-talent co-participation
+    network without persisting definition-specific viewer edges
 
 ## Python split
 
