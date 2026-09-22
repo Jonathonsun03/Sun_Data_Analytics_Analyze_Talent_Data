@@ -22,7 +22,17 @@ multi-video selectors without requiring a server-side application.
 
 `lib/video_explorer.js` uses a compact, dictionary-encoded activity payload to
 offer every video in the selected data scope. It materializes only the checked
-videos into the network and overlap matrix, keeping large catalogs usable.
+videos into the requested view, keeping large catalogs usable. Its shared
+picker supports title search, date presets and custom ranges, primary-topic and
+normalized-keyword facets, removable filter chips, and explicit batch selection
+of matching streams. Filtering the option list does not silently change the
+current chart selection.
+
+`lib/chatter_relationship_views.js` reuses that payload and selector for two
+coordinated relationship views: an individual-chatter alluvial chart and a
+chatter--stream heatmap. The alluvial view conserves attendance or message flow
+through the stream layer; the heatmap can order rows by participation-pattern
+similarity.
 
 D3 is vendored locally so generated reports remain reproducible and usable
 without a CDN. Update the filename and the matching dependency version in

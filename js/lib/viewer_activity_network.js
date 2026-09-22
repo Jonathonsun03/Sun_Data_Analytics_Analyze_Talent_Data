@@ -4,25 +4,33 @@
   const TYPE_COLORS = {
     User: "#3b82f6",
     Video: "#f59e0b",
-    Streamer: "#8b5cf6"
+    Streamer: "#8b5cf6",
+    Topic: "#8b5cf6",
+    Keyword: "#14b8a6"
   };
 
   const TYPE_LABELS = {
     User: "Chatter",
     Video: "Video",
-    Streamer: "Streamer"
+    Streamer: "Streamer",
+    Topic: "Primary topic",
+    Keyword: "Normalized keyword"
   };
 
   const TYPE_HEADINGS = {
     User: "Chatters",
     Video: "Videos",
-    Streamer: "Streamers"
+    Streamer: "Streamers",
+    Topic: "Primary topics",
+    Keyword: "Normalized keywords"
   };
 
   const TYPE_X = {
     User: 120,
     Video: 520,
-    Streamer: 900
+    Streamer: 900,
+    Topic: 900,
+    Keyword: 900
   };
 
   function createVideoPicker(videos, onChange) {
@@ -129,7 +137,7 @@
     const search = document.createElement("input");
     search.className = "sd-network__search";
     search.type = "search";
-    search.placeholder = "Find a chatter, video, or streamer";
+    search.placeholder = "Find a chatter, video, topic, or keyword";
     search.setAttribute("aria-label", search.placeholder);
     const reset = document.createElement("button");
     reset.className = "sd-network__reset";
@@ -138,7 +146,8 @@
     const legend = document.createElement("div");
     legend.className = "sd-network__legend";
     legend.setAttribute("aria-label", "Network legend");
-    Object.entries(TYPE_COLORS).forEach(([type, color]) => {
+    const presentTypes = new Set(nodes.map((item) => item.type));
+    Object.entries(TYPE_COLORS).filter(([type]) => presentTypes.has(type)).forEach(([type, color]) => {
       const item = document.createElement("span");
       item.className = "sd-network__legend-item";
       const swatch = document.createElement("span");
@@ -147,6 +156,10 @@
       item.append(swatch, document.createTextNode(TYPE_LABELS[type]));
       legend.append(item);
     });
+    const edgeLegend = document.createElement("span");
+    edgeLegend.className = "sd-network__legend-item";
+    edgeLegend.textContent = data.edgeLegend || "Line width shows relationship weight";
+    legend.append(edgeLegend);
     const videoNodes = nodes.filter((item) => item.type === "Video");
     let selectedVideoIds = new Set(videoNodes.map((item) => item.id));
     toolbar.append(search);
@@ -178,17 +191,25 @@
       .append("svg")
       .attr("viewBox", [0, 0, width, height])
       .attr("role", "img")
-      .attr("aria-label", "Interactive chatter, video, and streamer engagement network");
+      .attr("aria-label", "Interactive chatter, video, and stream-title classification network");
     const viewport = svg.append("g");
 
     const maxNodeWeight = global.d3.max(nodes, (node) => Number(node.weight) || 0) || 1;
-    const maxLinkWeight = global.d3.max(links, (link) => Number(link.weight) || 0) || 1;
     const nodeRadius = global.d3.scaleSqrt().domain([0, maxNodeWeight]).range([4, 18]);
-    const linkWidth = global.d3.scaleSqrt().domain([0, maxLinkWeight]).range([0.6, 7]);
+    const engagementMax = global.d3.max(
+      links.filter((item) => item.type === "engagement"),
+      (item) => Number(item.weight) || 0
+    ) || 1;
+    const classificationMax = global.d3.max(
+      links.filter((item) => item.type === "classification"),
+      (item) => Number(item.weight) || 0
+    ) || 1;
+    const engagementWidth = global.d3.scaleSqrt().domain([0, engagementMax]).range([0.8, 7]);
+    const classificationWidth = global.d3.scaleSqrt().domain([0, classificationMax]).range([0.8, 8]);
 
     viewport.append("g")
       .selectAll("text")
-      .data(Object.keys(TYPE_X))
+      .data(Array.from(presentTypes))
       .join("text")
       .attr("class", "sd-network__column-label")
       .attr("x", (type) => TYPE_X[type])
@@ -201,9 +222,11 @@
       .data(links)
       .join("line")
       .attr("class", "sd-network__link")
-      .attr("stroke", (item) => item.type === "ownership" ? "#94a3b8" : "#60a5fa")
-      .attr("stroke-opacity", (item) => item.type === "ownership" ? 0.34 : 0.28)
-      .attr("stroke-width", (item) => item.type === "ownership" ? 1.2 : linkWidth(Number(item.weight) || 0));
+      .attr("stroke", (item) => item.type === "classification" ? "#8b5cf6" : "#60a5fa")
+      .attr("stroke-opacity", (item) => item.type === "classification" ? 0.42 : 0.3)
+      .attr("stroke-width", (item) => item.type === "classification"
+        ? classificationWidth(Number(item.weight) || 0)
+        : engagementWidth(Number(item.weight) || 0));
 
     const node = viewport.append("g")
       .selectAll("circle")
@@ -234,7 +257,9 @@
     }
 
     function videoIdForLink(item) {
-      return item.type === "ownership" ? linkId(item.source) : linkId(item.target);
+      return item.type === "classification" || item.type === "ownership"
+        ? linkId(item.source)
+        : linkId(item.target);
     }
 
     let selectedNode = null;
@@ -265,9 +290,16 @@
     }
 
     function showTooltip(event, item) {
-      const messages = Number(item.weight || 0).toLocaleString();
+      if (item.tooltip) {
+        tooltip.textContent = item.tooltip;
+        tooltip.style.left = `${event.offsetX}px`;
+        tooltip.style.top = `${event.offsetY}px`;
+        tooltip.style.visibility = "visible";
+        return;
+      }
+      const weight = Number(item.weight || 0).toLocaleString();
       const typeLabel = TYPE_LABELS[item.type] || item.type;
-      tooltip.textContent = `${item.label} · ${typeLabel} · ${messages} selected messages`;
+      tooltip.textContent = `${item.label} · ${typeLabel} · weight ${weight}`;
       tooltip.style.left = `${event.offsetX}px`;
       tooltip.style.top = `${event.offsetY}px`;
       tooltip.style.visibility = "visible";
@@ -300,8 +332,13 @@
         }
       });
 
+    link
+      .on("mouseenter", showTooltip)
+      .on("mousemove", showTooltip)
+      .on("mouseleave", hideTooltip);
+
     const simulation = global.d3.forceSimulation(nodes)
-      .force("link", global.d3.forceLink(links).id((item) => item.id).distance((item) => item.type === "ownership" ? 250 : 330).strength(0.16))
+      .force("link", global.d3.forceLink(links).id((item) => item.id).distance((item) => item.type === "classification" ? 250 : 330).strength(0.16))
       .force("x", global.d3.forceX((item) => TYPE_X[item.type] || width / 2).strength(0.92))
       .force("y", global.d3.forceY(height / 2).strength(0.045))
       .force("charge", global.d3.forceManyBody().strength(-24))

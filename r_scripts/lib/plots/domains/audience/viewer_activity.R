@@ -107,13 +107,14 @@ viewer_activity_bipartite_ggplot <- function(network, label_count = 15L) {
 .viewer_activity_d3_dependency <- function() {
   htmltools::htmlDependency(
     name = "sun-data-viewer-activity",
-    version = "1.2.0",
+    version = "1.5.0",
     src = c(file = normalizePath(here::here("js"), mustWork = TRUE)),
     script = c(
       "vendor/d3.v7.9.0.min.js",
       "lib/viewer_activity_network.js",
       "lib/community_shape.js",
-      "lib/video_explorer.js"
+      "lib/video_explorer.js",
+      "lib/chatter_relationship_views.js"
     ),
     stylesheet = c(
       "styles/viewer_activity_network.css",
@@ -423,12 +424,16 @@ viewer_activity_community_shape_d3 <- function(
   htmltools::browsable(htmltools::attachDependencies(widget, .viewer_activity_d3_dependency()))
 }
 
-viewer_activity_video_explorer_prep <- function(viewer_video_activity) {
+viewer_activity_video_explorer_prep <- function(
+  viewer_video_activity,
+  video_catalog = NULL,
+  classification_contributions = NULL
+) {
   if (nrow(viewer_video_activity) == 0L) {
     stop("Video-explorer preparation requires at least one activity row.", call. = FALSE)
   }
 
-  videos <- viewer_video_activity %>%
+  activity_videos <- viewer_video_activity %>%
     dplyr::group_by(
       .data$video_id,
       .data$video_title,
@@ -448,10 +453,30 @@ viewer_activity_video_explorer_prep <- function(viewer_video_activity) {
       dplyr::desc(.data$stream_at),
       .data$video_id
     ) %>%
-    dplyr::mutate(
-      label = dplyr::coalesce(.data$video_title, .data$video_id),
-      video_index = dplyr::row_number() - 1L
-    )
+    dplyr::mutate(label = dplyr::coalesce(.data$video_title, .data$video_id))
+  videos <- if (is.null(video_catalog)) {
+    activity_videos
+  } else {
+    video_catalog %>%
+      dplyr::left_join(
+        activity_videos %>%
+          dplyr::select("video_id", "messages", "chatters"),
+        by = "video_id"
+      ) %>%
+      dplyr::mutate(
+        messages = dplyr::coalesce(.data$messages, 0),
+        chatters = dplyr::coalesce(.data$chatters, 0L),
+        label = dplyr::coalesce(.data$video_title, .data$video_id)
+      ) %>%
+      dplyr::arrange(
+        dplyr::desc(.data$messages),
+        dplyr::desc(.data$chatters),
+        dplyr::desc(.data$stream_at),
+        .data$video_id
+      )
+  }
+  videos <- videos %>%
+    dplyr::mutate(video_index = dplyr::row_number() - 1L)
   multiple_talents <- dplyr::n_distinct(videos$talent_code) > 1L
   videos <- videos %>%
     dplyr::mutate(
@@ -479,6 +504,33 @@ viewer_activity_video_explorer_prep <- function(viewer_video_activity) {
   edge_matrix <- as.matrix(edge_rows)
   storage.mode(edge_matrix) <- "integer"
 
+  serialize_classifications <- function(edges) {
+    if (is.null(edges) || nrow(edges) == 0L) return(list())
+    edges %>%
+      dplyr::transmute(
+        videoId = .data$video_id,
+        label = .data$classification,
+        videoTitle = .data$video_title,
+        videoViews = .data$video_views,
+        classificationViews = .data$classification_views,
+        contributionPercentage = .data$contribution_percentage,
+        confidence = .data$confidence
+      )
+  }
+
+  serialize_filters <- function(edges) {
+    if (is.null(edges) || nrow(edges) == 0L) return(list())
+    edges %>%
+      dplyr::semi_join(
+        videos %>% dplyr::select("video_id"),
+        by = "video_id"
+      ) %>%
+      dplyr::transmute(
+        videoId = .data$video_id,
+        label = .data$classification
+      )
+  }
+
   list(
     videos = videos %>%
       dplyr::transmute(
@@ -494,13 +546,21 @@ viewer_activity_video_explorer_prep <- function(viewer_video_activity) {
       ),
     users = users %>%
       dplyr::transmute(id = .data$user_id, label = .data$label),
-    edges = edge_matrix
+    edges = edge_matrix,
+    classifications = list(
+      topics = serialize_classifications(classification_contributions$topics),
+      keywords = serialize_classifications(classification_contributions$keywords)
+    ),
+    filters = list(
+      topics = serialize_filters(classification_contributions$filter_topics),
+      keywords = serialize_filters(classification_contributions$filter_keywords)
+    )
   )
 }
 
 viewer_activity_video_explorer_d3 <- function(
   explorer_data,
-  view = c("network", "overlap"),
+  view = c("network", "overlap", "sankey", "heatmap"),
   dataset_id = "viewer_activity_explorer",
   initial_video_count = NULL,
   initial_video_ids = NULL,
@@ -516,11 +576,13 @@ viewer_activity_video_explorer_d3 <- function(
     stop("Install the jsonlite package to render the D3 video explorer.", call. = FALSE)
   }
   view <- match.arg(view)
-  defaults <- if (view == "network") {
-    list(initial = 24L, selected = 40L, height = 760L)
-  } else {
-    list(initial = 16L, selected = 30L, height = 720L)
-  }
+  defaults <- switch(
+    view,
+    network = list(initial = 24L, selected = 40L, height = 760L),
+    overlap = list(initial = 16L, selected = 30L, height = 720L),
+    sankey = list(initial = 12L, selected = 20L, height = 820L),
+    heatmap = list(initial = 24L, selected = 40L, height = 900L)
+  )
   normalize_positive <- function(value, default, minimum = 1L) {
     if (is.null(value)) return(default)
     value <- suppressWarnings(as.integer(value))
@@ -570,7 +632,13 @@ viewer_activity_video_explorer_d3 <- function(
       envir = .viewer_activity_d3_state$published_datasets
     )
   }
-  renderer <- if (view == "network") "renderNetwork" else "renderOverlap"
+  renderer <- switch(
+    view,
+    network = "renderNetwork",
+    overlap = "renderOverlap",
+    sankey = "renderSankey",
+    heatmap = "renderHeatmap"
+  )
   options <- list(
     initialVideoCount = initial_video_count,
     initialVideoIds = initial_video_ids,

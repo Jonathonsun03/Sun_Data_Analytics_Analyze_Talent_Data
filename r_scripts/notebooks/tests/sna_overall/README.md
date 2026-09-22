@@ -5,14 +5,23 @@ descriptive relations and the reusable user--video engagement network tools.
 
 `chatter_network_explorer.qmd` is the client-facing, full-width D3 view. It
 adds a scope summary and interaction guidance while using the same canonical
-activity loader, bounded network preparation, and shared JavaScript component
-as the audit notebook. It retains the chatter--video--streamer map and adds
+activity loader and shared JavaScript components as the audit notebook. Its
+opening individual-chatter alluvial view connects chatter--video--stream-title
+classification, with controls for attendance versus message weighting and
+primary topics versus normalized title tags. Hovering a chatter emphasizes the
+person's complete downstream path. View-contribution percentages use global
+talent-level denominators computed before interactive filtering. It pairs that
+view with a chatter--stream participation heatmap,
 full-community layers, an engagement landscape, and a stream audience-overlap
 matrix so clients can inspect community shape beyond the bounded node-link
-view. The node-link and overlap views include searchable multi-video selectors;
-every video in the current data scope is available. `max_videos` and
-`overlap_max_videos` control the initial selections, while
-`network_max_selected` and `overlap_max_selected` protect readability.
+view. The alluvial, heatmap, and overlap views include searchable multi-video
+selectors; every available live stream in the selected talent catalog is
+available. `sankey_max_videos`, `heatmap_max_videos`, and
+`overlap_max_videos` control initial selections, while their corresponding
+`*_max_selected` parameters protect readability. The shared selector can filter
+by title, date preset or custom range, current primary topic, and normalized
+keyword; filters narrow the list until the user explicitly selects or
+deselects the matching streams.
 
 `overall_chatter_profiles.qmd` reads three primary analytical grains from the unified
 lakehouse:

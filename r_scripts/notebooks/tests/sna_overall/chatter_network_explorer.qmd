@@ -1,6 +1,6 @@
 ---
 title: "Chatter Community Explorer"
-subtitle: "Explore the people, streams, and creators that form a live-chat community"
+subtitle: "Explore chatters, streams, and the topics attached to stream titles"
 format:
   html:
     page-layout: full
@@ -9,16 +9,17 @@ format:
     code-fold: true
     code-tools: false
 params:
-  talent_code: null
+  talent_code: "NOV6"
   video_id: null
   minimum_messages: 1
-  max_videos: 24
-  max_users: 100
-  network_label_count: 18
-  network_height: 760
   overlap_max_videos: 16
-  network_max_selected: 40
   overlap_max_selected: 30
+  sankey_max_videos: 12
+  sankey_max_selected: 20
+  sankey_max_users: 30
+  heatmap_max_videos: 24
+  heatmap_max_selected: 40
+  heatmap_max_users: 80
 execute:
   echo: false
   warning: false
@@ -51,27 +52,17 @@ execute:
 .explorer-stat__value { color: #0f172a; font-size: 1.65rem; font-weight: 720; line-height: 1.1; }
 .explorer-stat__label { color: #475569; font-size: 0.82rem; margin-top: 0.25rem; }
 .explorer-scope { color: #64748b; font-size: 0.86rem; margin: -0.4rem 0 0.7rem; }
-.explorer-notes {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-top: 1rem;
-}
-.explorer-note { background: #f8fafc; border-radius: 0.65rem; padding: 0.85rem 1rem; }
-.explorer-note strong { color: #1e293b; display: block; margin-bottom: 0.25rem; }
-.explorer-note span { color: #64748b; font-size: 0.88rem; }
 @media (max-width: 850px) {
   .explorer-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .explorer-notes { grid-template-columns: 1fr; }
 }
 </style>
 ```
 
 ::: {.explorer-intro}
-This map turns collected live-chat participation into a community you can
-explore. Start with a familiar chatter or stream, then follow the connections
-to see where audiences overlap. Every line represents observed chat activity,
-not passive viewing.
+These views turn collected live-chat participation into a community you can
+explore. Follow individual chatters through streams or compare participation
+patterns to see where audiences overlap. Every connection represents observed
+chat activity, not passive viewing.
 :::
 
 ```{r}
@@ -114,13 +105,14 @@ stat_card <- function(value, label) {
 talent_code <- normalize_parameter(params$talent_code)
 video_id <- normalize_parameter(params$video_id)
 minimum_messages <- positive_integer(params$minimum_messages, 1L)
-max_videos <- positive_integer(params$max_videos, 24L)
-max_users <- positive_integer(params$max_users, 100L)
-network_label_count <- positive_integer(params$network_label_count, 18L)
-network_height <- positive_integer(params$network_height, 760L, minimum = 420L)
 overlap_max_videos <- positive_integer(params$overlap_max_videos, 16L, minimum = 2L)
-network_max_selected <- positive_integer(params$network_max_selected, 40L)
 overlap_max_selected <- positive_integer(params$overlap_max_selected, 30L)
+sankey_max_videos <- positive_integer(params$sankey_max_videos, 12L)
+sankey_max_selected <- positive_integer(params$sankey_max_selected, 20L)
+sankey_max_users <- positive_integer(params$sankey_max_users, 30L)
+heatmap_max_videos <- positive_integer(params$heatmap_max_videos, 24L)
+heatmap_max_selected <- positive_integer(params$heatmap_max_selected, 40L)
+heatmap_max_users <- positive_integer(params$heatmap_max_users, 80L)
 
 load_repo_env(repo_root = here::here())
 db_path <- talent_lakehouse_db_path()
@@ -134,17 +126,14 @@ viewer_video_activity <- load_viewer_video_activity(con, talent_code) %>%
 if (nrow(viewer_video_activity) == 0L) {
   stop("No collected chat activity matched the selected scope.", call. = FALSE)
 }
-video_explorer_data <- viewer_activity_video_explorer_prep(viewer_video_activity)
-
-engagement_network <- viewer_activity_bipartite_prep(
+available_live_videos <- load_available_live_videos(con, talent_code)
+classification_contributions <- load_title_classification_contributions(con, talent_code)
+video_explorer_data <- viewer_activity_video_explorer_prep(
   viewer_video_activity,
-  video_id = video_id,
-  max_videos = max_videos,
-  max_users = max_users
+  video_catalog = available_live_videos,
+  classification_contributions = classification_contributions
 )
-if (nrow(engagement_network$engagement_edges) == 0L) {
-  stop("No network edges matched the selected video and message threshold.", call. = FALSE)
-}
+
 community_shape <- viewer_activity_community_shape_prep(
   viewer_video_activity,
   max_overlap_videos = overlap_max_videos
@@ -160,10 +149,13 @@ htmltools::div(
   class = "explorer-stats",
   stat_card(scales::comma(nrow(community_shape$profiles)), "Community chatters"),
   stat_card(
-    scales::comma(dplyr::n_distinct(viewer_video_activity$video_id)),
-    "Streams in scope"
+    scales::comma(nrow(available_live_videos)),
+    "Available live streams"
   ),
-  stat_card(scales::comma(nrow(engagement_network$users)), "Chatters in opening map"),
+  stat_card(
+    scales::comma(dplyr::n_distinct(viewer_video_activity$video_id)),
+    "Streams with chat activity"
+  ),
   stat_card(
     scales::comma(sum(viewer_video_activity$message_count)),
     "Community messages"
@@ -178,63 +170,72 @@ htmltools::p(
 )
 ```
 
+## Chatter flows through streams
+
+This alluvial view keeps chatters as individuals: it does not assign them a
+classification. Each path follows an observed chatter into a stream and then
+into the topic or normalized title tag attached to that stream. Use a smaller
+stream selection so paths remain traceable. Hover over a chatter to highlight
+all of that person's paths through attended streams and their downstream
+classifications.
+
+Open the **Streams** selector to search titles or filter the catalog by date,
+primary genre, and normalized keyword. Filters narrow the option list without
+silently changing the current chart. Use **Select matching** or
+**Deselect matching** to apply the filtered result, subject to the view's
+selection limit; active filters remain visible as removable chips.
+
+The selected engagement measure supplies one consistent width along the whole
+path. For primary topics, a stream's flow goes to its single topic. When a
+stream has several normalized tags, its outgoing flow is divided evenly among
+those tags so the diagram does not duplicate engagement. View-contribution
+percentage remains available in the stream-to-classification tooltip; it is not
+added to message or attendance flow.
+
+View contribution uses `analytics.video_latest_performance.views`, whose
+canonical relation has one latest row per video. Its denominator includes all
+current, active-version classifications matching each video's current title
+hash, including eligible videos outside the visible selector. Filtering streams
+does not recalculate it. Videos missing views are excluded from contribution
+denominators; zero-view videos remain eligible. Normalized tags come directly
+from `normalization.active_label_mappings`.
+
 ```{r}
 viewer_activity_video_explorer_d3(
   video_explorer_data,
-  view = "network",
-  initial_video_count = max_videos,
+  view = "sankey",
+  initial_video_count = sankey_max_videos,
   initial_video_ids = video_id,
-  max_selected = network_max_selected,
-  max_users = max_users,
-  label_count = network_label_count,
-  height = network_height
+  max_selected = sankey_max_selected,
+  max_users = sankey_max_users,
+  height = 820
 )
 ```
 
-::: {.explorer-notes}
-::: {.explorer-note}
-**Find a community member**
+## Chatter–stream participation heatmap
 
-[Use the search box to locate a chatter, stream, or creator. Matching nodes stay highlighted.]{.explorer-note-text}
-:::
+The heatmap emphasizes relationships among chatters by placing people with
+similar stream-attendance patterns near one another. A shared vertical pattern
+means two chatters participated in many of the same selected streams. Switch
+the cell measure between attendance and messages, or restore a simple
+highest-activity row order.
 
-::: {.explorer-note}
-**Follow the overlap**
-
-[Use the Videos menu to choose one or several streams, then click a node to keep its immediate relationships highlighted.]{.explorer-note-text}
-:::
-
-::: {.explorer-note}
-**Read size and connection**
-
-[Larger nodes represent more selected messages. Thicker blue lines mean more messages from that chatter in that stream.]{.explorer-note-text}
-:::
-:::
-
-## How to interpret this map
-
-- **Blue nodes are chatters.** A connection means the person posted at least
-  one collected chat message in that stream.
-- **Gold nodes are streams.** Shared chatters reveal audience overlap between
-  streams.
-- **Purple nodes are creators.** Gray links identify which creator hosted
-  each stream; they are context links rather than audience activity.
-
-The display is intentionally bounded to the most active selected streams and
-chatters so the network remains usable. It does not imply that people outside
-the display were absent. “First observed” and related measures describe the
-collected chat record, not a person’s first-ever interaction with a creator.
-The Videos menu searches every stream in the current talent and message scope.
-`max_videos` controls only the initial selection, not which titles are
-available. To keep the force layout readable, `network_max_selected` limits how
-many videos can be drawn simultaneously.
+```{r}
+viewer_activity_video_explorer_d3(
+  video_explorer_data,
+  view = "heatmap",
+  initial_video_count = heatmap_max_videos,
+  initial_video_ids = video_id,
+  max_selected = heatmap_max_selected,
+  max_users = heatmap_max_users,
+  height = 900
+)
+```
 
 ## The shape of the full community
 
-The opening network is useful for following individual relationships, but a
-node-link view becomes crowded before it can show the whole community. The
-next views use every chatter in the selected scope rather than only the
-chatters displayed in the opening map.
+The Sankey and heatmap are useful for following selected relationships, while
+the next views summarize every chatter in the selected scope.
 
 ### Community layers
 
