@@ -19,6 +19,10 @@ Adapters may select data, handle dashboard empty states, and apply
 dashboard-specific Plotly or card formatting, but should not become a second
 plot library.
 
+`metrics/viewer_activity.R` contains viewer-chat summaries that are not tied to
+one dashboard: talent-level engagement counts, video activity summaries, and
+participant tables. Other analysis workflows may source these functions.
+
 ## Naming
 
 Filenames use their layer and domain rather than repeating `dashboard_`; the

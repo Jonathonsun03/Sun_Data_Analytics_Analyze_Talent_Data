@@ -84,6 +84,14 @@ pin one coding run. `load_qualitative_codebook()` returns the matching codebook
 definitions from DuckDB. `load_qualitative_video_performance()` retrieves the
 matching rows from `analytics.video_latest_performance`.
 
+## Viewer Activity
+
+Defined in `viewer_activity.R`. `load_viewer_video_activity()` returns the
+canonical observed user--video chat edge grain joined to video and talent
+metadata. `load_viewer_profiles()` returns the corresponding per-talent viewer
+profiles with qualified public-subscription fields. Both accept an open DuckDB
+connection and an optional exact `talent_code`; neither writes data.
+
 Do not add a separate loader per codebook. New codebooks are resolved through
 the metadata in `qualitative.codebooks`, and their generated wide views are
 consumed by the same `load_qualitative_transcripts_wide()` function.

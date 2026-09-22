@@ -11,6 +11,10 @@ plot themes and Bundle A formatting helpers are available.
 - `publishing/`: day-of-week and topic-weekday analysis
 - `audience/`: demographic and geography visualizations
 
+`audience/viewer_activity.R` provides `viewer_activity_bipartite_prep()` for
+the user--video engagement node and edge tables, and
+`viewer_activity_bipartite_ggplot()` for its reusable static graph.
+
 Functions should identify their output contract explicitly:
 
 - `_prep`: prepared data frame or list

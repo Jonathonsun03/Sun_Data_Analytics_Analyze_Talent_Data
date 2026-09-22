@@ -1,6 +1,6 @@
 ---
-title: "Overall Chatter Profiles"
-subtitle: "Read-only prototype for community entry and participation metrics"
+title: "Viewer Activity and Engagement Networks"
+subtitle: "Introduction, audit, and examples for reusable viewer-activity tools"
 format:
   html:
     toc: true
@@ -11,9 +11,8 @@ params:
   talent_code: null
   video_id: null
   profile_preview_limit: 50
-  network_max_nodes: 75
-  network_min_videos: 3
-  network_min_shared_videos: 2
+  bipartite_max_videos: 12
+  bipartite_max_users: 60
   network_label_count: 15
 execute:
   echo: true
@@ -21,845 +20,175 @@ execute:
   message: false
 ---
 
-## Purpose and interpretation
+## Purpose and model
 
-This draft evaluates the stored descriptive layer and builds a bounded all-talent
-viewer co-participation network. The maintained relations provide:
+This read-only notebook introduces the reusable viewer-activity tools. The
+canonical stored grain is one row per **talent, video, and identified chatter**
+in `analysis.viewer_video_activity`; it is refreshed by
+`r_scripts/run/publish_viewer_activity.R`.
 
-1. **Viewer-video activity**: one row per talent, viewer, and video.
-2. **Viewer profiles**: one row per talent and viewer.
-3. **Global viewer profiles**: one row per stable viewer ID across all talents.
+```{mermaid}
+flowchart LR
+  U[User / chatter] -->|message_count| V[Video]
+  V -->|hosted by| S[Streamer / talent]
+```
 
-The report is read-only. Relation refreshes are owned by
-`r_scripts/run/publish_viewer_activity.R`, not by the notebook.
+The blue user--video edge represents collected chat participation, and its
+weight is messages sent in that video. The streamer link is ownership context,
+not engagement. This network does not represent viewers who watched without
+chatting.
 
-The word *joined* needs qualification. The strongest date available for every
-chatter is their **first observed chat** in the collected corpus. A public
-YouTube subscription date is attached only when available. A
-`membership_item` is an observed membership-related chat event, not an
-authoritative paid-membership start date.
-
-| Field | What it supports | What it does not prove |
+| Field | Supports | Does not prove |
 |---|---|---|
-| First observed chat | Earliest collected stream in which the viewer chatted | First watch, community membership, or historical first chat before collection |
-| Public subscription date | Public subscription date visible in the latest subscriber snapshot | Paid membership or complete subscriber coverage |
-| First membership event | Earliest collected `membership_item` for a viewer | Original paid-membership start or uninterrupted membership |
-| Videos chatted in | Distinct collected videos containing at least one message | Videos watched without chatting |
+| First observed chat | Earliest collected stream chat | First watch or original community entry |
+| Public subscription date | Date reported in a matched public subscriber snapshot | Complete subscriber coverage or paid membership start |
+| Membership event | Observed `membership_item` chat event | Original or uninterrupted membership |
 
-## Parameters and setup
+## Reusable tools
 
-Use `talent_code` to inspect one exact talent code. A null value includes every
-talent. Use `video_id` to display the chatter-level metrics for one video in
-the selected scope. `profile_preview_limit` controls only displayed profile
-tables; it does not change the calculations.
+The notebook is deliberately thin. Reusable responsibilities live in the
+library so reports, dashboards, and the Analyze Talent Data workflow can use
+the same definitions.
+
+| Tool area | Main functions | Responsibility |
+|---|---|---|
+| `lib/import_data/viewer_activity.R` | `load_viewer_video_activity()`, `load_viewer_profiles()` | Canonical lakehouse reads |
+| `lib/dashboard/metrics/viewer_activity.R` | `viewer_activity_talent_summary()`, `viewer_activity_video_summary()` | General engagement numbers and participant tables |
+| `lib/plots/domains/audience/viewer_activity.R` | `viewer_activity_bipartite_prep()`, `viewer_activity_bipartite_ggplot()` | Network-ready tables and graph rendering |
+
+The stored `analysis.viewer_profiles` and `analysis.global_viewer_profiles`
+tables remain the reusable per-talent and cross-talent descriptive layers.
+User--user co-participation is a later, derived projection of the canonical
+user--video edges; it is not stored as a second edge table.
+
+## Parameters
+
+- `talent_code`: one exact talent code; null includes all talents.
+- `video_id`: focus the participant table and network on one video.
+- `bipartite_max_videos` / `bipartite_max_users`: display bounds for a readable graph.
+- `network_label_count`: maximum user labels; all displayed videos and streamers are labeled.
+
+## Setup and audit
 
 ```{r}
-#| label: setup
-
-required_packages <- c(
-  "DBI", "duckdb", "dplyr", "ggplot2", "here", "knitr", "scales", "tidyr"
-)
-missing_packages <- required_packages[
-  !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
-]
+required_packages <- c("DBI", "duckdb", "dplyr", "ggplot2", "here", "knitr", "scales")
+missing_packages <- required_packages[!vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)]
 if (length(missing_packages) > 0L) {
-  stop(
-    "Install the required R packages before rendering: ",
-    paste(missing_packages, collapse = ", "),
-    call. = FALSE
-  )
+  stop("Install the required R packages before rendering: ", paste(missing_packages, collapse = ", "), call. = FALSE)
 }
 
 suppressPackageStartupMessages(library(dplyr))
-
 source(here::here("r_scripts", "lib", "utils", "repo_env.R"))
 source(here::here("r_scripts", "lib", "utils", "datalake_root.r"))
 source(here::here("r_scripts", "lib", "duckdb", "db_connect.R"))
+source(here::here("r_scripts", "lib", "import_data", "viewer_activity.R"))
+source(here::here("r_scripts", "lib", "dashboard", "metrics", "viewer_activity.R"))
+source(here::here("r_scripts", "lib", "plots", "domains", "audience", "viewer_activity.R"))
 
 load_repo_env(repo_root = here::here())
 db_path <- talent_lakehouse_db_path()
-if (!file.exists(db_path)) {
-  stop("Unified talent lakehouse not found: ", db_path, call. = FALSE)
-}
-
+if (!file.exists(db_path)) stop("Unified talent lakehouse not found: ", db_path, call. = FALSE)
 con <- duckdb_connect(db_path = db_path, read_only = TRUE)
 
 normalize_parameter <- function(value) {
-  if (is.null(value) || length(value) == 0L || is.na(value[[1]])) {
-    return(NULL)
-  }
+  if (is.null(value) || length(value) == 0L || is.na(value[[1]])) return(NULL)
   value <- trimws(as.character(value[[1]]))
   if (nzchar(value)) value else NULL
 }
-
-talent_code <- normalize_parameter(params$talent_code)
-video_id <- normalize_parameter(params$video_id)
-profile_preview_limit <- suppressWarnings(as.integer(params$profile_preview_limit))
-if (is.na(profile_preview_limit) || profile_preview_limit < 1L) {
-  profile_preview_limit <- 50L
-}
-network_max_nodes <- suppressWarnings(as.integer(params$network_max_nodes))
-network_min_videos <- suppressWarnings(as.integer(params$network_min_videos))
-network_min_shared_videos <- suppressWarnings(
-  as.integer(params$network_min_shared_videos)
-)
-network_label_count <- suppressWarnings(as.integer(params$network_label_count))
-if (is.na(network_max_nodes) || network_max_nodes < 2L) network_max_nodes <- 75L
-if (is.na(network_min_videos) || network_min_videos < 1L) network_min_videos <- 3L
-if (is.na(network_min_shared_videos) || network_min_shared_videos < 1L) {
-  network_min_shared_videos <- 2L
-}
-if (is.na(network_label_count) || network_label_count < 0L) {
-  network_label_count <- 15L
-}
-
-talent_filter_sql <- if (is.null(talent_code)) {
-  ""
-} else {
-  "AND activity.talent_code = ?"
-}
-talent_query_params <- if (is.null(talent_code)) list() else list(talent_code)
-
 display_table <- function(rows, digits = 1L) {
-  if (nrow(rows) == 0L) {
-    return(knitr::kable(data.frame(message = "No rows matched.")))
-  }
+  if (nrow(rows) == 0L) return(knitr::kable(data.frame(message = "No rows matched.")))
   knitr::kable(rows, digits = digits)
 }
-
-ggplot2::theme_set(
-  ggplot2::theme_minimal(base_size = 12) +
-    ggplot2::theme(
-      panel.grid.minor = ggplot2::element_blank(),
-      legend.position = "bottom"
-    )
-)
-
-scope_label <- if (is.null(talent_code)) "All talents" else talent_code
-display_table(data.frame(
-  item = c("Database", "Talent scope", "Network scope", "Rendered at"),
-  value = c(
-    db_path,
-    scope_label,
-    "All talents",
-    format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
-  )
-))
-```
-
-## Data preflight
-
-The prototype depends only on canonical chat, video, talent, and public
-subscriber relations. It deliberately does not use generated analysis files.
-
-```{r}
-#| label: data-preflight
-
-required_relations <- data.frame(
-  schema_name = c(
-    "text", "catalog", "catalog", "clean", "analysis", "analysis", "analysis"
-  ),
-  relation_name = c(
-    "chat_messages", "videos", "talents", "public_subscriber_snapshots",
-    "viewer_video_activity", "viewer_profiles", "global_viewer_profiles"
-  )
-)
-
-relation_status <- DBI::dbGetQuery(
-  con,
-  paste(
-    "SELECT table_schema AS schema_name, table_name AS relation_name",
-    "FROM information_schema.tables",
-    "WHERE (table_schema, table_name) IN (",
-    "  ('text', 'chat_messages'),",
-    "  ('catalog', 'videos'),",
-    "  ('catalog', 'talents'),",
-    "  ('clean', 'public_subscriber_snapshots'),",
-    "  ('analysis', 'viewer_video_activity'),",
-    "  ('analysis', 'viewer_profiles'),",
-    "  ('analysis', 'global_viewer_profiles')",
-    ")"
-  )
-)
-
-required_relations <- required_relations %>%
-  dplyr::left_join(
-    relation_status %>% dplyr::mutate(available = TRUE),
-    by = c("schema_name", "relation_name")
-  ) %>%
-  dplyr::mutate(
-    available = dplyr::coalesce(.data$available, FALSE),
-    status = dplyr::if_else(.data$available, "PASS", "FAIL")
-  )
-
-display_table(required_relations[, c("status", "schema_name", "relation_name")])
-if (!all(required_relations$available)) {
-  stop(
-    "Required lakehouse relations are missing. Run the viewer activity ",
-    "publisher before rendering this report.",
-    call. = FALSE
-  )
+positive_parameter <- function(value, default) {
+  value <- suppressWarnings(as.integer(value))
+  if (is.na(value) || value < 1L) default else value
 }
+talent_code <- normalize_parameter(params$talent_code)
+video_id <- normalize_parameter(params$video_id)
+profile_preview_limit <- positive_parameter(params$profile_preview_limit, 50L)
+bipartite_max_videos <- positive_parameter(params$bipartite_max_videos, 12L)
+bipartite_max_users <- positive_parameter(params$bipartite_max_users, 60L)
+network_label_count <- positive_parameter(params$network_label_count, 15L)
+
+required_relations <- data.frame(schema_name = c("text", "catalog", "clean", "analysis", "analysis", "analysis"), relation_name = c("chat_messages", "videos", "public_subscriber_snapshots", "viewer_video_activity", "viewer_profiles", "global_viewer_profiles"))
+available_relations <- DBI::dbGetQuery(con, "SELECT table_schema AS schema_name, table_name AS relation_name FROM information_schema.tables")
+required_relations <- required_relations %>% left_join(available_relations %>% mutate(available = TRUE), by = c("schema_name", "relation_name")) %>% mutate(available = coalesce(.data$available, FALSE), status = if_else(.data$available, "PASS", "FAIL"))
+display_table(required_relations)
+if (!all(required_relations$available)) stop("Run the viewer activity publisher before rendering.", call. = FALSE)
 ```
 
-## Load viewer-video activity
-
-`message_timestamp` is intentionally excluded from date calculations because
-replay chat sources can encode it as an epoch-relative clock. The stream date
-comes from `actual_start_at`, falling back to `published_at`; the first and last
-message offsets remain available in seconds.
+## Load the canonical activity and profile layers
 
 ```{r}
-#| label: load-viewer-video-activity
+viewer_video_activity <- load_viewer_video_activity(con, talent_code) %>%
+  mutate(stream_at = as.POSIXct(.data$stream_at, tz = "UTC"), active_minutes = .data$active_span_seconds / 60)
+viewer_profiles <- load_viewer_profiles(con, talent_code) %>%
+  mutate(observed_span_days = as.numeric(difftime(.data$last_observed_stream_at, .data$first_observed_stream_at, units = "days")))
+if (nrow(viewer_video_activity) == 0L) stop("No collected chat activity matched the selected scope.", call. = FALSE)
 
-viewer_video_sql <- paste(
-  "SELECT",
-  "  activity.talent_code,",
-  "  talent.talent_name,",
-  "  activity.channel_id,",
-  "  activity.video_id,",
-  "  video.title AS video_title,",
-  "  activity.user_id,",
-  "  activity.latest_username_in_video,",
-  "  activity.stream_at,",
-  "  activity.message_count,",
-  "  activity.text_message_count,",
-  "  activity.paid_message_count,",
-  "  activity.membership_event_count,",
-  "  activity.first_message_second,",
-  "  activity.last_message_second,",
-  "  activity.active_span_seconds,",
-  "  activity.pipeline_run_id,",
-  "  activity.calculated_at",
-  "FROM analysis.viewer_video_activity AS activity",
-  "JOIN catalog.videos AS video",
-  "  USING (talent_code, channel_id, video_id)",
-  "JOIN catalog.talents AS talent",
-  "  USING (talent_code)",
-  "WHERE 1 = 1",
-  talent_filter_sql,
-  "ORDER BY activity.talent_code, activity.stream_at,",
-  "  activity.video_id, activity.user_id"
-)
-
-viewer_video_activity <- DBI::dbGetQuery(
-  con,
-  viewer_video_sql,
-  params = talent_query_params
-) %>%
-  dplyr::mutate(
-    stream_at = as.POSIXct(.data$stream_at, tz = "UTC"),
-    active_minutes = .data$active_span_seconds / 60,
-    messages_per_active_minute = dplyr::if_else(
-      .data$active_minutes > 0,
-      .data$message_count / .data$active_minutes,
-      as.numeric(.data$message_count)
-    )
-  )
-
-if (nrow(viewer_video_activity) == 0L) {
-  stop("No valid chat activity matched the selected scope.", call. = FALSE)
-}
-
-display_table(
-  viewer_video_activity %>%
-    dplyr::select(
-      .data$talent_code,
-      .data$video_id,
-      .data$stream_at,
-      .data$user_id,
-      .data$latest_username_in_video,
-      .data$message_count,
-      .data$first_message_second,
-      .data$last_message_second
-    ) %>%
-    dplyr::slice_head(n = 10L)
-)
+display_table(data.frame(item = c("Database", "Talent scope", "User–video edges"), value = c(db_path, if (is.null(talent_code)) "All talents" else talent_code, nrow(viewer_video_activity))))
 ```
 
-## Load overall viewer profiles
+## Reusable engagement numbers
 
-The latest observed username is a label; the stable profile key is
-`(talent_code, user_id)`. Public subscription records use the value in the
-latest snapshot. `subscription_date_versions` exposes cases where the reported
-date changed across snapshots rather than silently treating the history as
-stable.
+These numbers come from `viewer_activity_talent_summary()`, so downstream
+workflows can use the same definitions without copying notebook calculations.
 
 ```{r}
-#| label: load-viewer-profiles
+talent_summary <- viewer_activity_talent_summary(viewer_profiles, viewer_video_activity)
+display_table(talent_summary %>% mutate(messages = scales::comma(.data$messages), public_subscription_coverage = scales::percent(.data$public_subscription_coverage, accuracy = 0.1)))
 
-viewer_profile_sql <- paste(
-  "SELECT",
-  "  profile.*,",
-  "  talent.talent_name,",
-  "  profile.public_subscribed_at AS subscribed_at,",
-  "  profile.public_subscriber_snapshot_date AS snapshot_date",
-  "FROM analysis.viewer_profiles AS profile",
-  "JOIN catalog.talents AS talent USING (talent_code)",
-  "WHERE 1 = 1",
-  if (is.null(talent_code)) "" else "AND profile.talent_code = ?",
-  "ORDER BY profile.talent_code, profile.user_id"
-)
-
-viewer_profiles <- DBI::dbGetQuery(
-  con,
-  viewer_profile_sql,
-  params = talent_query_params
-) %>%
-  dplyr::mutate(
-    observed_span_days = as.numeric(
-      difftime(
-        .data$last_observed_stream_at,
-        .data$first_observed_stream_at,
-        units = "days"
-      )
-    )
-  )
-```
-
-## Overall corpus coverage
-
-These figures describe only chats that were collected and successfully joined
-to cataloged videos.
-
-```{r}
-#| label: corpus-coverage
-
-talent_summary <- viewer_profiles %>%
-  dplyr::group_by(.data$talent_code, .data$talent_name) %>%
-  dplyr::summarise(
-    chatters = dplyr::n(),
-    videos_with_chat = dplyr::n_distinct(
-      viewer_video_activity$video_id[
-        viewer_video_activity$talent_code == dplyr::first(.data$talent_code)
-      ]
-    ),
-    messages = sum(.data$total_messages),
-    median_videos_per_chatter = stats::median(.data$videos_chatted_in),
-    median_messages_per_chatter = stats::median(.data$total_messages),
-    public_subscription_matches = sum(.data$public_subscription_matched),
-    public_subscription_coverage = mean(.data$public_subscription_matched),
-    chatters_with_membership_events = sum(.data$membership_events > 0),
-    .groups = "drop"
-  )
-
-display_table(
-  talent_summary %>%
-    dplyr::mutate(
-      messages = scales::comma(.data$messages),
-      public_subscription_coverage = scales::percent(
-        .data$public_subscription_coverage,
-        accuracy = 0.1
-      )
-    )
-)
-```
-
-```{r}
-#| label: subscription-coverage-plot
-#| fig-height: 4.5
-
-ggplot2::ggplot(
-  talent_summary,
-  ggplot2::aes(
-    x = stats::reorder(.data$talent_code, .data$public_subscription_coverage),
-    y = .data$public_subscription_coverage
-  )
-) +
-  ggplot2::geom_col(fill = "#3B82F6", width = 0.7) +
-  ggplot2::geom_text(
-    ggplot2::aes(
-      label = scales::percent(.data$public_subscription_coverage, accuracy = 0.1)
-    ),
-    hjust = -0.1,
-    size = 3.5
-  ) +
-  ggplot2::coord_flip(clip = "off") +
-  ggplot2::scale_y_continuous(
-    labels = scales::label_percent(),
-    limits = c(0, max(talent_summary$public_subscription_coverage) * 1.2)
-  ) +
-  ggplot2::labs(
-    title = "Public subscription dates cover a minority of observed chatters",
-    subtitle = "Coverage uses each subscriber's latest available snapshot record",
-    x = NULL,
-    y = "Share of observed chatters with a public subscription match"
-  )
-```
-
-## When chatters first appeared
-
-This is the recommended first view of community entry. Each viewer is counted
-once, in the month of their earliest collected chat stream.
-
-```{r}
-#| label: first-observed-cohorts
-
-first_observed_cohorts <- viewer_profiles %>%
-  dplyr::mutate(
-    first_observed_month = as.Date(
-      format(.data$first_observed_stream_at, "%Y-%m-01")
-    )
-  ) %>%
-  dplyr::count(
-    .data$talent_code,
-    .data$talent_name,
-    .data$first_observed_month,
-    name = "newly_observed_chatters"
-  )
-
-ggplot2::ggplot(
-  first_observed_cohorts,
-  ggplot2::aes(
-    x = .data$first_observed_month,
-    y = .data$newly_observed_chatters
-  )
-) +
-  ggplot2::geom_col(fill = "#7C3AED", width = 25) +
-  ggplot2::facet_wrap(
-    ggplot2::vars(.data$talent_code),
-    scales = "free_y",
-    ncol = 2
-  ) +
-  ggplot2::scale_y_continuous(labels = scales::label_comma()) +
-  ggplot2::labs(
-    title = "First observed chatters by month",
-    subtitle = "A collection-bounded entry cohort, not a complete community join date",
-    x = "First observed chat month",
-    y = "Newly observed chatters"
-  )
-```
-
-## Breadth and intensity of participation
-
-The log scales keep occasional and highly active chatters visible in the same
-view. Color marks whether a public subscription date is available; it should
-not be interpreted as subscriber versus non-subscriber status.
-
-```{r}
-#| label: participation-scatter
-#| fig-height: 6
-
-ggplot2::ggplot(
-  viewer_profiles,
-  ggplot2::aes(
-    x = .data$videos_chatted_in,
-    y = .data$total_messages,
-    color = .data$public_subscription_matched
-  )
-) +
-  ggplot2::geom_point(alpha = 0.35, size = 1.4) +
-  ggplot2::facet_wrap(
-    ggplot2::vars(.data$talent_code),
-    scales = "free",
-    ncol = 2
-  ) +
-  ggplot2::scale_x_log10(labels = scales::label_comma()) +
-  ggplot2::scale_y_log10(labels = scales::label_comma()) +
-  ggplot2::scale_color_manual(
-    values = c(`FALSE` = "#9CA3AF", `TRUE` = "#F59E0B"),
-    labels = c(`FALSE` = "No public match", `TRUE` = "Public match")
-  ) +
-  ggplot2::labs(
-    title = "Participation breadth and message intensity",
-    x = "Distinct videos chatted in (log scale)",
-    y = "Total messages (log scale)",
-    color = "Public subscription record"
-  )
-```
-
-## Video-level activity
-
-The first table identifies the videos with the most observed chat activity.
-When `video_id` is supplied, the second table answers how many messages each
-viewer sent in that video, along with their first and last offsets.
-
-```{r}
-#| label: video-activity
-
-video_summary <- viewer_video_activity %>%
-  dplyr::group_by(
-    .data$talent_code,
-    .data$video_id,
-    .data$video_title,
-    .data$stream_at
-  ) %>%
-  dplyr::summarise(
-    chatters = dplyr::n_distinct(.data$user_id),
-    messages = sum(.data$message_count),
-    paid_messages = sum(.data$paid_message_count),
-    membership_events = sum(.data$membership_event_count),
-    .groups = "drop"
-  ) %>%
-  dplyr::arrange(dplyr::desc(.data$messages))
-
-display_table(video_summary %>% dplyr::slice_head(n = 20L))
+video_summary <- viewer_activity_video_summary(viewer_video_activity)
+display_table(slice_head(video_summary, n = 20L))
 
 if (!is.null(video_id)) {
-  selected_video_activity <- viewer_video_activity %>%
-    dplyr::filter(.data$video_id == video_id) %>%
-    dplyr::arrange(
-      dplyr::desc(.data$message_count),
-      .data$user_id
-    ) %>%
-    dplyr::select(
-      .data$talent_code,
-      .data$video_id,
-      .data$user_id,
-      .data$latest_username_in_video,
-      .data$message_count,
-      .data$text_message_count,
-      .data$paid_message_count,
-      .data$membership_event_count,
-      .data$first_message_second,
-      .data$last_message_second,
-      .data$active_minutes
-    ) %>%
-    dplyr::slice_head(n = profile_preview_limit)
-
-  if (nrow(selected_video_activity) == 0L) {
-    warning("The requested video_id did not match the selected scope: ", video_id)
-  }
-  print(display_table(selected_video_activity))
+  display_table(viewer_activity_video_participants(viewer_video_activity, video_id, profile_preview_limit))
 }
 ```
 
-## Draft profile preview
+## User–video engagement graph
 
-The preview is ordered by videos chatted in, then total messages. It is a
-review surface for choosing fields—not a proposed physical table definition.
+`viewer_activity_bipartite_prep()` returns ordinary node and edge tables as
+well as the graph-ready coordinates. Use those tables directly in a dashboard,
+table, or another graphing system; this notebook uses the paired ggplot helper.
 
 ```{r}
-#| label: profile-preview
+engagement_network <- viewer_activity_bipartite_prep(
+  viewer_video_activity,
+  video_id = video_id,
+  max_videos = bipartite_max_videos,
+  max_users = bipartite_max_users
+)
 
+display_table(slice_head(engagement_network$engagement_edges %>% select(.data$user_id, .data$video_id, .data$message_count), n = 20L))
+
+engagement_plot <- viewer_activity_bipartite_ggplot(engagement_network, network_label_count)
+if (is.null(engagement_plot)) {
+  plot.new()
+  graphics::text(0.5, 0.5, "No user–video chat edges matched the selected scope.")
+} else {
+  print(engagement_plot)
+}
+```
+
+## Profile review surface
+
+```{r}
 profile_preview <- viewer_profiles %>%
-  dplyr::arrange(
-    dplyr::desc(.data$videos_chatted_in),
-    dplyr::desc(.data$total_messages),
-    .data$talent_code,
-    .data$user_id
-  ) %>%
-  dplyr::select(
-    .data$talent_code,
-    .data$user_id,
-    .data$current_username,
-    .data$first_observed_stream_at,
-    .data$last_observed_stream_at,
-    .data$videos_chatted_in,
-    .data$total_messages,
-    .data$median_messages_per_active_video,
-    .data$paid_messages,
-    .data$membership_events,
-    .data$first_membership_event_stream_at,
-    .data$subscribed_at,
-    .data$public_subscription_matched,
-    .data$subscription_date_changed
-  ) %>%
-  dplyr::slice_head(n = profile_preview_limit)
-
+  arrange(desc(.data$videos_chatted_in), desc(.data$total_messages), .data$talent_code, .data$user_id) %>%
+  select(.data$talent_code, .data$user_id, .data$current_username, .data$first_observed_stream_at, .data$last_observed_stream_at, .data$videos_chatted_in, .data$total_messages, .data$paid_messages, .data$membership_events, .data$subscribed_at, .data$public_subscription_matched, .data$subscription_date_changed) %>%
+  slice_head(n = profile_preview_limit)
 display_table(profile_preview)
 ```
 
-## All-talent core chatter network
+## Operating notes
 
-The global network treats two viewers as connected when they chatted in the
-same video for any talent. Edge weight is the number of distinct videos they
-shared across the full lakehouse. This is a co-participation network: it does not show
-direct replies, friendship, or proof that the viewers know one another.
-
-The stored global profile supplies reusable node metadata. Network thresholds
-and centrality are calculated at render time because they belong to this
-specific network definition.
+1. Refresh the canonical activity tables with `publish_viewer_activity.R`; it defaults to a dry run.
+2. Use the import and metric helpers for repeatable counts in analysis workflows.
+3. Use the plotting helper only after selecting a readable scope; do not treat a visual bound as a population filter.
+4. Keep subscription dates and first-observed chat dates qualified as described above.
 
 ```{r}
-#| label: global-profile-summary
-
-global_profiles <- DBI::dbGetQuery(
-  con,
-  paste(
-    "SELECT *",
-    "FROM analysis.global_viewer_profiles",
-    "ORDER BY talents_chatted_with DESC, videos_chatted_in DESC,",
-    "  total_messages DESC, user_id"
-  )
-)
-
-if (nrow(global_profiles) == 0L) {
-  stop("No stored global viewer profiles are available.", call. = FALSE)
-}
-
-global_summary <- global_profiles %>%
-  dplyr::summarise(
-    observed_chatters = dplyr::n(),
-    cross_talent_chatters = sum(.data$cross_talent_chatter),
-    maximum_talent_reach = max(.data$talents_chatted_with),
-    cross_talent_share = mean(.data$cross_talent_chatter),
-    median_active_videos = stats::median(.data$videos_chatted_in),
-    median_messages = stats::median(.data$total_messages)
-  ) %>%
-  dplyr::mutate(
-    cross_talent_share = scales::percent(.data$cross_talent_share, accuracy = 0.1)
-  )
-
-display_table(global_summary)
-```
-
-```{r}
-#| label: global-network-build
-
-network_candidates <- global_profiles %>%
-  dplyr::filter(.data$videos_chatted_in >= network_min_videos) %>%
-  dplyr::arrange(
-    dplyr::desc(.data$talents_chatted_with),
-    dplyr::desc(.data$videos_chatted_in),
-    dplyr::desc(.data$total_messages),
-    .data$user_id
-  ) %>%
-  dplyr::slice_head(n = network_max_nodes)
-
-candidate_placeholders <- paste(rep("?", nrow(network_candidates)), collapse = ", ")
-
-if (nrow(network_candidates) >= 2L) {
-  global_presence <- DBI::dbGetQuery(
-    con,
-    paste0(
-      "SELECT DISTINCT talent_code, video_id, user_id ",
-      "FROM analysis.viewer_video_activity ",
-      "WHERE user_id IN (", candidate_placeholders, ")"
-    ),
-    params = as.list(network_candidates$user_id)
-  )
-
-  global_edges <- global_presence %>%
-    dplyr::inner_join(
-      global_presence,
-      by = c("talent_code", "video_id"),
-      suffix = c("_from", "_to"),
-      relationship = "many-to-many"
-    ) %>%
-    dplyr::filter(.data$user_id_from < .data$user_id_to) %>%
-    dplyr::count(
-      from = .data$user_id_from,
-      to = .data$user_id_to,
-      name = "shared_videos"
-    ) %>%
-    dplyr::filter(.data$shared_videos >= network_min_shared_videos)
-} else {
-  global_edges <- data.frame(
-    from = character(),
-    to = character(),
-    shared_videos = integer()
-  )
-}
-
-network_user_ids <- sort(unique(c(global_edges$from, global_edges$to)))
-network_nodes <- network_candidates %>%
-  dplyr::filter(.data$user_id %in% network_user_ids) %>%
-  dplyr::arrange(.data$user_id)
-
-if (nrow(network_nodes) >= 2L && nrow(global_edges) > 0L) {
-  node_index <- stats::setNames(seq_len(nrow(network_nodes)), network_nodes$user_id)
-  adjacency <- matrix(
-    0,
-    nrow = nrow(network_nodes),
-    ncol = nrow(network_nodes),
-    dimnames = list(network_nodes$user_id, network_nodes$user_id)
-  )
-  from_index <- unname(node_index[global_edges$from])
-  to_index <- unname(node_index[global_edges$to])
-  adjacency[cbind(from_index, to_index)] <- global_edges$shared_videos
-  adjacency[cbind(to_index, from_index)] <- global_edges$shared_videos
-
-  eigen_result <- eigen(adjacency, symmetric = TRUE)
-  eigenvector_centrality <- abs(eigen_result$vectors[, 1])
-  if (max(eigenvector_centrality) > 0) {
-    eigenvector_centrality <- eigenvector_centrality / max(eigenvector_centrality)
-  }
-
-  graph_distance <- matrix(Inf, nrow(adjacency), ncol(adjacency))
-  diag(graph_distance) <- 0
-  connected <- adjacency > 0
-  graph_distance[connected] <- 1 / sqrt(adjacency[connected])
-  for (k in seq_len(nrow(graph_distance))) {
-    graph_distance <- pmin(
-      graph_distance,
-      outer(graph_distance[, k], graph_distance[k, ], "+")
-    )
-  }
-  finite_max <- max(graph_distance[is.finite(graph_distance)])
-  graph_distance[!is.finite(graph_distance)] <- finite_max * 2
-
-  if (nrow(network_nodes) == 2L) {
-    coordinates <- matrix(c(-1, 0, 1, 0), ncol = 2, byrow = TRUE)
-  } else {
-    coordinates <- stats::cmdscale(
-      stats::as.dist(graph_distance),
-      k = 2,
-      eig = FALSE
-    )
-  }
-
-  network_nodes <- network_nodes %>%
-    dplyr::mutate(
-      x = coordinates[, 1],
-      y = coordinates[, 2],
-      degree = rowSums(adjacency > 0),
-      weighted_degree = rowSums(adjacency),
-      eigenvector_centrality = eigenvector_centrality
-    ) %>%
-    dplyr::arrange(
-      dplyr::desc(.data$eigenvector_centrality),
-      dplyr::desc(.data$weighted_degree),
-      dplyr::desc(.data$talents_chatted_with),
-      dplyr::desc(.data$total_messages)
-    ) %>%
-    dplyr::mutate(core_rank = dplyr::row_number())
-
-  coordinate_lookup <- network_nodes %>%
-    dplyr::select(.data$user_id, .data$x, .data$y)
-  network_edges_plot <- global_edges %>%
-    dplyr::inner_join(
-      coordinate_lookup,
-      by = c("from" = "user_id")
-    ) %>%
-    dplyr::rename(x_from = .data$x, y_from = .data$y) %>%
-    dplyr::inner_join(
-      coordinate_lookup,
-      by = c("to" = "user_id")
-    ) %>%
-    dplyr::rename(x_to = .data$x, y_to = .data$y)
-} else {
-  network_edges_plot <- data.frame()
-}
-```
-
-```{r}
-#| label: global-network-plot
-#| fig-height: 8
-
-if (nrow(network_edges_plot) == 0L) {
-  plot.new()
-  graphics::text(
-    0.5,
-    0.5,
-    paste(
-      "No all-talent network survived the current thresholds.",
-      "Reduce network_min_videos or network_min_shared_videos."
-    )
-  )
-} else {
-  label_nodes <- network_nodes %>%
-    dplyr::slice_head(n = min(network_label_count, nrow(network_nodes)))
-
-  global_network_plot <- ggplot2::ggplot() +
-    ggplot2::geom_segment(
-      data = network_edges_plot,
-      ggplot2::aes(
-        x = .data$x_from,
-        y = .data$y_from,
-        xend = .data$x_to,
-        yend = .data$y_to,
-        linewidth = .data$shared_videos
-      ),
-      color = "#94A3B8",
-      alpha = 0.25
-    ) +
-    ggplot2::geom_point(
-      data = network_nodes,
-      ggplot2::aes(
-        x = .data$x,
-        y = .data$y,
-        size = .data$eigenvector_centrality,
-        color = .data$talents_chatted_with
-      ),
-      alpha = 0.9
-    ) +
-    ggplot2::geom_text(
-      data = label_nodes,
-      ggplot2::aes(
-        x = .data$x,
-        y = .data$y,
-        label = dplyr::coalesce(.data$current_username, .data$user_id)
-      ),
-      nudge_y = 0.04,
-      check_overlap = TRUE,
-      size = 3
-    ) +
-    ggplot2::scale_linewidth_continuous(
-      trans = "sqrt",
-      range = c(0.2, 2.2),
-      guide = "none"
-    ) +
-    ggplot2::scale_size_continuous(range = c(2.5, 11)) +
-    ggplot2::scale_color_viridis_c(option = "C", direction = -1) +
-    ggplot2::coord_equal() +
-    ggplot2::theme_void(base_size = 12) +
-    ggplot2::theme(legend.position = "bottom") +
-    ggplot2::labs(
-      title = "Core chatter co-participation network across all talents",
-      subtitle = paste(
-        "Candidates:", network_max_nodes,
-        "| Minimum active videos:", network_min_videos,
-        "| Minimum shared videos per edge:", network_min_shared_videos
-      ),
-      size = "Eigenvector centrality",
-      color = "Talents chatted with"
-    )
-
-  print(global_network_plot)
-}
-```
-
-```{r}
-#| label: global-core-ranking
-
-if (exists("network_nodes") && nrow(network_nodes) > 0L) {
-  core_ranking <- network_nodes %>%
-    dplyr::select(
-      .data$core_rank,
-      .data$user_id,
-      .data$current_username,
-      .data$talents_chatted_with,
-      .data$videos_chatted_in,
-      .data$total_messages,
-      .data$degree,
-      .data$weighted_degree,
-      .data$eigenvector_centrality,
-      .data$primary_talent_code,
-      .data$public_subscription_talent_count
-    ) %>%
-    dplyr::slice_head(n = 25L)
-  display_table(core_ranking, digits = 3L)
-} else {
-  display_table(data.frame(message = "No core ranking at current thresholds."))
-}
-```
-
-## Candidate persistent design
-
-The maintained grains are:
-
-| Candidate relation | Key | Responsibility |
-|---|---|---|
-| `viewer_video_activity` | `(talent_code, video_id, user_id)` | Message counts, event counts, first/last offsets, and active span within a video |
-| `viewer_profiles` | `(talent_code, user_id)` | First/latest observed activity, distinct active videos, lifetime observed counts, and latest display label |
-| `global_viewer_profiles` | `user_id` | Cross-talent reach, all-talent activity totals, primary talent, subscription coverage, and reusable node attributes |
-
-Public subscription evidence should remain joined from
-`clean.public_subscriber_snapshots` or be represented with explicit snapshot
-lineage. It should not silently become a universal viewer join date.
-
-Viewer edges remain ephemeral and definition-specific. Remaining decisions are:
-
-- whether bot/moderator/owner accounts need exclusion flags;
-- whether deleted or unavailable videos remain in lifetime counts;
-- whether membership events require a separate event-level analytical view;
-- whether the current full refresh should later become incremental;
-- which collection-coverage fields must accompany first-observed dates.
-
-```{r}
-#| label: disconnect
 #| include: false
-
 DBI::dbDisconnect(con, shutdown = TRUE)
 ```

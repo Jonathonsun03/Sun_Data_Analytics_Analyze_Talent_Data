@@ -15,5 +15,6 @@ plot_domain_source("content_strategy", "collaboration.R")
 plot_domain_source("content_strategy", "topics.R")
 plot_domain_source("content_strategy", "tags.R")
 plot_domain_source("audience", "geography.R")
+plot_domain_source("audience", "viewer_activity.R")
 
 invisible(TRUE)

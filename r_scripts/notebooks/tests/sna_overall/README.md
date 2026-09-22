@@ -1,7 +1,7 @@
 # Overall chatter profiles draft
 
-This folder contains a read-only report for evaluating the maintained chatter
-descriptive relations and a draft all-talent co-participation network.
+This folder contains a read-only introduction to the maintained chatter
+descriptive relations and the reusable user--video engagement network tools.
 
 `overall_chatter_profiles.qmd` reads three primary analytical grains from the unified
 lakehouse:
@@ -9,6 +9,15 @@ lakehouse:
 - one row per talent, chatter, and video;
 - one row per talent and chatter; and
 - one row per globally identified chatter across every talent.
+
+The notebook documents the library interfaces for canonical activity loading,
+general engagement summaries, and graph preparation/rendering. The primary
+network is a three-layer graph: users send messages in videos, and videos
+belong to streamers. User--video edge width is the number of messages the user
+sent in the video. To remain legible, the graph selects a bounded number of
+high-message videos and active users; use `bipartite_max_videos` and
+`bipartite_max_users` to adjust those bounds. Supplying `video_id` focuses the
+graph on one video.
 
 Refresh those relations with `r_scripts/run/publish_viewer_activity.R`. The
 publisher defaults to a read-only dry run; set
