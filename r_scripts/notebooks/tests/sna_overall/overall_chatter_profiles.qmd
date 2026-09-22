@@ -71,7 +71,7 @@ user--video edges; it is not stored as a second edge table.
 ## Setup and audit
 
 ```{r}
-required_packages <- c("DBI", "duckdb", "dplyr", "ggplot2", "here", "knitr", "scales")
+required_packages <- c("DBI", "duckdb", "dplyr", "ggplot2", "here", "htmltools", "jsonlite", "knitr", "scales")
 missing_packages <- required_packages[!vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)]
 if (length(missing_packages) > 0L) {
   stop("Install the required R packages before rendering: ", paste(missing_packages, collapse = ", "), call. = FALSE)
@@ -150,7 +150,7 @@ if (!is.null(video_id)) {
 
 `viewer_activity_bipartite_prep()` returns ordinary node and edge tables as
 well as the graph-ready coordinates. Use those tables directly in a dashboard,
-table, or another graphing system; this notebook uses the paired ggplot helper.
+table, or another graphing system; this notebook uses the shared D3 renderer.
 
 ```{r}
 engagement_network <- viewer_activity_bipartite_prep(
@@ -162,14 +162,20 @@ engagement_network <- viewer_activity_bipartite_prep(
 
 display_table(slice_head(engagement_network$engagement_edges %>% select(.data$user_id, .data$video_id, .data$message_count), n = 20L))
 
-engagement_plot <- viewer_activity_bipartite_ggplot(engagement_network, network_label_count)
+engagement_plot <- viewer_activity_bipartite_d3(engagement_network, network_label_count)
 if (is.null(engagement_plot)) {
   plot.new()
   graphics::text(0.5, 0.5, "No user–video chat edges matched the selected scope.")
 } else {
-  print(engagement_plot)
+  engagement_plot
 }
 ```
+
+The interactive graph uses the same bounded node and edge tables as the static
+renderer. Hover or click a node to isolate its immediate relationships, search
+by label, drag nodes, and zoom or pan the canvas. The existing
+`viewer_activity_bipartite_ggplot()` helper remains available as a static or
+non-HTML fallback.
 
 ## Profile review surface
 

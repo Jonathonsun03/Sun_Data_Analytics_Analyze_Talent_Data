@@ -1,0 +1,103 @@
+.sd-community-chart {
+  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+  border: 1px solid #dbe4ee;
+  border-radius: 0.7rem;
+  margin: 0.6rem 0 1.4rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.sd-community-chart svg {
+  display: block;
+  height: auto;
+  max-height: 80vh;
+  min-height: 16rem;
+  width: 100%;
+}
+
+.sd-community-chart__axis {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.sd-community-chart__axis-title {
+  fill: #475569;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.sd-community-chart__grid {
+  color: #e2e8f0;
+}
+
+.sd-community-chart__grid .domain {
+  display: none;
+}
+
+.sd-community-chart__bar,
+.sd-community-chart rect {
+  transition: filter 120ms ease, opacity 120ms ease;
+}
+
+.sd-community-chart__bar:hover,
+.sd-community-chart rect:hover {
+  filter: brightness(0.94) saturate(1.08);
+}
+
+.sd-community-chart__bar-label {
+  fill: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.sd-community-chart__cell-label {
+  fill: #1e293b;
+  font-size: 13px;
+  font-weight: 650;
+  pointer-events: none;
+}
+
+.sd-community-chart__cell-label--light {
+  fill: #fff;
+}
+
+.sd-community-chart__cell--filtered {
+  opacity: 0.08;
+  pointer-events: none;
+}
+
+.sd-community-chart__tick--filtered {
+  opacity: 0.2;
+}
+
+.sd-community-chart__overlap-axis {
+  font-size: 10px;
+}
+
+.sd-community-chart__tooltip {
+  background: rgb(15 23 42 / 95%);
+  border-radius: 0.45rem;
+  color: #e2e8f0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  max-width: 24rem;
+  padding: 0.5rem 0.65rem;
+  pointer-events: none;
+  position: absolute;
+  transform: translate(0.7rem, calc(-100% - 0.45rem));
+  visibility: hidden;
+  z-index: 3;
+}
+
+.sd-community-chart__tooltip-title {
+  color: #fff;
+  font-weight: 650;
+  margin-bottom: 0.15rem;
+}
+
+.sd-community-chart > .sd-video-picker {
+  display: inline-block;
+  margin: 0.75rem 0 0 0.75rem;
+  z-index: 4;
+}

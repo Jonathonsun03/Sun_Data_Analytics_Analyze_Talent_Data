@@ -99,3 +99,496 @@ viewer_activity_bipartite_ggplot <- function(network, label_count = 15L) {
     ggplot2::theme(panel.grid = ggplot2::element_blank(), legend.position = "bottom") +
     ggplot2::labs(title = "User–video chat engagement network", subtitle = "Blue edge width is messages sent in one video; gray edges identify video ownership.", x = NULL, y = NULL, fill = "Node type", shape = "Node type")
 }
+
+.viewer_activity_d3_state <- new.env(parent = emptyenv())
+.viewer_activity_d3_state$widget_id <- 0L
+.viewer_activity_d3_state$published_datasets <- new.env(parent = emptyenv())
+
+.viewer_activity_d3_dependency <- function() {
+  htmltools::htmlDependency(
+    name = "sun-data-viewer-activity",
+    version = "1.2.0",
+    src = c(file = normalizePath(here::here("js"), mustWork = TRUE)),
+    script = c(
+      "vendor/d3.v7.9.0.min.js",
+      "lib/viewer_activity_network.js",
+      "lib/community_shape.js",
+      "lib/video_explorer.js"
+    ),
+    stylesheet = c(
+      "styles/viewer_activity_network.css",
+      "styles/community_shape.css"
+    )
+  )
+}
+
+viewer_activity_bipartite_d3 <- function(network, label_count = 15L, height = 680L) {
+  if (nrow(network$engagement_edges) == 0L) return(NULL)
+  if (!requireNamespace("htmltools", quietly = TRUE)) {
+    stop("Install the htmltools package to render the D3 network.", call. = FALSE)
+  }
+  if (!requireNamespace("jsonlite", quietly = TRUE)) {
+    stop("Install the jsonlite package to render the D3 network.", call. = FALSE)
+  }
+
+  label_count <- suppressWarnings(as.integer(label_count))
+  if (is.na(label_count) || label_count < 0L) label_count <- 15L
+  height <- suppressWarnings(as.integer(height))
+  if (is.na(height) || height < 320L) height <- 680L
+
+  labeled_users <- network$users %>%
+    dplyr::slice_head(n = min(label_count, nrow(network$users))) %>%
+    dplyr::pull(.data$node_id)
+  nodes <- dplyr::bind_rows(
+    network$users %>%
+      dplyr::transmute(
+        id = paste0("user:", .data$node_id),
+        type = "User",
+        label = .data$label,
+        weight = .data$node_weight,
+        showLabel = .data$node_id %in% labeled_users
+      ),
+    network$videos %>%
+      dplyr::transmute(
+        id = paste0("video:", .data$node_id),
+        type = "Video",
+        label = .data$label,
+        weight = .data$node_weight,
+        showLabel = TRUE
+      ),
+    network$streamers %>%
+      dplyr::transmute(
+        id = paste0("streamer:", .data$node_id),
+        type = "Streamer",
+        label = .data$label,
+        weight = .data$node_weight,
+        showLabel = TRUE
+      )
+  )
+  links <- dplyr::bind_rows(
+    network$engagement_edges %>%
+      dplyr::transmute(
+        source = paste0("user:", .data$user_id),
+        target = paste0("video:", .data$video_id),
+        type = "engagement",
+        weight = .data$message_count
+      ),
+    network$ownership_edges %>%
+      dplyr::transmute(
+        source = paste0("video:", .data$node_id),
+        target = paste0("streamer:", .data$channel_id),
+        type = "ownership",
+        weight = .data$node_weight
+      )
+  )
+
+  payload <- jsonlite::toJSON(
+    list(nodes = nodes, links = links),
+    dataframe = "rows",
+    auto_unbox = TRUE,
+    na = "null",
+    digits = NA
+  )
+  payload <- gsub("</", "<\\/", payload, fixed = TRUE)
+  .viewer_activity_d3_state$widget_id <- .viewer_activity_d3_state$widget_id + 1L
+  widget_id <- paste0("viewer-activity-network-", .viewer_activity_d3_state$widget_id)
+  data_id <- paste0(widget_id, "-data")
+
+  widget <- htmltools::tagList(
+    htmltools::tags$div(id = widget_id),
+    htmltools::tags$script(
+      id = data_id,
+      type = "application/json",
+      htmltools::HTML(payload)
+    ),
+    htmltools::tags$script(htmltools::HTML(sprintf(
+      "SunDataNetwork.renderViewerActivityNetwork(document.getElementById(%s), JSON.parse(document.getElementById(%s).textContent), {height: %d});",
+      jsonlite::toJSON(widget_id, auto_unbox = TRUE),
+      jsonlite::toJSON(data_id, auto_unbox = TRUE),
+      height
+    )))
+  )
+  htmltools::browsable(htmltools::attachDependencies(widget, .viewer_activity_d3_dependency()))
+}
+
+viewer_activity_community_shape_prep <- function(
+  viewer_video_activity,
+  max_overlap_videos = 12L
+) {
+  if (nrow(viewer_video_activity) == 0L) {
+    stop("Community-shape preparation requires at least one activity row.", call. = FALSE)
+  }
+  max_overlap_videos <- suppressWarnings(as.integer(max_overlap_videos))
+  if (is.na(max_overlap_videos) || max_overlap_videos < 2L) max_overlap_videos <- 12L
+
+  segment_levels <- c("Drop-in", "Returning", "Regular", "Core")
+  breadth_levels <- c("1", "2", "3–4", "5–8", "9+")
+  intensity_levels <- c("1–9", "10–49", "50–199", "200–999", "1,000+")
+
+  chatter_profiles <- viewer_video_activity %>%
+    dplyr::arrange(.data$user_id, .data$stream_at, .data$video_id) %>%
+    dplyr::group_by(.data$user_id) %>%
+    dplyr::summarise(
+      label = dplyr::last(dplyr::coalesce(.data$latest_username_in_video, .data$user_id)),
+      videos = dplyr::n_distinct(.data$video_id),
+      messages = sum(.data$message_count),
+      first_stream_at = min(.data$stream_at, na.rm = TRUE),
+      last_stream_at = max(.data$stream_at, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    dplyr::mutate(
+      segment = dplyr::case_when(
+        .data$videos >= 8L ~ "Core",
+        .data$videos >= 4L ~ "Regular",
+        .data$videos >= 2L ~ "Returning",
+        TRUE ~ "Drop-in"
+      ),
+      breadth_band = dplyr::case_when(
+        .data$videos == 1L ~ "1",
+        .data$videos == 2L ~ "2",
+        .data$videos <= 4L ~ "3–4",
+        .data$videos <= 8L ~ "5–8",
+        TRUE ~ "9+"
+      ),
+      intensity_band = dplyr::case_when(
+        .data$messages <= 9 ~ "1–9",
+        .data$messages <= 49 ~ "10–49",
+        .data$messages <= 199 ~ "50–199",
+        .data$messages <= 999 ~ "200–999",
+        TRUE ~ "1,000+"
+      )
+    )
+
+  segment_summary <- data.frame(segment = segment_levels) %>%
+    dplyr::left_join(
+      chatter_profiles %>%
+        dplyr::group_by(.data$segment) %>%
+        dplyr::summarise(
+          chatters = dplyr::n(),
+          messages = sum(.data$messages),
+          .groups = "drop"
+        ),
+      by = "segment"
+    ) %>%
+    dplyr::mutate(
+      chatters = dplyr::coalesce(.data$chatters, 0L),
+      messages = dplyr::coalesce(.data$messages, 0),
+      chatter_share = .data$chatters / sum(.data$chatters),
+      message_share = .data$messages / sum(.data$messages),
+      order = match(.data$segment, segment_levels)
+    )
+
+  landscape <- expand.grid(
+    breadth_band = breadth_levels,
+    intensity_band = intensity_levels,
+    stringsAsFactors = FALSE
+  ) %>%
+    dplyr::left_join(
+      chatter_profiles %>%
+        dplyr::count(.data$breadth_band, .data$intensity_band, name = "chatters"),
+      by = c("breadth_band", "intensity_band")
+    ) %>%
+    dplyr::mutate(
+      chatters = dplyr::coalesce(.data$chatters, 0L),
+      breadth_order = match(.data$breadth_band, breadth_levels),
+      intensity_order = match(.data$intensity_band, intensity_levels)
+    )
+
+  video_summary <- viewer_video_activity %>%
+    dplyr::group_by(.data$video_id, .data$video_title, .data$talent_code) %>%
+    dplyr::summarise(
+      messages = sum(.data$message_count),
+      chatters = dplyr::n_distinct(.data$user_id),
+      .groups = "drop"
+    ) %>%
+    dplyr::arrange(dplyr::desc(.data$messages), dplyr::desc(.data$chatters), .data$video_id) %>%
+    dplyr::slice_head(n = max_overlap_videos) %>%
+    dplyr::mutate(
+      label = dplyr::coalesce(.data$video_title, .data$video_id),
+      order = dplyr::row_number()
+    )
+  membership <- viewer_video_activity %>%
+    dplyr::semi_join(video_summary, by = "video_id") %>%
+    dplyr::distinct(.data$video_id, .data$user_id)
+  member_sets <- split(membership$user_id, membership$video_id)
+  overlap <- expand.grid(
+    row_id = video_summary$video_id,
+    column_id = video_summary$video_id,
+    stringsAsFactors = FALSE
+  )
+  overlap$shared_chatters <- vapply(
+    seq_len(nrow(overlap)),
+    function(index) {
+      length(intersect(member_sets[[overlap$row_id[[index]]]], member_sets[[overlap$column_id[[index]]]]))
+    },
+    integer(1)
+  )
+  overlap$union_chatters <- vapply(
+    seq_len(nrow(overlap)),
+    function(index) {
+      length(union(member_sets[[overlap$row_id[[index]]]], member_sets[[overlap$column_id[[index]]]]))
+    },
+    integer(1)
+  )
+  overlap <- overlap %>%
+    dplyr::mutate(
+      similarity = dplyr::if_else(
+        .data$union_chatters > 0L,
+        .data$shared_chatters / .data$union_chatters,
+        0
+      )
+    )
+
+  list(
+    profiles = chatter_profiles,
+    segments = segment_summary,
+    landscape = landscape,
+    breadth_levels = breadth_levels,
+    intensity_levels = intensity_levels,
+    overlap_videos = video_summary %>%
+      dplyr::transmute(
+        id = .data$video_id,
+        label = .data$label,
+        messages = .data$messages,
+        chatters = .data$chatters,
+        order = .data$order
+      ),
+    overlap = overlap
+  )
+}
+
+viewer_activity_community_shape_d3 <- function(
+  community_shape,
+  view = c("segments", "landscape", "overlap"),
+  height = NULL
+) {
+  if (!requireNamespace("htmltools", quietly = TRUE)) {
+    stop("Install the htmltools package to render the D3 community charts.", call. = FALSE)
+  }
+  if (!requireNamespace("jsonlite", quietly = TRUE)) {
+    stop("Install the jsonlite package to render the D3 community charts.", call. = FALSE)
+  }
+  view <- match.arg(view)
+  default_heights <- c(segments = 310L, landscape = 430L, overlap = 720L)
+  if (is.null(height)) height <- default_heights[[view]]
+  height <- suppressWarnings(as.integer(height))
+  if (is.na(height) || height < 240L) height <- default_heights[[view]]
+
+  payload_data <- switch(
+    view,
+    segments = list(rows = community_shape$segments),
+    landscape = list(
+      cells = community_shape$landscape,
+      breadth = community_shape$breadth_levels,
+      intensity = community_shape$intensity_levels
+    ),
+    overlap = list(
+      videos = community_shape$overlap_videos,
+      cells = community_shape$overlap
+    )
+  )
+  payload <- jsonlite::toJSON(
+    payload_data,
+    dataframe = "rows",
+    auto_unbox = TRUE,
+    na = "null",
+    digits = NA
+  )
+  payload <- gsub("</", "<\\/", payload, fixed = TRUE)
+  .viewer_activity_d3_state$widget_id <- .viewer_activity_d3_state$widget_id + 1L
+  widget_id <- paste0("viewer-activity-community-", view, "-", .viewer_activity_d3_state$widget_id)
+  data_id <- paste0(widget_id, "-data")
+  renderer <- switch(
+    view,
+    segments = "renderSegments",
+    landscape = "renderLandscape",
+    overlap = "renderOverlap"
+  )
+
+  widget <- htmltools::tagList(
+    htmltools::tags$div(id = widget_id, class = "sd-community-chart"),
+    htmltools::tags$script(
+      id = data_id,
+      type = "application/json",
+      htmltools::HTML(payload)
+    ),
+    htmltools::tags$script(htmltools::HTML(sprintf(
+      "SunDataCommunity.%s(document.getElementById(%s), JSON.parse(document.getElementById(%s).textContent), {height: %d});",
+      renderer,
+      jsonlite::toJSON(widget_id, auto_unbox = TRUE),
+      jsonlite::toJSON(data_id, auto_unbox = TRUE),
+      height
+    )))
+  )
+  htmltools::browsable(htmltools::attachDependencies(widget, .viewer_activity_d3_dependency()))
+}
+
+viewer_activity_video_explorer_prep <- function(viewer_video_activity) {
+  if (nrow(viewer_video_activity) == 0L) {
+    stop("Video-explorer preparation requires at least one activity row.", call. = FALSE)
+  }
+
+  videos <- viewer_video_activity %>%
+    dplyr::group_by(
+      .data$video_id,
+      .data$video_title,
+      .data$talent_code,
+      .data$talent_name,
+      .data$channel_id,
+      .data$stream_at
+    ) %>%
+    dplyr::summarise(
+      messages = sum(.data$message_count),
+      chatters = dplyr::n_distinct(.data$user_id),
+      .groups = "drop"
+    ) %>%
+    dplyr::arrange(
+      dplyr::desc(.data$messages),
+      dplyr::desc(.data$chatters),
+      dplyr::desc(.data$stream_at),
+      .data$video_id
+    ) %>%
+    dplyr::mutate(
+      label = dplyr::coalesce(.data$video_title, .data$video_id),
+      video_index = dplyr::row_number() - 1L
+    )
+  multiple_talents <- dplyr::n_distinct(videos$talent_code) > 1L
+  videos <- videos %>%
+    dplyr::mutate(
+      option_label = if (multiple_talents) {
+        paste0("[", .data$talent_code, "] ", .data$label)
+      } else {
+        .data$label
+      }
+    )
+  users <- viewer_video_activity %>%
+    dplyr::arrange(.data$user_id, .data$stream_at, .data$video_id) %>%
+    dplyr::group_by(.data$user_id) %>%
+    dplyr::summarise(
+      label = dplyr::last(dplyr::coalesce(.data$latest_username_in_video, .data$user_id)),
+      .groups = "drop"
+    ) %>%
+    dplyr::arrange(.data$user_id) %>%
+    dplyr::mutate(user_index = dplyr::row_number() - 1L)
+  edge_rows <- viewer_video_activity %>%
+    dplyr::transmute(
+      video_index = match(.data$video_id, videos$video_id) - 1L,
+      user_index = match(.data$user_id, users$user_id) - 1L,
+      messages = as.integer(.data$message_count)
+    )
+  edge_matrix <- as.matrix(edge_rows)
+  storage.mode(edge_matrix) <- "integer"
+
+  list(
+    videos = videos %>%
+      dplyr::transmute(
+        id = .data$video_id,
+        label = .data$label,
+        optionLabel = .data$option_label,
+        talentCode = .data$talent_code,
+        talentName = .data$talent_name,
+        streamerId = .data$channel_id,
+        streamAt = as.character(.data$stream_at),
+        messages = .data$messages,
+        chatters = .data$chatters
+      ),
+    users = users %>%
+      dplyr::transmute(id = .data$user_id, label = .data$label),
+    edges = edge_matrix
+  )
+}
+
+viewer_activity_video_explorer_d3 <- function(
+  explorer_data,
+  view = c("network", "overlap"),
+  dataset_id = "viewer_activity_explorer",
+  initial_video_count = NULL,
+  initial_video_ids = NULL,
+  max_selected = NULL,
+  max_users = 100L,
+  label_count = 18L,
+  height = NULL
+) {
+  if (!requireNamespace("htmltools", quietly = TRUE)) {
+    stop("Install the htmltools package to render the D3 video explorer.", call. = FALSE)
+  }
+  if (!requireNamespace("jsonlite", quietly = TRUE)) {
+    stop("Install the jsonlite package to render the D3 video explorer.", call. = FALSE)
+  }
+  view <- match.arg(view)
+  defaults <- if (view == "network") {
+    list(initial = 24L, selected = 40L, height = 760L)
+  } else {
+    list(initial = 16L, selected = 30L, height = 720L)
+  }
+  normalize_positive <- function(value, default, minimum = 1L) {
+    if (is.null(value)) return(default)
+    value <- suppressWarnings(as.integer(value))
+    if (is.na(value) || value < minimum) default else value
+  }
+  initial_video_count <- normalize_positive(initial_video_count, defaults$initial)
+  max_selected <- normalize_positive(max_selected, defaults$selected)
+  max_users <- normalize_positive(max_users, 100L)
+  label_count <- normalize_positive(label_count, 18L)
+  height <- normalize_positive(height, defaults$height, minimum = 320L)
+  initial_video_ids <- if (is.null(initial_video_ids)) character() else as.character(initial_video_ids)
+
+  .viewer_activity_d3_state$widget_id <- .viewer_activity_d3_state$widget_id + 1L
+  widget_id <- paste0("viewer-activity-video-explorer-", view, "-", .viewer_activity_d3_state$widget_id)
+  include_data <- !exists(
+    dataset_id,
+    envir = .viewer_activity_d3_state$published_datasets,
+    inherits = FALSE
+  )
+  data_tags <- htmltools::tagList()
+  if (include_data) {
+    payload <- jsonlite::toJSON(
+      explorer_data,
+      dataframe = "rows",
+      matrix = "rowmajor",
+      auto_unbox = TRUE,
+      na = "null",
+      digits = NA
+    )
+    payload <- gsub("</", "<\\/", payload, fixed = TRUE)
+    data_id <- paste0(widget_id, "-data")
+    data_tags <- htmltools::tagList(
+      htmltools::tags$script(
+        id = data_id,
+        type = "application/json",
+        htmltools::HTML(payload)
+      ),
+      htmltools::tags$script(htmltools::HTML(sprintf(
+        "window.SunDataVideoExplorerDatasets = window.SunDataVideoExplorerDatasets || {}; window.SunDataVideoExplorerDatasets[%s] = JSON.parse(document.getElementById(%s).textContent);",
+        jsonlite::toJSON(dataset_id, auto_unbox = TRUE),
+        jsonlite::toJSON(data_id, auto_unbox = TRUE)
+      )))
+    )
+    assign(
+      dataset_id,
+      TRUE,
+      envir = .viewer_activity_d3_state$published_datasets
+    )
+  }
+  renderer <- if (view == "network") "renderNetwork" else "renderOverlap"
+  options <- list(
+    initialVideoCount = initial_video_count,
+    initialVideoIds = initial_video_ids,
+    maxSelected = max_selected,
+    maxUsers = max_users,
+    labelCount = label_count,
+    height = height
+  )
+  widget <- htmltools::tagList(
+    data_tags,
+    htmltools::tags$div(id = widget_id),
+    htmltools::tags$script(htmltools::HTML(sprintf(
+      "SunDataVideoExplorer.%s(document.getElementById(%s), window.SunDataVideoExplorerDatasets[%s], %s);",
+      renderer,
+      jsonlite::toJSON(widget_id, auto_unbox = TRUE),
+      jsonlite::toJSON(dataset_id, auto_unbox = TRUE),
+      jsonlite::toJSON(options, auto_unbox = TRUE, null = "null")
+    )))
+  )
+  htmltools::browsable(htmltools::attachDependencies(widget, .viewer_activity_d3_dependency()))
+}

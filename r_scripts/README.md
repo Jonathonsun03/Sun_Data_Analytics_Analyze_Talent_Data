@@ -51,6 +51,9 @@ This directory contains the repository's maintained R code.
   - `r_scripts/notebooks/tests/sna_overall/overall_chatter_profiles.qmd`
     audits the stored metadata and builds a bounded all-talent co-participation
     network without persisting definition-specific viewer edges
+  - `bin/linux/analytics/run_daily_analytics.sh --execute` is the maintained
+    post-collection orchestrator; add future durable derived-data refreshes to
+    that pipeline rather than creating competing daily timers
 
 ## Python split
 

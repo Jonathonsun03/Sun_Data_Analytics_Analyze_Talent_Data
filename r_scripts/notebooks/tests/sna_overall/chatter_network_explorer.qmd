@@ -1,0 +1,289 @@
+---
+title: "Chatter Community Explorer"
+subtitle: "Explore the people, streams, and creators that form a live-chat community"
+format:
+  html:
+    page-layout: full
+    toc: false
+    embed-resources: true
+    code-fold: true
+    code-tools: false
+params:
+  talent_code: null
+  video_id: null
+  minimum_messages: 1
+  max_videos: 24
+  max_users: 100
+  network_label_count: 18
+  network_height: 760
+  overlap_max_videos: 16
+  network_max_selected: 40
+  overlap_max_selected: 30
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{=html}
+<style>
+.explorer-intro {
+  background: linear-gradient(120deg, #eff6ff 0%, #f5f3ff 52%, #fff7ed 100%);
+  border: 1px solid #dbeafe;
+  border-radius: 0.9rem;
+  margin: 0.5rem 0 1rem;
+  padding: 1rem 1.2rem;
+}
+.explorer-intro p { color: #334155; margin: 0; max-width: 78rem; }
+.explorer-stats {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 1rem 0 1.25rem;
+}
+.explorer-stat {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  box-shadow: 0 5px 18px rgb(15 23 42 / 6%);
+  padding: 0.9rem 1rem;
+}
+.explorer-stat__value { color: #0f172a; font-size: 1.65rem; font-weight: 720; line-height: 1.1; }
+.explorer-stat__label { color: #475569; font-size: 0.82rem; margin-top: 0.25rem; }
+.explorer-scope { color: #64748b; font-size: 0.86rem; margin: -0.4rem 0 0.7rem; }
+.explorer-notes {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 1rem;
+}
+.explorer-note { background: #f8fafc; border-radius: 0.65rem; padding: 0.85rem 1rem; }
+.explorer-note strong { color: #1e293b; display: block; margin-bottom: 0.25rem; }
+.explorer-note span { color: #64748b; font-size: 0.88rem; }
+@media (max-width: 850px) {
+  .explorer-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .explorer-notes { grid-template-columns: 1fr; }
+}
+</style>
+```
+
+::: {.explorer-intro}
+This map turns collected live-chat participation into a community you can
+explore. Start with a familiar chatter or stream, then follow the connections
+to see where audiences overlap. Every line represents observed chat activity,
+not passive viewing.
+:::
+
+```{r}
+required_packages <- c("DBI", "duckdb", "dplyr", "here", "htmltools", "jsonlite", "scales")
+missing_packages <- required_packages[!vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)]
+if (length(missing_packages) > 0L) {
+  stop(
+    "Install the required R packages before rendering: ",
+    paste(missing_packages, collapse = ", "),
+    call. = FALSE
+  )
+}
+
+suppressPackageStartupMessages(library(dplyr))
+source(here::here("r_scripts", "lib", "utils", "repo_env.R"))
+source(here::here("r_scripts", "lib", "utils", "datalake_root.r"))
+source(here::here("r_scripts", "lib", "duckdb", "db_connect.R"))
+source(here::here("r_scripts", "lib", "import_data", "viewer_activity.R"))
+source(here::here("r_scripts", "lib", "plots", "domains", "audience", "viewer_activity.R"))
+
+normalize_parameter <- function(value) {
+  if (is.null(value) || length(value) == 0L || is.na(value[[1]])) return(NULL)
+  value <- trimws(as.character(value[[1]]))
+  if (nzchar(value)) value else NULL
+}
+
+positive_integer <- function(value, default, minimum = 1L) {
+  value <- suppressWarnings(as.integer(value))
+  if (is.na(value) || value < minimum) default else value
+}
+
+stat_card <- function(value, label) {
+  htmltools::div(
+    class = "explorer-stat",
+    htmltools::div(class = "explorer-stat__value", value),
+    htmltools::div(class = "explorer-stat__label", label)
+  )
+}
+
+talent_code <- normalize_parameter(params$talent_code)
+video_id <- normalize_parameter(params$video_id)
+minimum_messages <- positive_integer(params$minimum_messages, 1L)
+max_videos <- positive_integer(params$max_videos, 24L)
+max_users <- positive_integer(params$max_users, 100L)
+network_label_count <- positive_integer(params$network_label_count, 18L)
+network_height <- positive_integer(params$network_height, 760L, minimum = 420L)
+overlap_max_videos <- positive_integer(params$overlap_max_videos, 16L, minimum = 2L)
+network_max_selected <- positive_integer(params$network_max_selected, 40L)
+overlap_max_selected <- positive_integer(params$overlap_max_selected, 30L)
+
+load_repo_env(repo_root = here::here())
+db_path <- talent_lakehouse_db_path()
+if (!file.exists(db_path)) {
+  stop("Unified talent lakehouse not found: ", db_path, call. = FALSE)
+}
+con <- duckdb_connect(db_path = db_path, read_only = TRUE)
+
+viewer_video_activity <- load_viewer_video_activity(con, talent_code) %>%
+  filter(.data$message_count >= minimum_messages)
+if (nrow(viewer_video_activity) == 0L) {
+  stop("No collected chat activity matched the selected scope.", call. = FALSE)
+}
+video_explorer_data <- viewer_activity_video_explorer_prep(viewer_video_activity)
+
+engagement_network <- viewer_activity_bipartite_prep(
+  viewer_video_activity,
+  video_id = video_id,
+  max_videos = max_videos,
+  max_users = max_users
+)
+if (nrow(engagement_network$engagement_edges) == 0L) {
+  stop("No network edges matched the selected video and message threshold.", call. = FALSE)
+}
+community_shape <- viewer_activity_community_shape_prep(
+  viewer_video_activity,
+  max_overlap_videos = overlap_max_videos
+)
+
+scope_parts <- c(
+  if (is.null(talent_code)) "all talents" else paste("talent", talent_code),
+  if (!is.null(video_id)) paste("video", video_id),
+  paste("at least", minimum_messages, "message(s) per chatter–video relationship")
+)
+
+htmltools::div(
+  class = "explorer-stats",
+  stat_card(scales::comma(nrow(community_shape$profiles)), "Community chatters"),
+  stat_card(
+    scales::comma(dplyr::n_distinct(viewer_video_activity$video_id)),
+    "Streams in scope"
+  ),
+  stat_card(scales::comma(nrow(engagement_network$users)), "Chatters in opening map"),
+  stat_card(
+    scales::comma(sum(viewer_video_activity$message_count)),
+    "Community messages"
+  )
+)
+```
+
+```{r}
+htmltools::p(
+  class = "explorer-scope",
+  paste("Current scope:", paste(scope_parts, collapse = " · "))
+)
+```
+
+```{r}
+viewer_activity_video_explorer_d3(
+  video_explorer_data,
+  view = "network",
+  initial_video_count = max_videos,
+  initial_video_ids = video_id,
+  max_selected = network_max_selected,
+  max_users = max_users,
+  label_count = network_label_count,
+  height = network_height
+)
+```
+
+::: {.explorer-notes}
+::: {.explorer-note}
+**Find a community member**
+
+[Use the search box to locate a chatter, stream, or creator. Matching nodes stay highlighted.]{.explorer-note-text}
+:::
+
+::: {.explorer-note}
+**Follow the overlap**
+
+[Use the Videos menu to choose one or several streams, then click a node to keep its immediate relationships highlighted.]{.explorer-note-text}
+:::
+
+::: {.explorer-note}
+**Read size and connection**
+
+[Larger nodes represent more selected messages. Thicker blue lines mean more messages from that chatter in that stream.]{.explorer-note-text}
+:::
+:::
+
+## How to interpret this map
+
+- **Blue nodes are chatters.** A connection means the person posted at least
+  one collected chat message in that stream.
+- **Gold nodes are streams.** Shared chatters reveal audience overlap between
+  streams.
+- **Purple nodes are creators.** Gray links identify which creator hosted
+  each stream; they are context links rather than audience activity.
+
+The display is intentionally bounded to the most active selected streams and
+chatters so the network remains usable. It does not imply that people outside
+the display were absent. “First observed” and related measures describe the
+collected chat record, not a person’s first-ever interaction with a creator.
+The Videos menu searches every stream in the current talent and message scope.
+`max_videos` controls only the initial selection, not which titles are
+available. To keep the force layout readable, `network_max_selected` limits how
+many videos can be drawn simultaneously.
+
+## The shape of the full community
+
+The opening network is useful for following individual relationships, but a
+node-link view becomes crowded before it can show the whole community. The
+next views use every chatter in the selected scope rather than only the
+chatters displayed in the opening map.
+
+### Community layers
+
+This view separates occasional participation from repeat and core engagement.
+Bar length is the number of chatters; the annotation shows how much of the
+community’s conversation each layer produced.
+
+- **Drop-in:** chatted in one stream.
+- **Returning:** chatted in two or three streams.
+- **Regular:** chatted in four to seven streams.
+- **Core:** chatted in eight or more streams.
+
+```{r}
+viewer_activity_community_shape_d3(community_shape, view = "segments")
+```
+
+### Engagement landscape
+
+Each square contains the number of chatters with that combination of stream
+breadth and message intensity. This distinguishes, for example, prolific
+single-stream visitors from people who participate consistently across the
+creator’s catalog.
+
+```{r}
+viewer_activity_community_shape_d3(community_shape, view = "landscape")
+```
+
+### Stream audience overlap
+
+This is the adjacency-matrix form of a stream-to-stream network. Darker purple
+means the two streams share a larger proportion of their combined chatter
+audience, measured with Jaccard similarity. Hover for the shared-chatter count
+and exact similarity. Use the Compare menu to choose any videos in the current
+scope; the matrix is recalculated immediately for that exact subset. The
+diagonal is gray because it compares each stream with itself.
+`overlap_max_videos` controls the initial comparison and
+`overlap_max_selected` keeps a selected matrix readable.
+
+```{r}
+viewer_activity_video_explorer_d3(
+  video_explorer_data,
+  view = "overlap",
+  initial_video_count = overlap_max_videos,
+  initial_video_ids = video_id,
+  max_selected = overlap_max_selected
+)
+```
+
+```{r}
+#| include: false
+DBI::dbDisconnect(con, shutdown = TRUE)
+```

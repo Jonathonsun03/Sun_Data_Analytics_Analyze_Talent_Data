@@ -3,6 +3,17 @@
 This folder contains a read-only introduction to the maintained chatter
 descriptive relations and the reusable user--video engagement network tools.
 
+`chatter_network_explorer.qmd` is the client-facing, full-width D3 view. It
+adds a scope summary and interaction guidance while using the same canonical
+activity loader, bounded network preparation, and shared JavaScript component
+as the audit notebook. It retains the chatter--video--streamer map and adds
+full-community layers, an engagement landscape, and a stream audience-overlap
+matrix so clients can inspect community shape beyond the bounded node-link
+view. The node-link and overlap views include searchable multi-video selectors;
+every video in the current data scope is available. `max_videos` and
+`overlap_max_videos` control the initial selections, while
+`network_max_selected` and `overlap_max_selected` protect readability.
+
 `overall_chatter_profiles.qmd` reads three primary analytical grains from the unified
 lakehouse:
 
@@ -12,9 +23,11 @@ lakehouse:
 
 The notebook documents the library interfaces for canonical activity loading,
 general engagement summaries, and graph preparation/rendering. The primary
-network is a three-layer graph: users send messages in videos, and videos
+network is a three-layer D3 graph: users send messages in videos, and videos
 belong to streamers. User--video edge width is the number of messages the user
-sent in the video. To remain legible, the graph selects a bounded number of
+sent in the video. The shared browser component lives under the repository's
+top-level `js/` directory so R, Python, and direct HTML can reuse it. To remain
+legible, the graph selects a bounded number of
 high-message videos and active users; use `bipartite_max_videos` and
 `bipartite_max_users` to adjust those bounds. Supplying `video_id` focuses the
 graph on one video.
@@ -31,6 +44,13 @@ Render from the repository root:
 ```bash
 quarto render \
   r_scripts/notebooks/tests/sna_overall/overall_chatter_profiles.qmd
+```
+
+Render the client explorer with:
+
+```bash
+quarto render \
+  r_scripts/notebooks/tests/sna_overall/chatter_network_explorer.qmd
 ```
 
 Limit the draft to one talent when iterating on the design:
