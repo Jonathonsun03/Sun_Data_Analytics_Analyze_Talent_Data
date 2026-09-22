@@ -30,9 +30,14 @@
     });
 
     const field = settings.engagementMode === "attendance" ? "attendance" : "messages";
-    const users = Array.from(activity.entries())
-      .sort((a, b) => b[1][field] - a[1][field] || b[1].messages - a[1].messages || a[0] - b[0])
-      .slice(0, Number(settings.maxUsers) || 50)
+    const rankedUsers = Array.from(activity.entries())
+      .sort((a, b) => b[1][field] - a[1][field] || b[1].messages - a[1].messages || a[0] - b[0]);
+    const chosenUsers = settings.selectedUserIndexes instanceof Set
+      ? Array.from(settings.selectedUserIndexes)
+        .map((index) => [index, activity.get(index)])
+        .filter((entry) => entry[1])
+      : rankedUsers.slice(0, Number(settings.maxUsers) || 50);
+    const users = chosenUsers
       .map(([index, totals]) => ({
         index,
         label: data.users[index].label,
@@ -42,7 +47,369 @@
       }));
     const userIndexes = new Set(users.map((user) => user.index));
 
-    return { edgesByVideo, videos, users, userIndexes, field };
+    return { edgesByVideo, videos, users, userIndexes, field, activity, rankedUsers };
+  }
+
+  function createChatterPicker(data, settings, onChange) {
+    const picker = document.createElement("details");
+    picker.className = "sd-chatter-picker";
+    const summary = document.createElement("summary");
+    summary.className = "sd-video-picker__summary";
+    picker.append(summary);
+    const panel = document.createElement("div");
+    panel.className = "sd-chatter-picker__panel";
+    const search = document.createElement("input");
+    search.type = "search";
+    search.className = "sd-video-picker__search";
+    search.placeholder = `Search all ${data.users.length.toLocaleString()} chatters`;
+    search.setAttribute("aria-label", search.placeholder);
+    const filters = document.createElement("div");
+    filters.className = "sd-chatter-picker__filters";
+    const scopeLabel = document.createElement("label");
+    scopeLabel.textContent = "Count within";
+    const scopeSelect = document.createElement("select");
+    scopeSelect.setAttribute("aria-label", "Chatter activity count scope");
+    [["selected", "Selected streams"], ["all", "All observed streams"]].forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      scopeSelect.append(option);
+    });
+    scopeLabel.append(scopeSelect);
+    const measureLabel = document.createElement("label");
+    measureLabel.textContent = "Measure";
+    const measureSelect = document.createElement("select");
+    measureSelect.setAttribute("aria-label", "Chatter activity measure");
+    [["messages", "Messages sent"], ["attendance", "Streams attended"]].forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      measureSelect.append(option);
+    });
+    measureLabel.append(measureSelect);
+    const sortLabel = document.createElement("label");
+    sortLabel.textContent = "Order";
+    const sortSelect = document.createElement("select");
+    sortSelect.setAttribute("aria-label", "Order filtered chatters");
+    [
+      ["activity-desc", "Highest activity first"],
+      ["activity-asc", "Lowest activity first"],
+      ["name-asc", "Name A–Z"],
+      ["name-desc", "Name Z–A"]
+    ].forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      sortSelect.append(option);
+    });
+    sortLabel.append(sortSelect);
+    const minimumLabel = document.createElement("label");
+    minimumLabel.textContent = "At least";
+    const minimumInput = document.createElement("input");
+    minimumInput.type = "number";
+    minimumInput.min = "0";
+    minimumInput.step = "1";
+    minimumInput.placeholder = "Any";
+    minimumInput.setAttribute("aria-label", "Minimum chatter activity");
+    minimumLabel.append(minimumInput);
+    const maximumLabel = document.createElement("label");
+    maximumLabel.textContent = "At most";
+    const maximumInput = document.createElement("input");
+    maximumInput.type = "number";
+    maximumInput.min = "0";
+    maximumInput.step = "1";
+    maximumInput.placeholder = "Any";
+    maximumInput.setAttribute("aria-label", "Maximum chatter activity");
+    maximumLabel.append(maximumInput);
+    const clearFiltersButton = document.createElement("button");
+    clearFiltersButton.type = "button";
+    clearFiltersButton.textContent = "Clear filters";
+    filters.append(scopeLabel, measureLabel, sortLabel, minimumLabel, maximumLabel, clearFiltersButton);
+    const status = document.createElement("div");
+    status.className = "sd-video-picker__match-status";
+    const actions = document.createElement("div");
+    actions.className = "sd-video-picker__actions";
+    const automaticButton = document.createElement("button");
+    automaticButton.type = "button";
+    automaticButton.textContent = "Use automatic";
+    const noneButton = document.createElement("button");
+    noneButton.type = "button";
+    noneButton.textContent = "None";
+    const selectMatchingButton = document.createElement("button");
+    selectMatchingButton.type = "button";
+    selectMatchingButton.textContent = "Select matching";
+    const deselectMatchingButton = document.createElement("button");
+    deselectMatchingButton.type = "button";
+    deselectMatchingButton.textContent = "Deselect matching";
+    const selectPageButton = document.createElement("button");
+    selectPageButton.type = "button";
+    selectPageButton.textContent = "Select page";
+    const deselectPageButton = document.createElement("button");
+    deselectPageButton.type = "button";
+    deselectPageButton.textContent = "Deselect page";
+    actions.append(
+      automaticButton,
+      noneButton,
+      selectMatchingButton,
+      deselectMatchingButton,
+      selectPageButton,
+      deselectPageButton
+    );
+    const notice = document.createElement("div");
+    notice.className = "sd-video-picker__notice";
+    const list = document.createElement("div");
+    list.className = "sd-video-picker__options sd-chatter-picker__options";
+    const pagination = document.createElement("div");
+    pagination.className = "sd-chatter-picker__pagination";
+    const previousButton = document.createElement("button");
+    previousButton.type = "button";
+    previousButton.textContent = "Previous";
+    const pageLabel = document.createElement("label");
+    pageLabel.textContent = "Page";
+    const pageInput = document.createElement("input");
+    pageInput.type = "number";
+    pageInput.min = "1";
+    pageInput.step = "1";
+    pageInput.setAttribute("aria-label", "Chatter results page");
+    const pageStatus = document.createElement("span");
+    pageLabel.append(pageInput, pageStatus);
+    const nextButton = document.createElement("button");
+    nextButton.type = "button";
+    nextButton.textContent = "Next";
+    pagination.append(previousButton, pageLabel, nextButton);
+    panel.append(search, filters, status, actions, notice, list, pagination);
+    picker.append(panel);
+
+    let automaticIndexes = [];
+    let activity = new Map();
+    let manualSelection = null;
+    let matchingIndexes = [];
+    let page = 0;
+    const maxUsers = Number(settings.maxUsers) || 50;
+    const pageSize = 100;
+    const globalActivity = new Map();
+    (data.edges || []).forEach((edge) => {
+      const userIndex = Number(edge[1]);
+      const messages = Number(edge[2]) || 0;
+      const current = globalActivity.get(userIndex) || { messages: 0, attendance: 0 };
+      current.messages += messages;
+      current.attendance += 1;
+      globalActivity.set(userIndex, current);
+    });
+
+    function activeSelection() {
+      return manualSelection === null ? new Set(automaticIndexes) : new Set(manualSelection);
+    }
+
+    function resultIndexes() {
+      const query = search.value.trim().toLocaleLowerCase();
+      const sourceActivity = scopeSelect.value === "all" ? globalActivity : activity;
+      const field = measureSelect.value;
+      const order = sortSelect.value;
+      const minimum = minimumInput.value === "" ? null : Number(minimumInput.value);
+      const maximum = maximumInput.value === "" ? null : Number(maximumInput.value);
+      return data.users
+        .map((user, index) => ({
+          index,
+          label: String(user.label).toLocaleLowerCase(),
+          totals: sourceActivity.get(index) || { messages: 0, attendance: 0 }
+        }))
+        .filter((item) => {
+          const value = item.totals[field];
+          return (!query || item.label.includes(query)) &&
+            (minimum === null || value >= minimum) &&
+            (maximum === null || value <= maximum);
+        })
+        .sort((left, right) => {
+          if (order === "name-asc") return left.label.localeCompare(right.label);
+          if (order === "name-desc") return right.label.localeCompare(left.label);
+          const direction = order === "activity-asc" ? 1 : -1;
+          return direction * (left.totals[field] - right.totals[field]) ||
+            direction * (left.totals.messages - right.totals.messages) ||
+            direction * (left.totals.attendance - right.totals.attendance) ||
+            left.label.localeCompare(right.label);
+        })
+        .map((item) => item.index);
+    }
+
+    function currentPageIndexes() {
+      return matchingIndexes.slice(page * pageSize, (page + 1) * pageSize);
+    }
+
+    function updateSummary() {
+      const current = activeSelection();
+      summary.textContent = manualSelection === null
+        ? `Chatters: automatic top ${automaticIndexes.length}`
+        : `Chatters: ${current.size} selected`;
+      const pageStart = matchingIndexes.length === 0 ? 0 : page * pageSize + 1;
+      const pageEnd = Math.min((page + 1) * pageSize, matchingIndexes.length);
+      const scopeText = scopeSelect.value === "all" ? "all observed streams" : "selected streams";
+      status.textContent = `${matchingIndexes.length.toLocaleString()} matching across ${scopeText} · showing ${pageStart.toLocaleString()}–${pageEnd.toLocaleString()}`;
+      notice.textContent = manualSelection === null
+        ? `The chart still uses its automatic starting set. Change a checkbox or select matching results to customize up to ${maxUsers} chatters.`
+        : `Choose up to ${maxUsers} chatters. Chatters without activity in the selected streams remain selected but are not drawn.`;
+      const pageCount = Math.max(1, Math.ceil(matchingIndexes.length / pageSize));
+      pageInput.max = String(pageCount);
+      pageInput.value = String(Math.min(page + 1, pageCount));
+      pageStatus.textContent = `of ${pageCount}`;
+      previousButton.disabled = page === 0;
+      nextButton.disabled = page + 1 >= pageCount;
+    }
+
+    function renderRows(resetPage) {
+      if (resetPage) page = 0;
+      matchingIndexes = resultIndexes();
+      const pageCount = Math.max(1, Math.ceil(matchingIndexes.length / pageSize));
+      page = Math.min(page, pageCount - 1);
+      const current = activeSelection();
+      list.replaceChildren();
+      const pageIndexes = currentPageIndexes();
+      pageIndexes.forEach((index) => {
+        const user = data.users[index];
+        const selectedTotals = activity.get(index) || { messages: 0, attendance: 0 };
+        const allTotals = globalActivity.get(index) || { messages: 0, attendance: 0 };
+        const row = document.createElement("label");
+        row.className = "sd-video-picker__option sd-chatter-picker__option";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = current.has(index);
+        const text = document.createElement("span");
+        const details = scopeSelect.value === "all"
+          ? `${utils.formatCount(allTotals.attendance)} streams · ${utils.formatCount(allTotals.messages)} messages overall`
+          : `${utils.formatCount(selectedTotals.attendance)} selected streams · ${utils.formatCount(selectedTotals.messages)} messages`;
+        text.textContent = `${user.label} · ${details}`;
+        checkbox.addEventListener("change", () => {
+          if (manualSelection === null) manualSelection = new Set(automaticIndexes);
+          if (checkbox.checked && manualSelection.size >= maxUsers) {
+            checkbox.checked = false;
+            notice.textContent = `Selection limit reached (${maxUsers}). Clear another chatter first.`;
+            return;
+          }
+          if (checkbox.checked) manualSelection.add(index);
+          else manualSelection.delete(index);
+          updateSummary();
+          onChange(manualSelection);
+        });
+        row.append(checkbox, text);
+        list.append(row);
+      });
+      updateSummary();
+    }
+
+    function setManual(nextSelection) {
+      manualSelection = nextSelection;
+      renderRows();
+      onChange(manualSelection);
+    }
+
+    search.addEventListener("input", () => renderRows(true));
+    scopeSelect.addEventListener("change", () => renderRows(true));
+    measureSelect.addEventListener("change", () => renderRows(true));
+    sortSelect.addEventListener("change", () => renderRows(true));
+    minimumInput.addEventListener("input", () => renderRows(true));
+    maximumInput.addEventListener("input", () => renderRows(true));
+    clearFiltersButton.addEventListener("click", () => {
+      search.value = "";
+      scopeSelect.value = "selected";
+      measureSelect.value = "messages";
+      sortSelect.value = "activity-desc";
+      minimumInput.value = "";
+      maximumInput.value = "";
+      renderRows(true);
+    });
+    previousButton.addEventListener("click", () => {
+      if (page > 0) page -= 1;
+      renderRows(false);
+    });
+    nextButton.addEventListener("click", () => {
+      if ((page + 1) * pageSize < matchingIndexes.length) page += 1;
+      renderRows(false);
+    });
+    function goToEnteredPage() {
+      const pageCount = Math.max(1, Math.ceil(matchingIndexes.length / pageSize));
+      const requestedPage = Number(pageInput.value);
+      const safePage = Number.isFinite(requestedPage)
+        ? Math.max(1, Math.min(pageCount, Math.trunc(requestedPage)))
+        : page + 1;
+      page = safePage - 1;
+      renderRows(false);
+    }
+    pageInput.addEventListener("change", goToEnteredPage);
+    pageInput.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      goToEnteredPage();
+    });
+    automaticButton.addEventListener("click", () => setManual(null));
+    noneButton.addEventListener("click", () => setManual(new Set()));
+    selectMatchingButton.addEventListener("click", () => {
+      if (manualSelection === null) manualSelection = new Set();
+      let added = 0;
+      for (const index of matchingIndexes) {
+        if (manualSelection.size >= maxUsers) break;
+        if (!manualSelection.has(index)) {
+          manualSelection.add(index);
+          added += 1;
+        }
+      }
+      renderRows();
+      const skipped = matchingIndexes.filter((index) => !manualSelection.has(index)).length;
+      notice.textContent = `${added} matching chatter${added === 1 ? " was" : "s were"} added.` +
+        (skipped > 0 ? ` ${skipped} could not be added because the limit is ${maxUsers}.` : "");
+      onChange(manualSelection);
+    });
+    deselectMatchingButton.addEventListener("click", () => {
+      if (manualSelection === null) manualSelection = new Set(automaticIndexes);
+      matchingIndexes.forEach((index) => manualSelection.delete(index));
+      renderRows();
+      notice.textContent = "Matching chatters were removed from the selection.";
+      onChange(manualSelection);
+    });
+    selectPageButton.addEventListener("click", () => {
+      if (manualSelection === null) manualSelection = new Set();
+      const pageIndexes = currentPageIndexes();
+      let added = 0;
+      for (const index of pageIndexes) {
+        if (manualSelection.size >= maxUsers) break;
+        if (!manualSelection.has(index)) {
+          manualSelection.add(index);
+          added += 1;
+        }
+      }
+      renderRows();
+      const skipped = pageIndexes.filter((index) => !manualSelection.has(index)).length;
+      notice.textContent = `${added} chatter${added === 1 ? " was" : "s were"} added from this page.` +
+        (skipped > 0 ? ` ${skipped} could not be added because the limit is ${maxUsers}.` : "");
+      onChange(manualSelection);
+    });
+    deselectPageButton.addEventListener("click", () => {
+      if (manualSelection === null) manualSelection = new Set(automaticIndexes);
+      currentPageIndexes().forEach((index) => manualSelection.delete(index));
+      renderRows();
+      notice.textContent = "Chatters on this page were removed from the selection.";
+      onChange(manualSelection);
+    });
+
+    return {
+      element: picker,
+      getSelection: () => manualSelection === null ? null : new Set(manualSelection),
+      updateContext(nextAutomaticIndexes, nextActivity) {
+        automaticIndexes = nextAutomaticIndexes.slice(0, maxUsers);
+        activity = nextActivity;
+        renderRows();
+      }
+    };
+  }
+
+  function makePickersExclusive(...pickers) {
+    pickers.forEach((picker) => {
+      picker.addEventListener("toggle", () => {
+        if (!picker.open) return;
+        pickers.forEach((other) => {
+          if (other !== picker) other.open = false;
+        });
+      });
+    });
   }
 
   function classificationRows(data, mode) {
@@ -320,6 +687,13 @@
 
     function update(nextSelected) {
       selected = nextSelected;
+      const automatic = selectedActivity(
+        data,
+        selected,
+        Object.assign({}, settings, { selectedUserIndexes: null })
+      );
+      chatterPicker.updateContext(automatic.users.map((user) => user.index), automatic.activity);
+      settings.selectedUserIndexes = chatterPicker.getSelection();
       const result = renderSankeyChart(chart, data, selected, settings);
       status.textContent = `${selected.size} streams · ${result.users} chatters · ${result.classifications} classifications`;
     }
@@ -329,6 +703,11 @@
       summaryPrefix: "Streams",
       filterData: data.filters
     }, update);
+    const chatterPicker = createChatterPicker(data, settings, (selection) => {
+      settings.selectedUserIndexes = selection;
+      update(selected);
+    });
+    makePickersExclusive(picker, chatterPicker.element);
     const engagement = utils.createSelectControl("Flow width", [
       { value: "attendance", label: "Streams attended" },
       { value: "messages", label: "Messages sent" }
@@ -343,7 +722,7 @@
       settings.classificationMode = value;
       update(selected);
     });
-    controls.append(picker, engagement, classification, status);
+    controls.append(picker, chatterPicker.element, engagement, classification, status);
     update(selected);
   }
 
@@ -508,6 +887,13 @@
 
     function update(nextSelected) {
       selected = nextSelected;
+      const automatic = selectedActivity(
+        data,
+        selected,
+        Object.assign({}, settings, { selectedUserIndexes: null })
+      );
+      chatterPicker.updateContext(automatic.users.map((user) => user.index), automatic.activity);
+      settings.selectedUserIndexes = chatterPicker.getSelection();
       const result = renderHeatmapChart(chart, data, selected, settings);
       status.textContent = `${selected.size} streams · ${result.users} chatters displayed`;
     }
@@ -516,6 +902,11 @@
       summaryPrefix: "Streams",
       filterData: data.filters
     }, update);
+    const chatterPicker = createChatterPicker(data, settings, (selection) => {
+      settings.selectedUserIndexes = selection;
+      update(selected);
+    });
+    makePickersExclusive(picker, chatterPicker.element);
     const engagement = utils.createSelectControl("Cell measure", [
       { value: "attendance", label: "Attendance" },
       { value: "messages", label: "Messages sent" }
@@ -530,7 +921,7 @@
       settings.rowOrder = value;
       update(selected);
     });
-    controls.append(picker, engagement, order, status);
+    controls.append(picker, chatterPicker.element, engagement, order, status);
     update(selected);
   }
 

@@ -21,7 +21,11 @@ available. `sankey_max_videos`, `heatmap_max_videos`, and
 `*_max_selected` parameters protect readability. The shared selector can filter
 by title, date preset or custom range, current primary topic, and normalized
 keyword; filters narrow the list until the user explicitly selects or
-deselects the matching streams.
+deselects the matching streams. The alluvial and heatmap views also include a
+search-first chatter selector that preserves the automatic top-chatter starting
+point while allowing paginated browsing, name search, inclusive activity-count
+filters, activity/name ordering, direct page jumps, page-level batch actions,
+and a bounded manual selection from the full chatter catalog.
 
 `overall_chatter_profiles.qmd` reads three primary analytical grains from the unified
 lakehouse:

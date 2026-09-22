@@ -28,6 +28,15 @@ normalized-keyword facets, removable filter chips, and explicit batch selection
 of matching streams. Filtering the option list does not silently change the
 current chart selection.
 
+The alluvial and chatter--stream heatmap controls also provide a search-first
+chatter picker. It begins in automatic mode with the highest-engagement users
+for the selected streams, provides paginated browsing and name search across
+the complete chatter catalog, and supports inclusive minimum/maximum filters
+for message count or stream attendance in the selected or full observed scope.
+Results can be ordered by activity or name in either direction, jumped to by
+page number, and selected or deselected one page at a time. Manual selection
+remains bounded, and the automatic ranking can be restored after exploration.
+
 `lib/chatter_relationship_views.js` reuses that payload and selector for two
 coordinated relationship views: an individual-chatter alluvial chart and a
 chatter--stream heatmap. The alluvial view conserves attendance or message flow

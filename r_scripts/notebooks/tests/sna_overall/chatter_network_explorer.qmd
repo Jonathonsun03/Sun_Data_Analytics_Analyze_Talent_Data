@@ -185,6 +185,17 @@ silently changing the current chart. Use **Select matching** or
 **Deselect matching** to apply the filtered result, subject to the view's
 selection limit; active filters remain visible as removable chips.
 
+The adjacent **Chatters** selector starts with the highest-engagement people
+for the selected streams. Browse the complete paginated chatter catalog or
+search by name. Numeric filters accept inclusive **At least** and **At most**
+values for messages sent or streams attended, calculated either within the
+currently selected streams or across all observed streams. Change **Order** to
+put the least-active chatters first or sort names A–Z/Z–A. You can jump directly
+to a page and use **Select page** or **Deselect page** for batch changes; the
+existing **Select matching** action still applies the entire filtered result.
+Choose **Use automatic** to restore the default ranking after exploring a
+custom group.
+
 The selected engagement measure supplies one consistent width along the whole
 path. For primary topics, a stream's flow goes to its single topic. When a
 stream has several normalized tags, its outgoing flow is divided evenly among
