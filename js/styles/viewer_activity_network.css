@@ -325,10 +325,15 @@
 }
 
 .sd-video-explorer__empty {
+  align-items: center;
   background: #f8fafc;
   border: 1px solid #dbe4ee;
   border-radius: 0.7rem;
+  box-sizing: border-box;
   color: #64748b;
+  display: grid;
+  justify-items: center;
+  min-height: 32rem;
   padding: 2rem;
   text-align: center;
 }
