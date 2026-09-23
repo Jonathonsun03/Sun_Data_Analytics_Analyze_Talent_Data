@@ -775,9 +775,15 @@
     });
     if (settings.rowOrder === "similarity") rows = similarityOrder(rows);
 
-    const cellWidth = Math.max(18, Math.min(32, 720 / selection.videos.length));
-    const cellHeight = 17;
-    const margin = { top: 190, right: 35, bottom: 45, left: 205 };
+    const compact = Boolean(settings.compact);
+    const cellWidth = Math.max(
+      compact ? 16 : 18,
+      Math.min(compact ? 28 : 32, (compact ? 620 : 720) / selection.videos.length)
+    );
+    const cellHeight = compact ? 14 : 17;
+    const margin = compact
+      ? { top: 128, right: 24, bottom: 36, left: 165 }
+      : { top: 190, right: 35, bottom: 45, left: 205 };
     const width = margin.left + selection.videos.length * cellWidth + margin.right;
     const height = margin.top + rows.length * cellHeight + margin.bottom;
     const maximum = global.d3.max(rows.flatMap((row) => row.values)) || 1;
@@ -815,7 +821,10 @@
       .attr("class", "sd-heatmap__column-label")
       .attr("transform", (_, index) => `translate(${margin.left + index * cellWidth + cellWidth / 2},${margin.top - 10}) rotate(-55)`)
       .attr("text-anchor", "start")
-      .text((video) => video.label.length > 34 ? `${video.label.slice(0, 33)}…` : video.label)
+      .text((video) => {
+        const limit = compact ? 23 : 34;
+        return video.label.length > limit ? `${video.label.slice(0, limit - 1)}…` : video.label;
+      })
       .append("title")
       .text((video) => video.label);
 
@@ -827,7 +836,10 @@
       .attr("x", margin.left - 8)
       .attr("y", (_, index) => margin.top + index * cellHeight + cellHeight * 0.72)
       .attr("text-anchor", "end")
-      .text((row) => row.label.length > 28 ? `${row.label.slice(0, 27)}…` : row.label)
+      .text((row) => {
+        const limit = compact ? 21 : 28;
+        return row.label.length > limit ? `${row.label.slice(0, limit - 1)}…` : row.label;
+      })
       .append("title")
       .text((row) => row.label);
 

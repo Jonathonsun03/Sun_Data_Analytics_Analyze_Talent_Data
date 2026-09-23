@@ -107,7 +107,7 @@ viewer_activity_bipartite_ggplot <- function(network, label_count = 15L) {
 .viewer_activity_d3_dependency <- function() {
   htmltools::htmlDependency(
     name = "sun-data-viewer-activity",
-    version = "1.8.0",
+    version = "1.8.1",
     src = c(file = normalizePath(here::here("js"), mustWork = TRUE)),
     script = c(
       "vendor/d3.v7.9.0.min.js",
@@ -567,7 +567,8 @@ viewer_activity_video_explorer_d3 <- function(
   max_selected = NULL,
   max_users = 100L,
   label_count = 18L,
-  height = NULL
+  height = NULL,
+  compact = FALSE
 ) {
   if (!requireNamespace("htmltools", quietly = TRUE)) {
     stop("Install the htmltools package to render the D3 video explorer.", call. = FALSE)
@@ -645,7 +646,8 @@ viewer_activity_video_explorer_d3 <- function(
     maxSelected = max_selected,
     maxUsers = max_users,
     labelCount = label_count,
-    height = height
+    height = height,
+    compact = isTRUE(compact)
   )
   widget <- htmltools::tagList(
     data_tags,

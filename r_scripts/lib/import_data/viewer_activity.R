@@ -1,9 +1,35 @@
 # Canonical viewer-activity lakehouse loaders.
 
-load_viewer_video_activity <- function(con, talent_code = NULL) {
+load_viewer_video_activity <- function(
+  con,
+  talent_code = NULL,
+  start_date = NULL,
+  end_date = NULL,
+  minimum_messages = NULL
+) {
   talent_code <- if (is.null(talent_code)) NULL else trimws(as.character(talent_code[[1]]))
-  filter_sql <- if (is.null(talent_code) || !nzchar(talent_code)) "" else "AND activity.talent_code = ?"
-  params <- if (nzchar(filter_sql)) list(talent_code) else list()
+  filters <- character()
+  params <- list()
+  if (!is.null(talent_code) && nzchar(talent_code)) {
+    filters <- c(filters, "AND activity.talent_code = ?")
+    params <- c(params, list(talent_code))
+  }
+  if (!is.null(start_date) && length(start_date) > 0L && !is.na(start_date[[1]])) {
+    filters <- c(filters, "AND CAST(activity.stream_at AS DATE) >= ?")
+    params <- c(params, list(as.Date(start_date[[1]])))
+  }
+  if (!is.null(end_date) && length(end_date) > 0L && !is.na(end_date[[1]])) {
+    filters <- c(filters, "AND CAST(activity.stream_at AS DATE) <= ?")
+    params <- c(params, list(as.Date(end_date[[1]])))
+  }
+  if (!is.null(minimum_messages) && length(minimum_messages) > 0L) {
+    minimum_messages <- suppressWarnings(as.integer(minimum_messages[[1]]))
+    if (is.na(minimum_messages) || minimum_messages < 1L) {
+      stop("`minimum_messages` must be a positive integer.", call. = FALSE)
+    }
+    filters <- c(filters, "AND activity.message_count >= ?")
+    params <- c(params, list(minimum_messages))
+  }
 
   DBI::dbGetQuery(
     con,
@@ -18,17 +44,40 @@ load_viewer_video_activity <- function(con, talent_code = NULL) {
       "FROM analysis.viewer_video_activity AS activity",
       "JOIN catalog.videos AS video USING (talent_code, channel_id, video_id)",
       "JOIN catalog.talents AS talent USING (talent_code)",
-      "WHERE 1 = 1", filter_sql,
+      "WHERE 1 = 1", paste(filters, collapse = " "),
       "ORDER BY activity.talent_code, activity.stream_at, activity.video_id, activity.user_id"
     ),
     params = params
   )
 }
 
-load_available_live_videos <- function(con, talent_code = NULL) {
+load_available_live_videos <- function(
+  con,
+  talent_code = NULL,
+  start_date = NULL,
+  end_date = NULL
+) {
   talent_code <- if (is.null(talent_code)) NULL else trimws(as.character(talent_code[[1]]))
-  filter_sql <- if (is.null(talent_code) || !nzchar(talent_code)) "" else "AND video.talent_code = ?"
-  params <- if (nzchar(filter_sql)) list(talent_code) else list()
+  filters <- character()
+  params <- list()
+  if (!is.null(talent_code) && nzchar(talent_code)) {
+    filters <- c(filters, "AND video.talent_code = ?")
+    params <- c(params, list(talent_code))
+  }
+  if (!is.null(start_date) && length(start_date) > 0L && !is.na(start_date[[1]])) {
+    filters <- c(
+      filters,
+      "AND CAST(COALESCE(video.actual_start_at, video.published_at) AS DATE) >= ?"
+    )
+    params <- c(params, list(as.Date(start_date[[1]])))
+  }
+  if (!is.null(end_date) && length(end_date) > 0L && !is.na(end_date[[1]])) {
+    filters <- c(
+      filters,
+      "AND CAST(COALESCE(video.actual_start_at, video.published_at) AS DATE) <= ?"
+    )
+    params <- c(params, list(as.Date(end_date[[1]])))
+  }
 
   DBI::dbGetQuery(
     con,
@@ -38,7 +87,7 @@ load_available_live_videos <- function(con, talent_code = NULL) {
       "COALESCE(video.actual_start_at, video.published_at) AS stream_at",
       "FROM catalog.videos AS video",
       "JOIN catalog.talents AS talent USING (talent_code)",
-      "WHERE video.is_available AND video.content_type = 'live'", filter_sql,
+      "WHERE video.is_available AND video.content_type = 'live'", paste(filters, collapse = " "),
       "ORDER BY stream_at DESC NULLS LAST, video.video_id"
     ),
     params = params

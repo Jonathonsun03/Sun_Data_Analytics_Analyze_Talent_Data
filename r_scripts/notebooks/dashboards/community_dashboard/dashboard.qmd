@@ -1,0 +1,507 @@
+---
+title: "Chatter Community Dashboard"
+format:
+  dashboard:
+    orientation: rows
+server: shiny
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| context: setup
+#| include: false
+
+knitr::opts_knit$set(root.dir = normalizePath(getwd(), winslash = "/", mustWork = TRUE))
+
+dashboard_machine_library <- file.path(
+  path.expand("~/R"),
+  paste0(R.version$platform, "-library"),
+  paste(R.version$major, sub("\\..*$", "", R.version$minor), sep = ".")
+)
+if (dir.exists(dashboard_machine_library)) {
+  .libPaths(unique(c(.libPaths(), dashboard_machine_library)))
+}
+
+library(here)
+library(shiny)
+
+source(here::here("r_scripts", "lib", "dashboard", "load.R"))
+
+community_database_path <- dashboard_resolve_database_path()
+community_startup_talents <- dashboard_community_talent_catalog(community_database_path)
+community_available_dates <- community_startup_talents %>%
+  dplyr::filter(
+    !is.na(.data$earliest_chat_date),
+    !is.na(.data$latest_chat_date)
+  )
+
+community_global_min_date <- if (nrow(community_available_dates) == 0L) {
+  Sys.Date()
+} else {
+  min(community_available_dates$earliest_chat_date)
+}
+community_global_max_date <- if (nrow(community_available_dates) == 0L) {
+  Sys.Date()
+} else {
+  max(community_available_dates$latest_chat_date)
+}
+
+community_section <- function(title, ..., class = NULL) {
+  htmltools::tags$section(
+    class = paste(c("community-analysis-section", class), collapse = " "),
+    htmltools::tags$header(
+      class = "community-analysis-section__header",
+      htmltools::tags$h2(title)
+    ),
+    htmltools::tags$div(
+      class = "community-analysis-section__body",
+      ...
+    )
+  )
+}
+
+community_optional_date <- function(value, index) {
+  if (is.null(value) || length(value) < index || is.na(value[[index]])) {
+    return(NULL)
+  }
+  as.Date(value[[index]])
+}
+```
+
+# {.sidebar}
+
+```{r}
+htmltools::tags$div(
+  class = "community-filter-panel",
+  htmltools::tags$div(class = "community-filter-panel__title", "Filters"),
+  uiOutput("community_identity"),
+  htmltools::tags$div(
+    class = "community-filter-panel__group",
+    selectInput(
+      inputId = "community_talent",
+      label = "Talent",
+      choices = c("Loading authorized talents..." = ""),
+      selected = ""
+    ),
+    uiOutput("community_data_coverage")
+  ),
+  htmltools::tags$div(
+    class = "community-filter-panel__group",
+    dateRangeInput(
+      inputId = "community_dates",
+      label = "Stream dates",
+      start = community_global_min_date,
+      end = community_global_max_date,
+      min = community_global_min_date,
+      max = community_global_max_date,
+      format = "yyyy-mm-dd",
+      separator = " to "
+    ),
+    numericInput(
+      inputId = "community_minimum_messages",
+      label = "Minimum messages",
+      value = 1L,
+      min = 1L,
+      step = 1L
+    )
+  ),
+  actionButton(
+    inputId = "community_apply_filters",
+    label = "Apply filters",
+    class = "btn-primary"
+  )
+)
+```
+
+# Overview {scrolling="true"}
+
+```{r}
+htmltools::attachDependencies(htmltools::tags$div(
+  class = "community-overview",
+  uiOutput("community_context", fill = FALSE),
+  community_section(
+    "Community Layers",
+    uiOutput("community_segments"),
+    class = "community-layers-section"
+  ),
+  community_section(
+    "Engagement Landscape",
+    uiOutput("community_landscape"),
+    class = "community-landscape-section"
+  )
+), htmltools::htmlDependency(
+  name = "community-dashboard",
+  version = "1.0.0",
+  src = c(file = normalizePath(here::here(
+    "r_scripts", "notebooks", "dashboards", "community_dashboard"
+  ))),
+  stylesheet = "community-dashboard.css",
+  all_files = FALSE
+))
+```
+
+# Chatter Flows {scrolling="true"}
+
+```{r}
+community_section(
+  "Chatter Flows Through Streams",
+  uiOutput("community_sankey"),
+  class = "community-primary-section"
+)
+```
+
+# Participation {scrolling="true"}
+
+```{r}
+community_section(
+  "Chatter–Stream Participation",
+  uiOutput("community_heatmap"),
+  class = "community-primary-section"
+)
+```
+
+# Audience Overlap {scrolling="true"}
+
+```{r}
+community_section(
+  "Stream Audience Overlap",
+  uiOutput("community_overlap"),
+  class = "community-primary-section"
+)
+```
+
+# Methodology {scrolling="true"}
+
+```{r}
+community_section(
+  "How to Interpret These Views",
+  htmltools::tags$ol(
+    class = "community-method-list",
+    htmltools::tags$li(
+      htmltools::tags$span("01"),
+      htmltools::tags$div(
+        htmltools::tags$h3("Community layers"),
+        htmltools::tags$p("Groups chatters by the number of streams in which they participated.")
+      )
+    ),
+    htmltools::tags$li(
+      htmltools::tags$span("02"),
+      htmltools::tags$div(
+        htmltools::tags$h3("Engagement landscape"),
+        htmltools::tags$p("Combines stream breadth with total observed message intensity.")
+      )
+    ),
+    htmltools::tags$li(
+      htmltools::tags$span("03"),
+      htmltools::tags$div(
+        htmltools::tags$h3("Chatter flows"),
+        htmltools::tags$p("Connects individuals to streams and current title classifications.")
+      )
+    ),
+    htmltools::tags$li(
+      htmltools::tags$span("04"),
+      htmltools::tags$div(
+        htmltools::tags$h3("Audience overlap"),
+        htmltools::tags$p("Uses Jaccard similarity based on shared identified chatters.")
+      )
+    ),
+    htmltools::tags$li(
+      htmltools::tags$span("05"),
+      htmltools::tags$div(
+        htmltools::tags$h3("Authorized scope"),
+        htmltools::tags$p("Chart selectors only narrow the server-authorized talent and stream-date scope.")
+      )
+    )
+  )
+)
+```
+
+```{r}
+#| label: server
+#| context: server
+#| include: false
+
+# Reload the catalog for each session so permissions are intersected with the
+# current active-talent catalog rather than process-startup state.
+community_talents <- dashboard_community_talent_catalog(community_database_path)
+community_session_access <- dashboard_access_context(
+  session$request,
+  community_talents$talent_code
+)
+community_allowed_talents <- community_talents %>%
+  dplyr::filter(
+    .data$talent_code %in% community_session_access$allowed_talent_codes
+  )
+community_allowed_choices <- dashboard_authorized_talent_choices(
+  community_talents,
+  community_session_access
+)
+
+output$community_identity <- renderUI({
+  if (!community_session_access$authorized) {
+    return(
+      htmltools::div(
+        class = "alert alert-danger",
+        "No active talent permissions were found for this account."
+      )
+    )
+  }
+
+  htmltools::tags$small(
+    class = "community-filter-panel__identity",
+    paste("Signed in as", community_session_access$verified_email)
+  )
+})
+
+session$onFlushed(function() {
+  if (length(community_allowed_choices) == 0L) {
+    updateSelectInput(
+      session,
+      inputId = "community_talent",
+      choices = c("No authorized talents" = ""),
+      selected = ""
+    )
+    return()
+  }
+
+  selected_code <- isolate(input$community_talent)
+  if (!dashboard_talent_is_authorized(selected_code, community_session_access)) {
+    selected_code <- unname(community_allowed_choices[[1]])
+  }
+  updateSelectInput(
+    session,
+    inputId = "community_talent",
+    choices = community_allowed_choices,
+    selected = selected_code
+  )
+}, once = TRUE)
+
+output$community_data_coverage <- renderUI({
+  req(community_session_access$authorized)
+  req(dashboard_talent_is_authorized(input$community_talent, community_session_access))
+  selected <- community_allowed_talents %>%
+    dplyr::filter(.data$talent_code == input$community_talent) %>%
+    dplyr::slice_head(n = 1)
+  if (nrow(selected) == 0L || is.na(selected$earliest_chat_date[[1]])) {
+    return(
+      htmltools::div(
+        class = "community-coverage community-coverage--empty",
+        "No collected community activity is available for this talent."
+      )
+    )
+  }
+
+  htmltools::div(
+    class = "community-coverage",
+    htmltools::tags$span(class = "community-coverage__label", "Coverage"),
+    htmltools::tags$span(
+      class = "community-coverage__value",
+      paste(
+        format(selected$earliest_chat_date[[1]], "%Y-%m-%d"),
+        "–",
+        format(selected$latest_chat_date[[1]], "%Y-%m-%d")
+      )
+    )
+  )
+})
+
+observe({
+  req(dashboard_talent_is_authorized(input$community_talent, community_session_access))
+  selected <- community_allowed_talents %>%
+    dplyr::filter(.data$talent_code == input$community_talent) %>%
+    dplyr::slice_head(n = 1)
+  if (nrow(selected) != 1L ||
+      is.na(selected$earliest_chat_date[[1]]) ||
+      is.na(selected$latest_chat_date[[1]])) {
+    return()
+  }
+
+  updateDateRangeInput(
+    session,
+    inputId = "community_dates",
+    start = selected$earliest_chat_date[[1]],
+    end = selected$latest_chat_date[[1]],
+    min = selected$earliest_chat_date[[1]],
+    max = selected$latest_chat_date[[1]]
+  )
+})
+
+community_initial_talent_ready <- reactiveVal(FALSE)
+observeEvent(input$community_talent, {
+  if (!community_initial_talent_ready() &&
+      dashboard_talent_is_authorized(input$community_talent, community_session_access)) {
+    community_initial_talent_ready(TRUE)
+  }
+}, ignoreInit = FALSE)
+
+community_scope_reactive <- eventReactive(
+  list(input$community_apply_filters, community_initial_talent_ready()),
+  {
+    req(community_session_access$authorized)
+    req(dashboard_talent_is_authorized(input$community_talent, community_session_access))
+
+    list(
+      talent_code = input$community_talent,
+      start_date = community_optional_date(input$community_dates, 1),
+      end_date = community_optional_date(input$community_dates, 2),
+      minimum_messages = max(1L, as.integer(input$community_minimum_messages))
+    )
+  },
+  ignoreNULL = FALSE
+)
+
+community_data_reactive <- reactive({
+  scope <- community_scope_reactive()
+  req(dashboard_talent_is_authorized(scope$talent_code, community_session_access))
+
+  withProgress(message = "Building community analysis", value = 0, {
+    incProgress(0.15, detail = "Loading authorized chat activity")
+    data <- dashboard_load_community_data(
+      database_path = community_database_path,
+      talent_code = scope$talent_code,
+      start_date = scope$start_date,
+      end_date = scope$end_date,
+      minimum_messages = scope$minimum_messages
+    )
+    incProgress(0.85, detail = "Preparing community views")
+    data
+  })
+})
+
+community_has_data <- function(data) {
+  !is.null(data$explorer) && !is.null(data$community_shape)
+}
+
+community_empty_state <- function() {
+  dashboard_empty_state("No collected chat activity matched the authorized talent and applied filters.")
+}
+
+community_stat <- function(label, value) {
+  htmltools::tags$div(
+    class = "community-summary__metric",
+    htmltools::tags$dt(label),
+    htmltools::tags$dd(scales::comma(value))
+  )
+}
+
+output$community_context <- renderUI({
+  scope <- community_scope_reactive()
+  summary <- community_data_reactive()$summary
+  selected <- community_allowed_talents %>%
+    dplyr::filter(.data$talent_code == scope$talent_code) %>%
+    dplyr::slice_head(n = 1)
+  talent_name <- if (nrow(selected) == 0L) {
+    scope$talent_code
+  } else {
+    gsub("_", " ", selected$talent_name[[1]], fixed = TRUE)
+  }
+  date_label <- paste(
+    if (is.null(scope$start_date)) "All available" else format(scope$start_date, "%b %Y"),
+    "–",
+    if (is.null(scope$end_date)) "latest" else format(scope$end_date, "%b %Y")
+  )
+
+  htmltools::tags$header(
+    class = "community-summary",
+    htmltools::tags$div(
+      class = "community-summary__identity",
+      htmltools::tags$span(class = "community-summary__eyebrow", "Talent"),
+      htmltools::tags$h1(talent_name),
+      htmltools::tags$span(class = "community-summary__period", paste("Selected period", date_label))
+    ),
+    htmltools::tags$dl(
+      class = "community-summary__metrics",
+      community_stat("Total messages", summary$messages),
+      community_stat("Community chatters", summary$chatters),
+      community_stat("Available live streams", summary$available_live_videos),
+      community_stat("Streams with chat activity", summary$videos_with_chat)
+    )
+  )
+})
+
+output$community_segments <- renderUI({
+  data <- community_data_reactive()
+  if (!community_has_data(data)) return(community_empty_state())
+  htmltools::as.tags(
+    viewer_activity_community_shape_d3(
+      data$community_shape,
+      view = "segments",
+      height = 240L
+    )
+  )
+})
+
+output$community_landscape <- renderUI({
+  data <- community_data_reactive()
+  if (!community_has_data(data)) return(community_empty_state())
+  htmltools::as.tags(
+    viewer_activity_community_shape_d3(
+      data$community_shape,
+      view = "landscape",
+      height = 300L
+    )
+  )
+})
+
+community_dataset_id <- function(view) {
+  paste(
+    "community",
+    session$token,
+    isolate(input$community_apply_filters),
+    view,
+    sep = "-"
+  )
+}
+
+output$community_sankey <- renderUI({
+  data <- community_data_reactive()
+  if (!community_has_data(data)) return(community_empty_state())
+  htmltools::as.tags(
+    viewer_activity_video_explorer_d3(
+      data$explorer,
+      view = "sankey",
+      dataset_id = community_dataset_id("sankey"),
+      initial_video_count = 10L,
+      max_selected = 16L,
+      max_users = 24L,
+      height = 560L
+    )
+  )
+})
+
+output$community_heatmap <- renderUI({
+  data <- community_data_reactive()
+  if (!community_has_data(data)) return(community_empty_state())
+  htmltools::as.tags(
+    viewer_activity_video_explorer_d3(
+      data$explorer,
+      view = "heatmap",
+      dataset_id = community_dataset_id("heatmap"),
+      initial_video_count = 12L,
+      max_selected = 18L,
+      max_users = 28L,
+      height = 520L,
+      compact = TRUE
+    )
+  )
+})
+
+output$community_overlap <- renderUI({
+  data <- community_data_reactive()
+  if (!community_has_data(data)) return(community_empty_state())
+  htmltools::as.tags(
+    viewer_activity_video_explorer_d3(
+      data$explorer,
+      view = "overlap",
+      dataset_id = community_dataset_id("overlap"),
+      initial_video_count = 12L,
+      max_selected = 20L,
+      height = 560L
+    )
+  )
+})
+```

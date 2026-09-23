@@ -7,6 +7,8 @@ notebook sources.
 
 - `dashboards/`
   - interactive and published dashboard notebooks
+  - `dashboards/community_dashboard/dashboard.qmd` is the permission-scoped
+    Shiny dashboard for chatter community shape, participation, and overlap
   - `dashboards/company_dashboard/dashboard.qmd` is the company-level Shiny
     dashboard for selecting a company, its talents, and an analytics date range
   - `dashboards/individual_videos/dashboard.qmd` is the permission-scoped Shiny

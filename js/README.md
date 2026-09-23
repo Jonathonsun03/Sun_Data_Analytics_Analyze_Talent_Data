@@ -41,7 +41,8 @@ remains bounded, and the automatic ranking can be restored after exploration.
 coordinated relationship views: an individual-chatter alluvial chart and a
 chatter--stream heatmap. The alluvial view conserves attendance or message flow
 through the stream layer; the heatmap can order rows by participation-pattern
-similarity.
+similarity. Dashboard callers may request the compact heatmap layout to reduce
+label margins and row height without changing the full report presentation.
 
 D3 is vendored locally so generated reports remain reproducible and usable
 without a CDN. Update the filename and the matching dependency version in

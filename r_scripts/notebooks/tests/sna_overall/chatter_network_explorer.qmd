@@ -5,9 +5,11 @@ format:
   html:
     page-layout: full
     toc: false
+    css: chatter_network_explorer.css
     embed-resources: true
     code-fold: true
     code-tools: false
+    anchor-sections: false
 params:
   talent_code: "NOV6"
   video_id: null
@@ -25,45 +27,6 @@ execute:
   warning: false
   message: false
 ---
-
-```{=html}
-<style>
-.explorer-intro {
-  background: linear-gradient(120deg, #eff6ff 0%, #f5f3ff 52%, #fff7ed 100%);
-  border: 1px solid #dbeafe;
-  border-radius: 0.9rem;
-  margin: 0.5rem 0 1rem;
-  padding: 1rem 1.2rem;
-}
-.explorer-intro p { color: #334155; margin: 0; max-width: 78rem; }
-.explorer-stats {
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin: 1rem 0 1.25rem;
-}
-.explorer-stat {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
-  box-shadow: 0 5px 18px rgb(15 23 42 / 6%);
-  padding: 0.9rem 1rem;
-}
-.explorer-stat__value { color: #0f172a; font-size: 1.65rem; font-weight: 720; line-height: 1.1; }
-.explorer-stat__label { color: #475569; font-size: 0.82rem; margin-top: 0.25rem; }
-.explorer-scope { color: #64748b; font-size: 0.86rem; margin: -0.4rem 0 0.7rem; }
-@media (max-width: 850px) {
-  .explorer-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-</style>
-```
-
-::: {.explorer-intro}
-These views turn collected live-chat participation into a community you can
-explore. Follow individual chatters through streams or compare participation
-patterns to see where audiences overlap. Every connection represents observed
-chat activity, not passive viewing.
-:::
 
 ```{r}
 required_packages <- c("DBI", "duckdb", "dplyr", "here", "htmltools", "jsonlite", "scales")
@@ -94,11 +57,11 @@ positive_integer <- function(value, default, minimum = 1L) {
   if (is.na(value) || value < minimum) default else value
 }
 
-stat_card <- function(value, label) {
+summary_metric <- function(value, label) {
   htmltools::div(
-    class = "explorer-stat",
-    htmltools::div(class = "explorer-stat__value", value),
-    htmltools::div(class = "explorer-stat__label", label)
+    class = "community-summary__metric",
+    htmltools::tags$dt(label),
+    htmltools::tags$dd(scales::comma(value))
   )
 }
 
@@ -139,77 +102,189 @@ community_shape <- viewer_activity_community_shape_prep(
   max_overlap_videos = overlap_max_videos
 )
 
-scope_parts <- c(
-  if (is.null(talent_code)) "all talents" else paste("talent", talent_code),
-  if (!is.null(video_id)) paste("video", video_id),
-  paste("at least", minimum_messages, "message(s) per chatter–video relationship")
-)
+talent_label <- viewer_video_activity %>%
+  dplyr::filter(!is.na(.data$talent_name), nzchar(.data$talent_name)) %>%
+  dplyr::distinct(.data$talent_name) %>%
+  dplyr::pull(.data$talent_name)
+talent_label <- if (length(talent_label) > 0L) {
+  paste(talent_label, collapse = ", ")
+} else if (!is.null(talent_code)) {
+  talent_code
+} else {
+  "All talent communities"
+}
+```
 
-htmltools::div(
-  class = "explorer-stats",
-  stat_card(scales::comma(nrow(community_shape$profiles)), "Community chatters"),
-  stat_card(
-    scales::comma(nrow(available_live_videos)),
-    "Available live streams"
+```{=html}
+<nav class="dashboard-nav" aria-label="Dashboard sections">
+  <a href="#overview">Overview</a>
+  <a href="#chatter-flows">Chatter flows</a>
+  <a href="#participation">Participation</a>
+  <a href="#community-shape">Community shape</a>
+  <a href="#audience-overlap">Audience overlap</a>
+</nav>
+```
+
+::: {.dashboard-shell}
+
+::: {.explorer-rail aria-label="Dashboard context"}
+
+## View context
+
+```{r}
+htmltools::tagList(
+  htmltools::div(class = "explorer-rail__label", "Community"),
+  htmltools::p(class = "explorer-rail__value", talent_label),
+  htmltools::div(class = "explorer-rail__label", "Relationship threshold"),
+  htmltools::p(
+    class = "explorer-rail__value",
+    paste0(scales::comma(minimum_messages), "+ message", if (minimum_messages == 1L) "" else "s")
   ),
-  stat_card(
-    scales::comma(dplyr::n_distinct(viewer_video_activity$video_id)),
-    "Streams with chat activity"
+  htmltools::div(class = "explorer-rail__label", "Evidence"),
+  htmltools::p(class = "explorer-rail__value", "Observed live-chat activity")
+)
+```
+
+```{=html}
+<hr class="explorer-rail__rule">
+<div class="explorer-rail__nav" aria-label="Jump to a view">
+  <a href="#chatter-flows">Chatter flows</a>
+  <a href="#participation">Participation heatmap</a>
+  <a href="#community-shape">Community shape</a>
+  <a href="#audience-overlap">Audience overlap</a>
+</div>
+<p class="explorer-rail__hint">
+  Stream and chatter controls are attached to the chart they update. Open a
+  selector to search, filter, or change the visible comparison.
+</p>
+```
+
+:::
+
+::: {.dashboard-main}
+
+```{r}
+#| classes: summary-output
+scope_dates <- as.Date(viewer_video_activity$stream_at)
+scope_dates <- scope_dates[!is.na(scope_dates)]
+period_label <- if (length(scope_dates)) {
+  paste(format(range(scope_dates), "%b %Y"), collapse = " – ")
+} else {
+  "Period unavailable"
+}
+
+htmltools::tags$header(
+  id = "overview",
+  class = "community-summary dashboard-section",
+  htmltools::div(
+    class = "community-summary__identity",
+    htmltools::span(class = "community-summary__eyebrow", "Talent"),
+    htmltools::h1(gsub("_", " ", talent_label, fixed = TRUE)),
+    htmltools::span(class = "community-summary__period", period_label)
   ),
-  stat_card(
-    scales::comma(sum(viewer_video_activity$message_count)),
-    "Community messages"
+  htmltools::tags$dl(
+    class = "community-summary__metrics",
+    summary_metric(sum(viewer_video_activity$message_count), "Total messages"),
+    summary_metric(nrow(community_shape$profiles), "Community chatters"),
+    summary_metric(nrow(available_live_videos), "Available live streams"),
+    summary_metric(
+      dplyr::n_distinct(viewer_video_activity$video_id),
+      "Streams with chat activity"
+    )
   )
 )
 ```
 
+::: {#community-shape .dashboard-grid--community .dashboard-section}
+
+::: {.dashboard-card}
+
+::: {.dashboard-card__header}
+
+::: {}
+
+### Community layers
+
+See how occasional, returning, regular, and core participants shape conversation.
+
+:::
+
+`Audience`{.dashboard-card__badge}
+
+:::
+
+::: {.dashboard-card__body}
+
 ```{r}
-htmltools::p(
-  class = "explorer-scope",
-  paste("Current scope:", paste(scope_parts, collapse = " · "))
+viewer_activity_community_shape_d3(
+  community_shape,
+  view = "segments",
+  height = 250
 )
 ```
 
-## Chatter flows through streams
+:::
 
-This alluvial view keeps chatters as individuals: it does not assign them a
-classification. Each path follows an observed chatter into a stream and then
-into the topic or normalized title tag attached to that stream. Use a smaller
-stream selection so paths remain traceable. Hover over a chatter to highlight
-all of that person's paths through attended streams and their downstream
-classifications.
+<details>
+<summary>Layer definitions</summary>
+<p>
+Drop-in: one stream. Returning: two or three streams. Regular: four to seven
+streams. Core: eight or more streams. Bar length is the number of chatters;
+the annotation shows the share of conversation produced.
+</p>
+</details>
 
-Open the **Streams** selector to search titles or filter the catalog by date,
-primary genre, and normalized keyword. Filters narrow the option list without
-silently changing the current chart. Use **Select matching** or
-**Deselect matching** to apply the filtered result, subject to the view's
-selection limit; active filters remain visible as removable chips.
+:::
 
-The adjacent **Chatters** selector starts with the highest-engagement people
-for the selected streams. Browse the complete paginated chatter catalog or
-search by name. Numeric filters accept inclusive **At least** and **At most**
-values for messages sent or streams attended, calculated either within the
-currently selected streams or across all observed streams. Change **Order** to
-put the least-active chatters first or sort names A–Z/Z–A. You can jump directly
-to a page and use **Select page** or **Deselect page** for batch changes; the
-existing **Select matching** action still applies the entire filtered result.
-Choose **Use automatic** to restore the default ranking after exploring a
-custom group.
+::: {.dashboard-card}
 
-The selected engagement measure supplies one consistent width along the whole
-path. For primary topics, a stream's flow goes to its single topic. When a
-stream has several normalized tags, its outgoing flow is divided evenly among
-those tags so the diagram does not duplicate engagement. View-contribution
-percentage remains available in the stream-to-classification tooltip; it is not
-added to message or attendance flow.
+::: {.dashboard-card__header}
 
-View contribution uses `analytics.video_latest_performance.views`, whose
-canonical relation has one latest row per video. Its denominator includes all
-current, active-version classifications matching each video's current title
-hash, including eligible videos outside the visible selector. Filtering streams
-does not recalculate it. Videos missing views are excluded from contribution
-denominators; zero-view videos remain eligible. Normalized tags come directly
-from `normalization.active_label_mappings`.
+::: {}
+
+### Engagement landscape
+
+Cross stream breadth with message intensity to reveal distinct participation patterns.
+
+:::
+
+`Matrix`{.dashboard-card__badge}
+
+:::
+
+::: {.dashboard-card__body}
+
+```{r}
+viewer_activity_community_shape_d3(
+  community_shape,
+  view = "landscape",
+  height = 350
+)
+```
+
+:::
+
+:::
+
+:::
+
+::: {#chatter-flows .dashboard-card .dashboard-section}
+
+::: {.dashboard-card__header}
+
+::: {}
+
+## Chatter flows
+
+Follow individual chatters through streams and into title topics or tags.
+
+:::
+
+`Relationship view`{.dashboard-card__badge}
+
+:::
+
+::: {.dashboard-card__body}
 
 ```{r}
 viewer_activity_video_explorer_d3(
@@ -219,17 +294,44 @@ viewer_activity_video_explorer_d3(
   initial_video_ids = video_id,
   max_selected = sankey_max_selected,
   max_users = sankey_max_users,
-  height = 820
+  height = 620
 )
 ```
 
-## Chatter–stream participation heatmap
+:::
 
-The heatmap emphasizes relationships among chatters by placing people with
-similar stream-attendance patterns near one another. A shared vertical pattern
-means two chatters participated in many of the same selected streams. Switch
-the cell measure between attendance and messages, or restore a simple
-highest-activity row order.
+<details>
+<summary>About this view</summary>
+<p>
+Each path follows an observed chatter into a stream and then into the topic or
+normalized title tag attached to that stream. Use the Streams and Chatters
+selectors to search the complete catalogs; filtering options never silently
+changes the chart. Path width uses the selected engagement measure. When a
+stream has several normalized tags, its outgoing flow is divided evenly so
+engagement is not duplicated. View contribution uses the latest canonical
+video performance and is not recalculated when streams are filtered.
+</p>
+</details>
+
+:::
+
+::: {#participation .dashboard-card .dashboard-section}
+
+::: {.dashboard-card__header}
+
+::: {}
+
+## Chatter–stream participation
+
+Compare attendance patterns and identify chatters who move through similar streams.
+
+:::
+
+`Heatmap`{.dashboard-card__badge}
+
+:::
+
+::: {.dashboard-card__body}
 
 ```{r}
 viewer_activity_video_explorer_d3(
@@ -239,51 +341,42 @@ viewer_activity_video_explorer_d3(
   initial_video_ids = video_id,
   max_selected = heatmap_max_selected,
   max_users = heatmap_max_users,
-  height = 900
+  height = 660,
+  compact = TRUE
 )
 ```
 
-## The shape of the full community
+:::
 
-The Sankey and heatmap are useful for following selected relationships, while
-the next views summarize every chatter in the selected scope.
+<details>
+<summary>About this view</summary>
+<p>
+Rows place people with similar stream-attendance patterns near one another. A
+shared vertical pattern means two chatters participated in many of the same
+selected streams. Switch the cell measure between attendance and messages, or
+restore a simple highest-activity row order.
+</p>
+</details>
 
-### Community layers
+:::
 
-This view separates occasional participation from repeat and core engagement.
-Bar length is the number of chatters; the annotation shows how much of the
-community’s conversation each layer produced.
+::: {#audience-overlap .dashboard-card .dashboard-section}
 
-- **Drop-in:** chatted in one stream.
-- **Returning:** chatted in two or three streams.
-- **Regular:** chatted in four to seven streams.
-- **Core:** chatted in eight or more streams.
+::: {.dashboard-card__header}
 
-```{r}
-viewer_activity_community_shape_d3(community_shape, view = "segments")
-```
+::: {}
 
-### Engagement landscape
+## Stream audience overlap
 
-Each square contains the number of chatters with that combination of stream
-breadth and message intensity. This distinguishes, for example, prolific
-single-stream visitors from people who participate consistently across the
-creator’s catalog.
+Compare shared chatter audiences across streams with Jaccard similarity.
 
-```{r}
-viewer_activity_community_shape_d3(community_shape, view = "landscape")
-```
+:::
 
-### Stream audience overlap
+`Network matrix`{.dashboard-card__badge}
 
-This is the adjacency-matrix form of a stream-to-stream network. Darker purple
-means the two streams share a larger proportion of their combined chatter
-audience, measured with Jaccard similarity. Hover for the shared-chatter count
-and exact similarity. Use the Compare menu to choose any videos in the current
-scope; the matrix is recalculated immediately for that exact subset. The
-diagonal is gray because it compares each stream with itself.
-`overlap_max_videos` controls the initial comparison and
-`overlap_max_selected` keeps a selected matrix readable.
+:::
+
+::: {.dashboard-card__body}
 
 ```{r}
 viewer_activity_video_explorer_d3(
@@ -291,9 +384,29 @@ viewer_activity_video_explorer_d3(
   view = "overlap",
   initial_video_count = overlap_max_videos,
   initial_video_ids = video_id,
-  max_selected = overlap_max_selected
+  max_selected = overlap_max_selected,
+  height = 620
 )
 ```
+
+:::
+
+<details>
+<summary>About this view</summary>
+<p>
+Darker purple indicates that two streams share a larger proportion of their
+combined chatter audience. Hover for the shared-chatter count and exact
+similarity. Use Compare to choose any videos in the current scope; the matrix
+recalculates immediately for that subset. The diagonal is gray because each
+stream is being compared with itself.
+</p>
+</details>
+
+:::
+
+:::
+
+:::
 
 ```{r}
 #| include: false

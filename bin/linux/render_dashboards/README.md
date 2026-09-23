@@ -20,6 +20,10 @@ The read-only raw talent data administration dashboard is:
 
 - `r_scripts/notebooks/dashboards/data_admin/raw_data_dashboard/dashboard.qmd`
 
+The permission-scoped chatter community dashboard is:
+
+- `r_scripts/notebooks/dashboards/community_dashboard/dashboard.qmd`
+
 ## Container Environment Setup
 
 In a restricted container, disable renv's optional system-library sandbox while
@@ -65,6 +69,18 @@ quarto serve \
 ```
 
 Place this administrative endpoint behind an authenticated reverse proxy.
+
+Run the chatter community dashboard on another internal port:
+
+```bash
+quarto serve \
+  r_scripts/notebooks/dashboards/community_dashboard/dashboard.qmd \
+  --host 0.0.0.0 \
+  --port 3841
+```
+
+Place it behind the same Cloudflare permissions proxy as the creator dashboard;
+do not expose port `3841` directly.
 
 Run the raw talent data explorer on another internal port:
 

@@ -23,6 +23,11 @@ plot library.
 one dashboard: talent-level engagement counts, video activity summaries, and
 participant tables. Other analysis workflows may source these functions.
 
+`data/viewer_activity.R` assembles the date-scoped data used by the separate
+chatter community dashboard. That application uses the same fail-closed access
+context as the creator dashboard and validates its selected talent before each
+lakehouse query.
+
 ## Naming
 
 Filenames use their layer and domain rather than repeating `dashboard_`; the
