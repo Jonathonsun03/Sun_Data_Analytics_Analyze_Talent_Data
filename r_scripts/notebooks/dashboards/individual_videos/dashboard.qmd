@@ -2,6 +2,7 @@
 title: "Individual Video Performance"
 format:
   dashboard:
+    include-in-header: ../talent_dashboard/presentation-controls.html
     orientation: rows
 server: shiny
 execute:

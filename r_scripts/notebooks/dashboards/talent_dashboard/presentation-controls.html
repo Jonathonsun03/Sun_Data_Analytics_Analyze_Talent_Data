@@ -11,13 +11,17 @@
   justify-content: center;
 }
 
-.card[data-presentation-control-init] > .card-header {
+.card[data-presentation-control-init] > .card-header,
+.dashboard-presentation-container[data-presentation-control-init] >
+  .dashboard-presentation-container__header {
   align-items: center;
   display: flex;
   gap: 0.5rem;
 }
 
-.card[data-presentation-control-init] > .card-header > .card-title {
+.card[data-presentation-control-init] > .card-header > .card-title,
+.dashboard-presentation-container[data-presentation-control-init] >
+  .dashboard-presentation-container__header > :first-child {
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -59,15 +63,21 @@
   white-space: nowrap;
 }
 
-.card.presentation-hidden > .card-body {
+.card.presentation-hidden > .card-body,
+.dashboard-presentation-container.presentation-hidden >
+  .dashboard-presentation-container__body {
   position: relative;
 }
 
-.card.presentation-hidden > .card-body > * {
+.card.presentation-hidden > .card-body > *,
+.dashboard-presentation-container.presentation-hidden >
+  .dashboard-presentation-container__body > * {
   visibility: hidden !important;
 }
 
-.card.presentation-hidden > .card-body::after {
+.card.presentation-hidden > .card-body::after,
+.dashboard-presentation-container.presentation-hidden >
+  .dashboard-presentation-container__body::after {
   align-items: center;
   background: var(--bs-tertiary-bg, #f8f9fa);
   color: var(--bs-secondary-color, #6c757d);
@@ -97,7 +107,18 @@
 (function() {
   "use strict";
 
-  const cardSelector = ".dashboard-page .card.cell[data-title]";
+  const cardSelector = [
+    ".dashboard-page .card.cell[data-title]",
+    ".dashboard-page .dashboard-presentation-container[data-title]"
+  ].join(", ");
+  const cardHeaderSelector = [
+    ".card-header",
+    ".dashboard-presentation-container__header"
+  ].join(", ");
+  const cardBodySelector = [
+    ".card-body",
+    ".dashboard-presentation-container__body"
+  ].join(", ");
   const hiddenClass = "presentation-hidden";
   const storagePrefix = "talent-dashboard-card-hidden:";
   const initializedAttribute = "data-presentation-control-init";
@@ -162,7 +183,8 @@
   }
 
   function updateCardButton(card, hidden) {
-    const button = card.querySelector(":scope > .card-header .dashboard-card-visibility-toggle");
+    const header = directChild(card, cardHeaderSelector);
+    const button = header && header.querySelector(".dashboard-card-visibility-toggle");
     if (!button) {
       return;
     }
@@ -176,7 +198,7 @@
   }
 
   function setCardHidden(card, hidden, persist) {
-    const body = directChild(card, ".card-body");
+    const body = directChild(card, cardBodySelector);
     card.classList.toggle(hiddenClass, hidden);
 
     if (body) {
@@ -215,8 +237,8 @@
       return;
     }
 
-    const header = directChild(card, ".card-header");
-    const body = directChild(card, ".card-body");
+    const header = directChild(card, cardHeaderSelector);
+    const body = directChild(card, cardBodySelector);
     if (!header || !body) {
       return;
     }

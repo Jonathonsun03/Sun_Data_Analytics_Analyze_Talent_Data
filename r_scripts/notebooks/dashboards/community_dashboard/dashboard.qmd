@@ -2,6 +2,7 @@
 title: "Chatter Community Dashboard"
 format:
   dashboard:
+    include-in-header: ../talent_dashboard/presentation-controls.html
     orientation: rows
 server: shiny
 execute:
@@ -52,13 +53,23 @@ community_global_max_date <- if (nrow(community_available_dates) == 0L) {
 
 community_section <- function(title, ..., class = NULL) {
   htmltools::tags$section(
-    class = paste(c("community-analysis-section", class), collapse = " "),
+    class = paste(
+      c("community-analysis-section", "dashboard-presentation-container", class),
+      collapse = " "
+    ),
+    `data-title` = title,
     htmltools::tags$header(
-      class = "community-analysis-section__header",
+      class = paste(
+        "community-analysis-section__header",
+        "dashboard-presentation-container__header"
+      ),
       htmltools::tags$h2(title)
     ),
     htmltools::tags$div(
-      class = "community-analysis-section__body",
+      class = paste(
+        "community-analysis-section__body",
+        "dashboard-presentation-container__body"
+      ),
       ...
     )
   )
