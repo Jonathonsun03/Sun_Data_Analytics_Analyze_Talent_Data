@@ -145,8 +145,9 @@ parallel run logs, or notebook-local imports of already-published coded CSVs.
 
 ## Inference machine power lifecycle
 
-`with_inference_machine()` in `lib/utils/inference_machine.R` keeps one lazy
-power scope around an entire batch. The targets are deliberately separate:
+`with_inference_machine()` in [lib/nlp_inference/](lib/nlp_inference/README.md)
+keeps one lazy power scope around an entire batch. The library separates API
+clients, machine readiness, locking, cleanup, and lifecycle orchestration. The targets are deliberately separate:
 
 | Target | Default | Purpose |
 | --- | --- | --- |
@@ -172,7 +173,7 @@ Configuration defaults are supplied by `inference_machine_config()`:
 - `INFERENCE_MACHINE_LOCK_DIR=/tmp/sun-data-inference-machine.lock`
 - `INFERENCE_MACHINE_SHUTDOWN_GUARD_COMMAND`: unset by default; see below.
 
-Install `wakeonlan` and configure noninteractive SSH authentication/known hosts
+Install `wakeonlan` and `flock`, and configure noninteractive SSH authentication/known hosts
 for both SSH targets in the calling environment. The helper sends Wake-on-LAN
 to the physical host, waits for authenticated Proxmox SSH, optionally starts the
 CT, waits for authenticated container SSH, then waits for API `/health` to
@@ -181,7 +182,7 @@ There is no host-side API proxy in this repository; requests targeting the
 physical host are rejected with a corrective error.
 
 ```r
-source(here::here("r_scripts", "lib", "utils", "inference_machine.R"))
+source(here::here("r_scripts", "lib", "nlp_inference", "load.R"))
 with_inference_machine({
   ensure_inference_machine(inference_punctuation_url())
   # Run the complete batch here.
@@ -222,11 +223,29 @@ server-side coordinator; setting a generic health/process/CPU check is unsafe.
 No remote guard is installed by this change.
 
 Busy/inconclusive leaves the host on and releases the caller lock so another
-managed batch can finish and run its own guard. Guard failures retain the lock
-for inspection. Confirmed shutdown waits for physical-host SSH to disappear
-and allows 15 seconds for power-down before releasing the lock. Forced process
-termination cannot guarantee cleanup; inspect running jobs before removing a
-stale lock. The helper does not install an unattended idle monitor.
+managed batch can finish and run its own guard. Guard failures retain runtime
+state. Confirmed shutdown waits for physical-host SSH to disappear and allows
+15 seconds for power-down before releasing the lock.
+
+The helper holds a Linux `flock` on `<INFERENCE_MACHINE_LOCK_DIR>.flock` through
+an input pipe for the lifetime of the managed batch. Closing the pipe or killing
+the R process releases that lock. The `.flock` file is intentionally persistent;
+its existence does not mean a batch is running, and it must not be deleted.
+Before contacting the server, the helper atomically saves `owner.rds` inside the
+runtime directory with the caller hostname/PID, container target, and batch token.
+Ordinary startup failures release any possibly accepted reservation before
+removing runtime state, including when the reserve response was lost.
+
+After an interrupted run, the next managed request first acquires the process
+lock, verifies the saved metadata belongs to the same caller host and container,
+and releases that exact batch token through the existing idempotent API. It then
+removes stale runtime state and starts a fresh batch. Recovery never requests
+host shutdown. A failed release retains metadata and stops the new run for a
+later retry; it does not infer server idleness from a local process exit.
+Legacy empty directories, corrupt metadata, or changed targets still require
+manual inspection because their reservation cannot be safely identified. This
+also applies to interruption before the initial metadata write completes.
+The helper does not install an unattended idle monitor.
 
 The host-side guard implementation is now available at
 `py_scripts/run/inference_shutdown_guard.py`; see the

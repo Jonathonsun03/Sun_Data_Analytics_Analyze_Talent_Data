@@ -1,4 +1,5 @@
 # Per-video reconstruction, validation, and publication workflow.
+source(here::here("r_scripts", "lib", "subtitle_backfill", "subtitle_speaker_checkpoints.R"), local = TRUE)
 
 reconstruct_subtitle_track_with_checkpoints <- function(
     db_path,
@@ -17,7 +18,9 @@ reconstruct_subtitle_track_with_checkpoints <- function(
     speaker_change_fn = NULL,
     checkpoints = NULL,
     checkpoint_dir = NULL,
-    before_publish = NULL) {
+    before_publish = NULL,
+    stop_requested_fn = function() FALSE,
+    speaker_cache_identity = NULL) {
   if (nrow(blocks) == 0L) {
     stop("No punctuation blocks were produced.", call. = FALSE)
   }
@@ -54,7 +57,8 @@ reconstruct_subtitle_track_with_checkpoints <- function(
     request_pause_sec = request_pause_sec,
     retry_failed = retry_failed,
     force = force,
-    punctuate_fn = punctuate_fn
+    punctuate_fn = punctuate_fn,
+    stop_requested_fn = stop_requested_fn
   )
 
   sentences <- dplyr::bind_rows(inference$sentence_results) |>
@@ -69,10 +73,24 @@ reconstruct_subtitle_track_with_checkpoints <- function(
     dplyr::mutate(sentence_number = dplyr::row_number()) |>
     dplyr::ungroup()
   validate_subtitle_reconstruction(raw_units, blocks, sentences)
+  if (isTRUE(stop_requested_fn())) {
+    stop(subtitle_backfill_stop_condition())
+  }
   if (!is.null(speaker_change_fn)) {
-    sentences <- infer_subtitle_speaker_turns(sentences, speaker_change_fn)
+    speaker_change_fn <- subtitle_speaker_resume_classifier(
+      speaker_change_fn, checkpoint_state$path, context, sentences,
+      speaker_cache_identity, force
+    )
+    sentences <- infer_subtitle_speaker_turns(
+      sentences,
+      speaker_change_fn,
+      stop_requested_fn = stop_requested_fn
+    )
   }
 
+  if (isTRUE(stop_requested_fn())) {
+    stop(subtitle_backfill_stop_condition())
+  }
   if (!is.null(before_publish)) before_publish()
   publication <- subtitle_backfill_with_writer(db_path, function(con) {
     current_raw_units <- load_subtitle_track_for_backfill(

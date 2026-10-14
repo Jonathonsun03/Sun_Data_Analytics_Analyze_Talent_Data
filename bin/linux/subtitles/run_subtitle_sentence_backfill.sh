@@ -21,6 +21,7 @@ TALENT_CODE=""
 VIDEO_ID=""
 MAX_VIDEOS="0"
 MAX_NEW_VIDEOS="0"
+MAX_RUNTIME_SEC="${SUBTITLE_BACKFILL_MAX_RUNTIME_SEC:-14400}"
 MAX_ATTEMPTS="3"
 REQUEST_PAUSE_SEC="0.2"
 TIMEOUT_SEC="120"
@@ -44,6 +45,7 @@ Options:
   --max-videos N               Process at most N tracks; 0 means all (default)
   --max-new-videos N           Process at most N tracks needing work; current
                                tracks do not count; 0 means all (default)
+  --max-runtime-sec N          Graceful processing budget (default: 14400; 0 disables)
   --max-attempts N             Maximum FullStop attempts per block (default: 3)
   --request-pause-sec N        Pause after successful model requests (default: 0.2)
   --timeout-sec N              FullStop request timeout in seconds (default: 120)
@@ -82,6 +84,11 @@ while [[ $# -gt 0 ]]; do
     --max-new-videos)
       [[ $# -ge 2 ]] || { echo "Error: --max-new-videos requires a value" >&2; exit 1; }
       MAX_NEW_VIDEOS="$2"
+      shift 2
+      ;;
+    --max-runtime-sec)
+      [[ $# -ge 2 ]] || { echo "Error: --max-runtime-sec requires a value" >&2; exit 1; }
+      MAX_RUNTIME_SEC="$2"
       shift 2
       ;;
     --max-attempts)
@@ -148,6 +155,7 @@ export SUBTITLE_BACKFILL_TALENT_CODE="${TALENT_CODE}"
 export SUBTITLE_BACKFILL_VIDEO_ID="${VIDEO_ID}"
 export SUBTITLE_BACKFILL_MAX_VIDEOS="${MAX_VIDEOS}"
 export SUBTITLE_BACKFILL_MAX_NEW_VIDEOS="${MAX_NEW_VIDEOS}"
+export SUBTITLE_BACKFILL_MAX_RUNTIME_SEC="${MAX_RUNTIME_SEC}"
 export SUBTITLE_BACKFILL_MAX_ATTEMPTS="${MAX_ATTEMPTS}"
 export SUBTITLE_BACKFILL_REQUEST_PAUSE_SEC="${REQUEST_PAUSE_SEC}"
 export SUBTITLE_PUNCTUATION_TIMEOUT_SEC="${TIMEOUT_SEC}"
@@ -155,4 +163,27 @@ export SUBTITLE_BACKFILL_PIPELINE_VERSION="${PIPELINE_VERSION}"
 export SUBTITLE_BACKFILL_RETRY_FAILED="${RETRY_FAILED}"
 export SUBTITLE_BACKFILL_FORCE="${FORCE}"
 
+if [[ "${DRY_RUN}" == "true" ]]; then
+  exec Rscript --vanilla "${R_SCRIPT}"
+fi
+
+# Keep the control channel separate from the read-only dashboard DataLake mount.
+CONTROL_DIR="${SUBTITLE_BACKFILL_CONTROL_DIR:-${LOCK_DIR}/control}"
+mkdir -p "${CONTROL_DIR}"
+exec 8>"${CONTROL_DIR}/run.lock"
+flock -n 8 || exit 1
+export SUBTITLE_BACKFILL_ACTIVE_MARKER="${CONTROL_DIR}/active"
+export SUBTITLE_BACKFILL_STOP_REQUEST="${CONTROL_DIR}/stop.request"
+export SUBTITLE_BACKFILL_MARKERS_MANAGED=true
+RUN_TOKEN="$(cat /proc/sys/kernel/random/uuid)"
+rm -f "${CONTROL_DIR}/stop.request"
+printf '%s\n' "${RUN_TOKEN}" > "${CONTROL_DIR}/active.tmp"
+mv "${CONTROL_DIR}/active.tmp" "${CONTROL_DIR}/active"
+finish_control() {
+  local result=$?
+  printf '%s\nexit_status=%s\n' "${RUN_TOKEN}" "${result}" > "${CONTROL_DIR}/last.result.tmp"
+  mv "${CONTROL_DIR}/last.result.tmp" "${CONTROL_DIR}/last.result"
+  rm -f "${CONTROL_DIR}/active" "${CONTROL_DIR}/stop.request"
+}
+trap finish_control EXIT
 Rscript --vanilla "${R_SCRIPT}"

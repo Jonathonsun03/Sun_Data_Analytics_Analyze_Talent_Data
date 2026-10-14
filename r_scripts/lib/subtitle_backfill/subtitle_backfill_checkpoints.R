@@ -180,9 +180,10 @@ subtitle_backfill_load_checkpoint_state <- function(
     checkpoint_dir = NULL) {
   # Direct callers may omit the checkpoints normally loaded by the batch runner.
   if (is.null(checkpoints)) {
-    read_con <- duckdb_connect(db_path = db_path, read_only = TRUE)
-    checkpoints <- tryCatch(
-      load_subtitle_backfill_checkpoints(
+    checkpoints <- subtitle_backfill_with_connection(
+      db_path,
+      read_only = TRUE,
+      operation = function(read_con) load_subtitle_backfill_checkpoints(
         read_con,
         context$video_id,
         context$subtitle_language,
@@ -190,8 +191,7 @@ subtitle_backfill_load_checkpoint_state <- function(
         context$source_checksum,
         context$pipeline_version,
         context$source_scope
-      ),
-      finally = DBI::dbDisconnect(read_con, shutdown = TRUE)
+      )
     )
   }
 

@@ -10,6 +10,12 @@ stopifnot(
   !subtitle_speaker_http_status_is_transient(404L)
 )
 
+stopifnot(
+  subtitle_speaker_error_is_transient("node stack overflow"),
+  subtitle_speaker_error_is_transient("C stack overflow"),
+  !subtitle_speaker_error_is_transient("response is missing message content")
+)
+
 retry_attempts <- 0L
 retry_delays <- numeric()
 retry_result <- subtitle_speaker_with_retries(

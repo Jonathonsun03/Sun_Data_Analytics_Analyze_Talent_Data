@@ -1,3 +1,5 @@
+source(here::here("r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_controls.R"), local = TRUE)
+
 # Environment parsing and collection-aware DuckDB reads for the backfill runner.
 
 subtitle_backfill_env_text <- function(name, default = NULL) {
@@ -25,7 +27,7 @@ subtitle_backfill_env_number <- function(name, default, minimum = 0) {
   value <- suppressWarnings(as.numeric(
     subtitle_backfill_env_text(name, as.character(default))
   ))
-  if (is.na(value) || value < minimum) {
+  if (!is.finite(value) || value < minimum) {
     stop(name, " must be numeric and >= ", minimum, ".", call. = FALSE)
   }
   value
@@ -45,6 +47,7 @@ subtitle_backfill_config <- function() {
     1L
   )
   list(
+    max_runtime_sec = subtitle_backfill_env_number("SUBTITLE_BACKFILL_MAX_RUNTIME_SEC", 14400),
     dry_run = subtitle_backfill_env_bool(
       "SUBTITLE_BACKFILL_DRY_RUN",
       default = TRUE
@@ -118,7 +121,9 @@ subtitle_backfill_config <- function() {
     force = subtitle_backfill_env_bool("SUBTITLE_BACKFILL_FORCE", default = FALSE),
     source_scope = "full_track",
     db_path = talent_lakehouse_db_path(),
-    collection_marker = subtitle_backfill_collection_marker()
+    collection_marker = subtitle_backfill_collection_marker(),
+    stop_request_path = subtitle_backfill_stop_request_path(),
+    active_marker_path = subtitle_backfill_active_marker_path()
   )
 }
 
@@ -128,6 +133,7 @@ subtitle_backfill_wait_for_collection <- function(
     poll_interval_sec = 15) {
   waiting <- FALSE
   while (file.exists(marker_path)) {
+    subtitle_backfill_assert_running(subtitle_backfill_stop_request_path())
     if (!waiting) {
       message(
         "Collection is active; waiting before ",
@@ -137,14 +143,14 @@ subtitle_backfill_wait_for_collection <- function(
       )
       waiting <- TRUE
     }
-    Sys.sleep(poll_interval_sec)
+    Sys.sleep(min(poll_interval_sec, 3))
   }
   if (waiting) message("Collection finished; continuing ", context, ".")
   invisible(NULL)
 }
 
 subtitle_backfill_with_reader <- function(db_path, marker_path, operation) {
-  subtitle_backfill_wait_for_collection(marker_path, "opening DuckDB")
-  con <- duckdb_connect(db_path = db_path, read_only = TRUE)
-  tryCatch(operation(con), finally = DBI::dbDisconnect(con, shutdown = TRUE))
+  subtitle_backfill_with_connection(
+    db_path, operation, read_only = TRUE, marker_path = marker_path
+  )
 }

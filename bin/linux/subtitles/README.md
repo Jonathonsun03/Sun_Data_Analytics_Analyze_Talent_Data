@@ -31,6 +31,13 @@ bin/linux/subtitles/run_subtitle_sentence_backfill.sh \
   --max-new-videos 10
 ```
 
+Executable runs now have a four-hour processing budget (14,400 seconds), then
+stop cooperatively and resume saved punctuation and speaker comparisons next run.
+Use `--max-runtime-sec N` to override it; `0` disables it. The budget starts with
+the runner, so missed-run catch-up uses four hours from that later start. Allow
+additional time for the current request, transaction, and cleanup; no hard kill
+is used. An already-running R process keeps its previously loaded code/settings.
+
 The initial DuckDB query excludes tracks already current for the exact source
 checksum and pipeline version. `--max-videos` limits that filtered candidate
 list; with `--force`, it limits the unfiltered list. `--max-new-videos` remains
@@ -43,17 +50,7 @@ configured readiness timeout rather than polling indefinitely.
 
 The checked-in user-systemd timer runs 50 new videos daily at 07:00
 America/New_York. It sets `INFERENCE_MANAGE_CONTAINER=true`, because CT 106 may
-remain stopped after the physical host wakes. Automatic physical-host shutdown
-is off by default, so the daily backfill leaves the NLP host running when it
-finishes.
-
-Shutdown remains available as an explicit opt-in. Set the following environment
-variable for a manual run or add the same `Environment=` setting to a private
-systemd override:
-
-```bash
-INFERENCE_MACHINE_SHUTDOWN_GUARD_COMMAND='python3 /opt/sun-data/py_scripts/run/inference_shutdown_guard.py'
-```
+remain stopped after the physical host wakes.
 
 Install or refresh the default timer with:
 
@@ -72,11 +69,11 @@ systemctl --user list-timers sun-data-subtitle-backfill.timer
 journalctl --user -u sun-data-subtitle-backfill.service
 ```
 
-The runner waits before DuckDB reads and completed-video publication while
+The runner waits before DuckDB reads, publication, and bookkeeping writes while
 `<TALENT_DATALAKE_ROOT>/Logs/collection-active` exists. Set
 `COLLECTION_ACTIVE_MARKER` in both repositories only when the collection and
-analytics environments need an explicit shared path. The fixed polling interval
-is 15 seconds. Inference already in progress finishes without checking the
+analytics environments need an explicit shared path. Database access checks the marker every second; other collection waits
+check at most every three seconds. Inference already in progress finishes without checking the
 marker; its DuckDB publication waits until collection removes the marker.
 
 The Bash file is only the command-line wrapper. Its R entrypoint is
@@ -100,7 +97,20 @@ tmux attach -t subtitle-sentence-backfill
 Detach without stopping the process with `Ctrl+B`, then `D`. Completed tracks
 are checksum- and pipeline-version-aware and are skipped on another run.
 Completed blocks for an interrupted track are also reused, so restarting the
-same command resumes rather than repeating successful FullStop requests.
+same command resumes rather than repeating successful FullStop requests or
+speaker comparisons saved by the updated runner. The
+administration dashboard stop control writes
+`<TALENT_DATALAKE_ROOT>/Logs/subtitle_sentence_backfill/control/stop.request`. The runner
+checks it between model operations, records a clean `cancelled` result, and removes
+the request. A request already in flight can continue until its configured timeout.
+
+The shell wrapper holds `control/run.lock`, publishes a unique `control/active`
+run token, and records `control/last.result` after R exits. Requests target that
+token. The dashboard confirms exit by checking the lock, so stale markers do not
+claim that a process is running. CT 110 mounts only this control directory writable
+at `/run/sun-data-transcript-control`; its main DataLake mount remains read-only.
+Its dashboard service overrides `SUBTITLE_BACKFILL_ACTIVE_MARKER` and
+`SUBTITLE_BACKFILL_STOP_REQUEST` to paths under that directory.
 
 Failed blocks receive up to three attempts per run by default. Only successful
 responses are saved locally; restarting retries unfinished blocks. `--retry-failed`

@@ -1,6 +1,6 @@
 # Network and power operations are mocked; no host is powered on or off.
 local({
-  source("r_scripts/lib/utils/inference_machine.R", local = TRUE)
+  source("r_scripts/lib/nlp_inference/load.R", local = TRUE)
   names <- c(
     "INFERENCE_MACHINE_HOST", "INFERENCE_MACHINE_SSH_USER", "INFERENCE_MACHINE_MAC",
     "INFERENCE_CONTAINER_HOST", "INFERENCE_CONTAINER_SSH_USER", "INFERENCE_CONTAINER_ID",
@@ -11,7 +11,7 @@ local({
   previous <- Sys.getenv(names, unset = NA_character_)
   lock_path <- tempfile("inference-lock-")
   on.exit({
-    unlink(lock_path, recursive = TRUE)
+    unlink(c(lock_path, paste0(lock_path, ".flock")), recursive = TRUE)
     for (name in names(previous)) {
       if (is.na(previous[[name]])) Sys.unsetenv(name) else
         do.call(Sys.setenv, setNames(list(previous[[name]]), name))
@@ -134,9 +134,11 @@ local({
   guard_status <- 1L
   suppressWarnings(with_inference_machine(ensure_inference_machine(url)))
   stopifnot("off" %in% kinds(), dir.exists(lock_path))
+  # The next scope can recover retained state under the process lock.
   calls <- list()
-  fails(with_inference_machine(ensure_inference_machine(url)))
-  stopifnot(length(calls) == 0L)
+  guard_status <- 75L
+  with_inference_machine(ensure_inference_machine(url))
+  stopifnot(!dir.exists(lock_path), kinds()[[1]] == "ssh")
   unlink(lock_path, recursive = TRUE)
   # A reservation release failure leaves both the host and local lock in place.
   calls <- list()
@@ -159,5 +161,81 @@ local({
     stopifnot(!dir.exists(lock_path), !inference_machine_state$active,
               !any(vapply(calls, function(x) any(grepl("verified-guard", unlist(x))), logical(1))))
   }
+  fail_stage <- ""
+  api_ready <- TRUE
+  Sys.unsetenv("INFERENCE_MACHINE_SHUTDOWN_GUARD_COMMAND")
+  # An ambiguous reserve failure still releases its persisted token.
+  batch_status <- 255L
+  calls <- list()
+  fails(with_inference_machine(ensure_inference_machine(url)))
+  stopifnot(!dir.exists(lock_path), any(vapply(calls, function(call) {
+    any(grepl("internal/batches/release/", unlist(call), fixed = TRUE))
+  }, logical(1))))
+  batch_status <- 0L
+  # Legacy/invalid metadata cannot silently clear an unknown reservation.
+  dir.create(lock_path)
+  calls <- list()
+  fails(with_inference_machine(ensure_inference_machine(url)))
+  stopifnot(dir.exists(lock_path), length(calls) == 0L)
+  unlink(lock_path, recursive = TRUE)
+
+  # Exercise real process death and flock contention, with remote calls mocked.
+  for (signal in c(15L, 9L)) {
+    child_ready <- tempfile("inference-child-ready-")
+    child <- parallel::mcparallel({
+      with_inference_machine({
+        ensure_inference_machine(url)
+        file.create(child_ready)
+        Sys.sleep(30)
+      })
+    }, silent = TRUE)
+    deadline <- Sys.time() + 5
+    while (!file.exists(child_ready) && Sys.time() < deadline) Sys.sleep(0.02)
+    stopifnot(file.exists(child_ready))
+    old_owner <- readRDS(file.path(lock_path, "owner.rds"))
+    calls <- list()
+    fails(with_inference_machine(ensure_inference_machine(url)))
+    stopifnot(length(calls) == 0L, dir.exists(lock_path))
+    tools::pskill(child$pid, signal = signal)
+    suppressWarnings(parallel::mccollect(child))
+    unlink(child_ready)
+    # Failed release preserves the exact token for a later retry.
+    batch_release_status <- 255L
+    fails(with_inference_machine(ensure_inference_machine(url)))
+    stopifnot(identical(readRDS(file.path(lock_path, "owner.rds")), old_owner))
+    batch_release_status <- 0L
+    calls <- list()
+    with_inference_machine(ensure_inference_machine(url))
+    stopifnot(
+      !dir.exists(lock_path),
+      grepl(paste0("internal/batches/release/", old_owner$token), calls[[1]][[3]], fixed = TRUE),
+      !"off" %in% kinds()
+    )
+  }
+})
+# SSH may be ready while Proxmox status/start still fails during host boot.
+local({
+  source("r_scripts/lib/nlp_inference/load.R", local = TRUE)
+  config <- inference_machine_config()
+  config$manage_container <- TRUE
+  config$timeout <- 10
+  start_attempts <- 0L
+  inference_machine_api_ready <- function(url) FALSE
+  system2 <- function(...) 0L
+  inference_machine_ssh <- function(target, command, ...) {
+    if (startsWith(command, "state=")) {
+      start_attempts <<- start_attempts + 1L
+      return(if (start_attempts < 3L) 1L else 0L)
+    }
+    0L
+  }
+  # The final API poll is ready; no actual network or power calls occur.
+  health_checks <- 0L
+  inference_machine_api_ready <- function(url) {
+    health_checks <<- health_checks + 1L
+    health_checks > 1L
+  }
+  inference_machine_ready(config)
+  stopifnot(start_attempts == 3L, health_checks == 2L)
 })
 cat("inference machine lifecycle tests passed\n")

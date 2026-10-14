@@ -28,10 +28,21 @@ source(here::here("r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_re
 source(here::here("r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_runtime.R"))
 source(here::here("r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_batch.R"))
 
-backfill_exit_status <- with_inference_machine({
+run_backfill <- function() {
+with_inference_machine({
 load_repo_env(repo_root = here::here())
 
 config <- subtitle_backfill_config()
+subtitle_backfill_start_budget(if (config$dry_run) 0 else config$max_runtime_sec)
+if (!config$dry_run &&
+    !subtitle_backfill_env_bool("SUBTITLE_BACKFILL_MARKERS_MANAGED", FALSE)) {
+  subtitle_backfill_clear_stop_request(config$stop_request_path)
+  subtitle_backfill_mark_active(config$active_marker_path)
+  on.exit({
+    try(subtitle_backfill_clear_active(config$active_marker_path), silent = TRUE)
+    try(subtitle_backfill_clear_stop_request(config$stop_request_path), silent = TRUE)
+  }, add = TRUE)
+}
 
 tracks <- subtitle_backfill_with_reader(
   config$db_path,
@@ -64,6 +75,7 @@ message("Subtitle sentence backfill configuration")
 message("  database: ", config$db_path)
 message("  mode: ", if (config$dry_run) "DRY RUN" else "EXECUTE")
 message("  pipeline version: ", config$pipeline_version)
+message("  runtime budget seconds: ", config$max_runtime_sec)
 message("  selected tracks: ", nrow(tracks))
 message(
   "  max new videos: ",
@@ -78,6 +90,8 @@ message("  per-block attempts: ", config$max_attempts)
 message("  request pause seconds: ", config$request_pause_sec)
 message("  retry failed checkpoints: ", config$retry_failed)
 message("  force reconstruction: ", config$force)
+message("  stop request: ", config$stop_request_path)
+message("  active marker: ", config$active_marker_path)
 
 if (config$dry_run) {
   print(utils::head(
@@ -91,7 +105,9 @@ if (config$dry_run) {
 }
 
 if (nrow(tracks) > 0L) {
+  subtitle_backfill_assert_running(config$stop_request_path)
   ensure_inference_machine(config$punctuation_url)
+  subtitle_backfill_assert_running(config$stop_request_path)
 }
 
 subtitle_backfill_wait_for_collection(
@@ -100,14 +116,17 @@ subtitle_backfill_wait_for_collection(
 )
 pipeline_run_id <- start_subtitle_backfill_run(config$db_path)
 run_finished <- FALSE
+stopped_by_request <- FALSE
 on.exit({
   if (!run_finished) {
     try(
       finish_subtitle_backfill_run(
         config$db_path,
         pipeline_run_id,
-        status = "failed",
-        error_summary = "Backfill process ended before normal completion."
+        status = if (subtitle_backfill_stop_requested(config$stop_request_path)) "cancelled" else "failed",
+        error_summary = if (subtitle_backfill_stop_requested(config$stop_request_path)) {
+          conditionMessage(subtitle_backfill_stop_condition())
+        } else "Backfill process ended before normal completion."
       ),
       silent = TRUE
     )
@@ -125,6 +144,11 @@ examined_tracks <- 0L
 new_videos_started <- 0L
 
 for (track_index in seq_len(nrow(tracks))) {
+  if (subtitle_backfill_stop_requested(config$stop_request_path)) {
+    stopped_by_request <- TRUE
+    message(conditionMessage(subtitle_backfill_stop_condition()))
+    break
+  }
   track <- tracks[track_index, , drop = FALSE]
   label <- paste0(
     "[",
@@ -152,6 +176,9 @@ for (track_index in seq_len(nrow(tracks))) {
 
   track_result <- tryCatch(
     subtitle_backfill_process_track(track, config, pipeline_run_id, label),
+    subtitle_backfill_stop_requested = function(error) {
+      list(status = "cancelled", error = error, examined = FALSE, is_new = FALSE)
+    },
     error = function(error) {
       list(status = "failed", error = error, examined = FALSE, is_new = FALSE)
     }
@@ -162,7 +189,11 @@ for (track_index in seq_len(nrow(tracks))) {
     new_videos_started <- new_videos_started + 1L
   }
 
-  if (identical(track_result$status, "current")) {
+  if (identical(track_result$status, "cancelled")) {
+    stopped_by_request <- TRUE
+    message(label, " - ", conditionMessage(track_result$error))
+    break
+  } else if (identical(track_result$status, "current")) {
     current_tracks <- current_tracks + 1L
     message(label, " - already current; skipped")
   } else if (identical(track_result$status, "published")) {
@@ -220,7 +251,11 @@ summary_text <- paste0(
   "; requested_blocks=",
   requested_blocks,
   "; reused_blocks=",
-  reused_blocks
+  reused_blocks,
+  "; stopped_by_request=",
+  tolower(as.character(stopped_by_request)),
+  "; runtime_budget_reached=",
+  tolower(as.character(subtitle_backfill_deadline_reached()))
 )
 if (length(failure_messages) > 0L) {
   summary_text <- paste(
@@ -230,14 +265,22 @@ if (length(failure_messages) > 0L) {
   )
 }
 summary_text <- substr(summary_text, 1L, 1000L)
-subtitle_backfill_wait_for_collection(
-  config$collection_marker,
-  "finishing the backfill run"
-)
+if (!stopped_by_request) {
+  subtitle_backfill_wait_for_collection(
+    config$collection_marker,
+    "finishing the backfill run"
+  )
+}
 finish_subtitle_backfill_run(
   config$db_path,
   pipeline_run_id,
-  status = if (failed_tracks == 0L) "completed" else "failed",
+  status = if (stopped_by_request) {
+    "cancelled"
+  } else if (failed_tracks == 0L) {
+    "completed"
+  } else {
+    "failed"
+  },
   error_summary = summary_text
 )
 run_finished <- TRUE
@@ -248,4 +291,12 @@ message("Subtitle sentence backfill finished: ", summary_text)
 if (failed_tracks > 0L) 1L else 0L
 
 })
+}
+backfill_exit_status <- tryCatch(
+  run_backfill(),
+  subtitle_backfill_stop_requested = function(error) {
+    message(conditionMessage(error))
+    0L
+  }
+)
 quit(save = "no", status = backfill_exit_status)

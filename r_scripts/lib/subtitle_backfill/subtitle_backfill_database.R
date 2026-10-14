@@ -1,49 +1,15 @@
 # Short-lived DuckDB writes and pipeline-run bookkeeping for subtitle backfills.
 
-subtitle_backfill_with_writer <- function(
-    db_path,
-    operation,
-    connection_attempts = 12L,
-    retry_delay_sec = 5) {
-  last_error <- NULL
-  for (attempt in seq_len(connection_attempts)) {
-    con <- NULL
-    result <- tryCatch(
-      {
-        con <- duckdb_connect(db_path = db_path, read_only = FALSE)
-        value <- operation(con)
-        DBI::dbDisconnect(con, shutdown = TRUE)
-        con <- NULL
-        list(ok = TRUE, value = value)
-      },
-      error = function(error) list(ok = FALSE, error = error)
-    )
-    if (!is.null(con)) {
-      suppressWarnings(try(DBI::dbDisconnect(con, shutdown = TRUE), silent = TRUE))
-    }
-    if (isTRUE(result$ok)) return(result$value)
+source(here::here("r_scripts", "lib", "subtitle_backfill", "subtitle_backfill_access.R"), local = TRUE)
 
-    last_error <- result$error
-    if (!grepl("Could not set lock|Conflicting lock|database is locked",
-               conditionMessage(last_error), ignore.case = TRUE)) {
-      stop(conditionMessage(last_error), call. = FALSE)
-    }
-    if (attempt < connection_attempts) {
-      message(
-        "DuckDB write attempt ",
-        attempt,
-        "/",
-        connection_attempts,
-        " failed: ",
-        conditionMessage(last_error),
-        "; retrying in ",
-        retry_delay_sec,
-        " seconds."
-      )
-      Sys.sleep(retry_delay_sec)
-    }
-  }
-  stop(conditionMessage(last_error), call. = FALSE)
+subtitle_backfill_with_writer <- function(
+    db_path, operation, connection_attempts = 12L, retry_delay_sec = 5,
+    honor_stop = TRUE) {
+  subtitle_backfill_with_connection(
+    db_path, operation, read_only = FALSE,
+    connection_attempts = connection_attempts, retry_delay_sec = retry_delay_sec,
+    honor_stop = honor_stop
+  )
 }
 
 start_subtitle_backfill_run <- function(db_path) {
@@ -123,7 +89,7 @@ finish_subtitle_backfill_attempt <- function(
   } else {
     NA_character_
   }
-  error_summary <- if (identical(track_result$status, "failed")) {
+  error_summary <- if (track_result$status %in% c("failed", "cancelled")) {
     substr(conditionMessage(track_result$error), 1L, 1000L)
   } else {
     NA_character_
@@ -136,7 +102,7 @@ finish_subtitle_backfill_attempt <- function(
     as.integer(value[[1]])
   }
 
-  subtitle_backfill_with_writer(db_path, function(con) {
+  subtitle_backfill_with_writer(db_path, honor_stop = FALSE, operation = function(con) {
     DBI::dbExecute(
       con,
       paste(
@@ -147,7 +113,9 @@ finish_subtitle_backfill_attempt <- function(
       ),
       params = list(
         as.POSIXct(Sys.time(), tz = "UTC"),
-        as.character(track_result$status),
+        # Existing lakehouses constrain attempt status; retain the stop reason
+        # in error_summary and mark the overall batch cancelled, without migration.
+        if (identical(track_result$status, "cancelled")) "failed" else as.character(track_result$status),
         metric("sentences"),
         metric("blocks"),
         metric("requested_blocks"),
@@ -166,7 +134,7 @@ finish_subtitle_backfill_run <- function(
     pipeline_run_id,
     status,
     error_summary = NA_character_) {
-  subtitle_backfill_with_writer(db_path, function(con) {
+  subtitle_backfill_with_writer(db_path, honor_stop = FALSE, operation = function(con) {
     DBI::dbExecute(
       con,
       paste(

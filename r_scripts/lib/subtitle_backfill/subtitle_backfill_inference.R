@@ -37,7 +37,8 @@ subtitle_backfill_infer_blocks <- function(
     request_pause_sec,
     retry_failed,
     force,
-    punctuate_fn) {
+    punctuate_fn,
+    stop_requested_fn = function() FALSE) {
   sentence_results <- vector("list", nrow(blocks))
   checkpoint_attempts <- integer()
   local_checkpoints <- checkpoint_state$local
@@ -45,6 +46,9 @@ subtitle_backfill_infer_blocks <- function(
   requested_blocks <- 0L
 
   for (block_index in seq_len(nrow(blocks))) {
+    if (isTRUE(stop_requested_fn())) {
+      stop(subtitle_backfill_stop_condition())
+    }
     block <- blocks[block_index, , drop = FALSE]
     block_checksum <- subtitle_sentence_hash(block$model_input_text[[1]])
     block_key <- subtitle_backfill_block_key(
@@ -112,6 +116,9 @@ subtitle_backfill_infer_blocks <- function(
 
     block_complete <- FALSE
     for (attempt in seq.int(prior_attempts + 1L, max_attempts)) {
+      if (isTRUE(stop_requested_fn())) {
+        stop(subtitle_backfill_stop_condition())
+      }
       message(
         "  block ",
         block_index,
