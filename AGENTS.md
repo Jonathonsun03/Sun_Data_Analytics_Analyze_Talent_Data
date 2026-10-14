@@ -48,6 +48,16 @@
 - Prefer small, high-confidence edits.
 - Do not move or rename major files unless explicitly asked.
 
+## Modular code structure
+- Keep executable scripts thin: load configuration, call named library operations, and report results. Put implementation in the relevant language's `lib/` subsystem.
+- Give each module one coherent responsibility. Separate configuration, API/transport calls, machine lifecycle, persistence, transformation, and orchestration when they change or are tested independently.
+- Do not accumulate a subsystem in a generic `utils` file. Create or extend a named library under the existing `lib/` tree, with a README mapping responsibilities and its public entrypoint.
+- Aim for modules under 200 lines and functions under 60 lines. Before crossing either threshold, extract cohesive operations; if splitting would obscure a single algorithm, document the concrete exception in the subsystem README. These are design review thresholds, not a reason to compress code or create arbitrary fragments.
+- When extending an already long script, extract the responsibility being changed instead of adding another large inline block. Keep unrelated refactoring out of scope.
+- Keep module dependencies explicit and acyclic. Loaders should only load definitions, never start jobs, call services, or mutate runtime state outside their local in-memory setup.
+- Preserve public interfaces during refactoring where practical; compatibility files must remain thin forwarding loaders without duplicate implementation.
+- Validate module boundaries with the smallest relevant behavioral checks, including error/cleanup paths when moving lifecycle code.
+
 ## Required context before editing
 - Before changing files, read the repository-level `AGENTS.md` and any more specific `AGENTS.md` files in the target path.
 - Before editing a file, look for relevant READMEs from the repository root down to the file's directory. Read the nearest README first, then any parent READMEs that explain the subsystem.

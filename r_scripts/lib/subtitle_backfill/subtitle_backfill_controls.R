@@ -85,6 +85,7 @@ subtitle_backfill_clear_marker <- function(path, label) {
   }
   invisible(TRUE)
 }
+
 subtitle_backfill_clear_stop_request <- function(path) {
   subtitle_backfill_clear_marker(path, "stop request")
 }
