@@ -11,6 +11,7 @@ SCRIPT_REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(SCRIPT_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_REPO_ROOT))
 
+from py_scripts.lib.talent_lifecycle.policy import require_path_allowed
 from py_scripts.lib.qualitative_coding.codebook import CodeDef, hierarchy_pairs, load_codebook, resolve_codebook
 from py_scripts.lib.qualitative_coding.csv_io import read_csv_dicts, write_csv_dicts
 from py_scripts.lib.qualitative_coding.prepared_transcripts import (
@@ -112,6 +113,7 @@ def apply_patch_to_file(
     reprocess: bool,
     smoke_copy: bool,
 ) -> TargetFile:
+    require_path_allowed(target)
     expected = [code.code_column for code in code_defs]
     original_fields, rows = read_csv_dicts(target)
     fields = list(original_fields)

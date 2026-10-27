@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import sys
 import csv
 import json
 import math
@@ -17,6 +18,10 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 DATA_ROOT = Path("/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data")
 REPO_ROOT = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(REPO_ROOT))
+from py_scripts.lib.utils.env import load_repo_env
+from py_scripts.lib.talent_lifecycle.policy import allowed, require_path_allowed
+load_repo_env(REPO_ROOT)
 PROMPT_SPEC_PATH = REPO_ROOT / "prompts" / "Monetary_analysis" / "monetary_summary_classification"
 SKIP_DIRS = {"VarianceProject"}
 WINDOW_BEFORE_SEC = 90.0
@@ -230,6 +235,8 @@ def load_existing_code_labels(path: Path) -> set[str]:
 def detect_talents() -> List[Path]:
     talents: List[Path] = []
     for talent_dir in sorted(DATA_ROOT.iterdir()):
+        if not allowed(talent_dir.name):
+            continue
         if not talent_dir.is_dir():
             continue
         if talent_dir.name in SKIP_DIRS:
@@ -1207,6 +1214,7 @@ def verify_quote(file_path: str, file_line: int, quote: str) -> bool:
 
 
 def process_talent(talent_dir: Path, prompt_text: str) -> dict:
+    require_path_allowed(talent_dir)
     talent_name = talent_dir.name
     inventory = build_video_inventory(talent_dir)
     all_video_ids = sorted(inventory)

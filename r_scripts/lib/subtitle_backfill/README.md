@@ -126,3 +126,11 @@ request; remaining comparisons use mock responses. Live mode requires an already
 available API. Audit results are diagnostic only, not publishable coding or
 speaker-turn results. Redirect logs to a DataLake output location when retaining
 or comparing runs across machines.
+
+## Per-talent processing pause
+
+The shared lifecycle policy filters paused talent codes at discovery and rechecks
+between videos, punctuation blocks, speaker comparisons/retries, and before
+publication. A pause preserves checkpoints and drains the current batch safely.
+The next run skips paused talents. Archive alone does not pause this workflow.
+Read `py_scripts/lib/talent_lifecycle/README.md` for the shared mount setup.

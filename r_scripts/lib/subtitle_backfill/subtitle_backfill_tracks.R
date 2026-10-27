@@ -1,3 +1,5 @@
+source(here::here("r_scripts", "lib", "talent_lifecycle", "policy.R"))
+
 # Track discovery, loading, and current-result checks for subtitle backfills.
 
 subtitle_backfill_scalar_text <- function(value) {
@@ -88,7 +90,7 @@ list_subtitle_backfill_tracks <- function(
     "|| chr(31) || COALESCE(CAST(subtitle.subtitle_track_type AS VARCHAR), '<NA>')"
   )
 
-  DBI::dbGetQuery(
+  tracks <- DBI::dbGetQuery(
     con,
     paste(
       "WITH track AS (",
@@ -115,6 +117,7 @@ list_subtitle_backfill_tracks <- function(
     ),
     params = parameters
   )
+  talent_processing_filter(tracks)
 }
 
 load_subtitle_track_for_backfill <- function(

@@ -12,6 +12,10 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+from py_scripts.lib.talent_lifecycle.batches import require_manifest_allowed
+
+
 API_BASE = "https://api.openai.com"
 
 
@@ -121,8 +125,10 @@ def main() -> int:
     if not api_key:
         raise SystemExit("OPENAI_API_KEY is not set. Export it before running with --execute.")
 
+    require_manifest_allowed(manifest)
     upload = upload_file(batch_input_path, api_key)
     input_file_id = str(upload["id"])
+    require_manifest_allowed(manifest)
     batch = api_request(
         "POST",
         "/v1/batches",

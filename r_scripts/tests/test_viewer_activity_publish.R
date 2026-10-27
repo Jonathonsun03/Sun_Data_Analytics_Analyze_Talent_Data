@@ -182,4 +182,37 @@ run_status <- DBI::dbGetQuery(
 )$status
 assert_equal(run_status, "completed", "Pipeline run was not completed.")
 
-message("Viewer activity publication tests passed.")
+test_pause_preserves_results <- function() {
+  root <- tempfile("talent-controls-")
+  dir.create(root)
+  old_root <- Sys.getenv("TALENT_CONTROL_ROOT", unset = NA_character_)
+  on.exit({
+    if (is.na(old_root)) Sys.unsetenv("TALENT_CONTROL_ROOT") else Sys.setenv(TALENT_CONTROL_ROOT = old_root)
+    unlink(root, recursive = TRUE)
+  }, add = TRUE)
+  Sys.setenv(TALENT_CONTROL_ROOT = root)
+  record <- list(version = 1L, talent_code = "T1", revision = 1L,
+                 retrieval_enabled = TRUE, processing_enabled = FALSE,
+                 channel_ids = list("C1"), aliases = list("Talent One"))
+  path <- file.path(root, "T1.json")
+  jsonlite::write_json(record, path, auto_unbox = TRUE)
+  before <- DBI::dbGetQuery(con, "SELECT * FROM analysis.viewer_profiles WHERE talent_code = 'T1' ORDER BY user_id")
+  DBI::dbExecute(con, paste(
+    "INSERT INTO text.chat_messages VALUES",
+    "('M7', 'T1', 'C1', 'V1', 'U1', 'Viewer One', 'text_message', 40),",
+    "('M8', 'T2', 'C2', 'V3', 'U1', 'Viewer One', 'text_message', 40)"
+  ))
+  publish_viewer_activity(con, memberships, "fixture-checksum", dry_run = FALSE)
+  after <- DBI::dbGetQuery(con, "SELECT * FROM analysis.viewer_profiles WHERE talent_code = 'T1' ORDER BY user_id")
+  assert_equal(after, before, "Paused talent results changed or disappeared.")
+  active <- DBI::dbGetQuery(con, "SELECT total_messages FROM analysis.viewer_profiles WHERE talent_code = 'T2' AND user_id = 'U1'")
+  assert_equal(active$total_messages, 2, "Active talent did not refresh.")
+  record$processing_enabled <- TRUE
+  record$revision <- 2L
+  jsonlite::write_json(record, path, auto_unbox = TRUE)
+  publish_viewer_activity(con, memberships, "fixture-checksum", dry_run = FALSE)
+  resumed <- DBI::dbGetQuery(con, "SELECT total_messages FROM analysis.viewer_profiles WHERE talent_code = 'T1' AND user_id = 'U1'")
+  assert_equal(resumed$total_messages, 4, "Resumed talent did not catch up.")
+}
+test_pause_preserves_results()
+message("Viewer activity publication and pause/resume tests passed.")

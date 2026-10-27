@@ -177,6 +177,7 @@ if [[ -n "$TALENT_SCOPE" || "$HAS_WINDOW_SCOPE" -eq 1 || -n "$PROFILE_DAYS" || "
 fi
 
 cd "$REPO"
+python3 "$REPO/py_scripts/run/check_talent_processing.py" --talent "${TALENT_SCOPE:-}"
 
 echo "Checking repo updates..."
 git pull --ff-only || true

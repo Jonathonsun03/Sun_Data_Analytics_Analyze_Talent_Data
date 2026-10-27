@@ -254,3 +254,10 @@ or shutdown was accepted; 75 means busy, unverified, or inconclusive. A shutdown
 attempt with uncertain/failing results returns 1 so R retains its reservation.
 A host-wide nonblocking file lock prevents concurrent guards from racing. This
 does not itself track service jobs; the coordinator provides that evidence.
+
+## Talent lifecycle controls
+
+The shared policy and atomic writer live in `lib/talent_lifecycle/`; read its
+README for deployment, coverage, and limits. The internal admin dashboard uses
+`run/talent_control.py`. Archive and processing pause are separate; removal is
+a later explicitly scoped operation. No production switch is enabled by default.

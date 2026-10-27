@@ -150,6 +150,7 @@ for (track_index in seq_len(nrow(tracks))) {
     break
   }
   track <- tracks[track_index, , drop = FALSE]
+  if (!talent_work_allowed(track$talent_code[[1]])) next
   label <- paste0(
     "[",
     track_index,
@@ -176,6 +177,9 @@ for (track_index in seq_len(nrow(tracks))) {
 
   track_result <- tryCatch(
     subtitle_backfill_process_track(track, config, pipeline_run_id, label),
+    talent_processing_paused = function(error) {
+      list(status = "cancelled", error = error, examined = FALSE, is_new = FALSE)
+    },
     subtitle_backfill_stop_requested = function(error) {
       list(status = "cancelled", error = error, examined = FALSE, is_new = FALSE)
     },

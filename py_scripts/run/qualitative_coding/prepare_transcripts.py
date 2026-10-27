@@ -10,6 +10,7 @@ SCRIPT_REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(SCRIPT_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_REPO_ROOT))
 
+from py_scripts.lib.talent_lifecycle.policy import require_path_allowed
 from py_scripts.lib.qualitative_coding.codebook import load_codebook, resolve_codebook
 from py_scripts.lib.qualitative_coding.csv_io import read_csv_dicts, write_csv_dicts
 from py_scripts.lib.utils.paths import TalentPaths, default_talent_root, resolve_talent_paths, talent_slugify, translate_datalake_path
@@ -153,6 +154,7 @@ def main() -> int:
         ]
 
     for talent, source_path in source_pairs:
+        require_path_allowed(source_path)
         if not selected_sources:
             total_sources += 1
         else:

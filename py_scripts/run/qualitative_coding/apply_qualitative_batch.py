@@ -14,6 +14,7 @@ SCRIPT_REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(SCRIPT_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_REPO_ROOT))
 
+from py_scripts.lib.talent_lifecycle.policy import require_path_allowed
 from py_scripts.lib.qualitative_coding.csv_io import read_csv_dicts, write_csv_dicts
 from py_scripts.lib.qualitative_coding.prepared_transcripts import row_id_for
 from py_scripts.lib.qualitative_coding.review import (
@@ -261,10 +262,15 @@ def main() -> int:
         print(f"preview_csv: {preview_path}")
         return 1
 
+    # Validate every member before changing the first file in a mixed batch.
+    for csv_path_text in grouped:
+        require_path_allowed(Path(csv_path_text))
+
     for csv_path_text, patch_rows in grouped.items():
         if not csv_path_text:
             raise SystemExit("Review CSV contains a blank csv_path.")
         csv_path = Path(csv_path_text)
+        require_path_allowed(csv_path)
         if not csv_path.exists():
             raise SystemExit(f"Target transcript CSV not found: {csv_path}")
         output_fields, output_rows, changed = apply_group(csv_path, patch_rows, code_columns, preview_rows)

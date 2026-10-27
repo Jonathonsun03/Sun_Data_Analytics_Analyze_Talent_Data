@@ -206,6 +206,8 @@ if (length(failed) > 0L && !allow_failures) {
   stop("Batch validation failed; no results were written. See: ", summary_path)
 }
 
+for (item in validated) talent_assert_processing(unique(item$rows$talent_code))
+
 pipeline_run_id <- manifest$pipeline_run_id
 register_title_classification_run(con, pipeline_run_id)
 inserted_total <- 0L

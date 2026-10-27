@@ -11,6 +11,7 @@ This workflow:
 
 from __future__ import annotations
 
+import sys
 import csv
 import glob
 import json
@@ -26,6 +27,10 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 DATA_ROOT = Path("/mnt/datalake/DataLake/Sun_Data_Analytics/Talent_data")
 REPO_ROOT = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(REPO_ROOT))
+from py_scripts.lib.utils.env import load_repo_env
+from py_scripts.lib.talent_lifecycle.policy import allowed, require_path_allowed
+load_repo_env(REPO_ROOT)
 PROMPT_SPEC_PATH = Path(
     os.environ.get(
         "SUMMARY_CLASSIFICATION_PROMPT_FILE",
@@ -407,6 +412,8 @@ def compile_any(patterns: Sequence[str]) -> List[re.Pattern[str]]:
 def discover_talents() -> List[Path]:
     if TALENT_SLUG:
         scoped_path = DATA_ROOT / TALENT_SLUG
+        if not allowed(scoped_path.name):
+            return []
         if scoped_path.name in SKIP_DIRS:
             return []
         if scoped_path.is_dir() and (scoped_path / "stream_summaries").is_dir():
@@ -415,6 +422,8 @@ def discover_talents() -> List[Path]:
 
     talents = []
     for path in sorted(DATA_ROOT.iterdir()):
+        if not allowed(path.name):
+            continue
         if not path.is_dir():
             continue
         if path.name in SKIP_DIRS:
@@ -1141,6 +1150,7 @@ def verify_example_line(example: Example) -> bool:
 
 
 def process_talent(talent_dir: Path, prompt_text: str) -> dict:
+    require_path_allowed(talent_dir)
     talent_name = talent_dir.name
     tokens = derive_streamer_tokens(talent_name)
     inventory, raw_only_ids = build_inventory(talent_dir)

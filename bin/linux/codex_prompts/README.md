@@ -245,3 +245,10 @@ Codex-driven wrappers also write a final-message markdown file alongside the `.l
 
 Keep only the categorized scripts in this directory tree as the maintained entry points.
 Use dedicated workflow folders, such as `streamer_personality_pipeline/`, for multi-step runners that coordinate scripts from more than one category.
+
+## Processing controls
+
+Prompt wrappers check the shared lifecycle policy before launching Codex. If any
+talent is paused, an unscoped launch is blocked; select an enabled talent with
+`--talent` instead. Already-running Codex jobs may complete. See the lifecycle
+subsystem README for the cooperative boundaries and deployment requirements.

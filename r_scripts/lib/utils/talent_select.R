@@ -1,6 +1,8 @@
 library(dplyr)
 library(stringr)
 
+source(here::here("r_scripts", "lib", "talent_lifecycle", "policy.R"))
+
 EXCLUDED_TALENT_FOLDERS <- c(
   "VarianceProject",
   "subtitle_analysis",
@@ -98,6 +100,7 @@ list_talents <- function(root = get_staging_root(), include_excluded = FALSE) {
       filter(!(name %in% EXCLUDED_TALENT_FOLDERS))
   }
 
+  talents <- talent_processing_filter(talents, "name")
   talents %>%
     arrange(name)
 }

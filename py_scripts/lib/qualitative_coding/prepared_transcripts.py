@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+from py_scripts.lib.talent_lifecycle.policy import require_path_allowed
+
 from .csv_io import read_csv_dicts
 from .text import is_missing, squish
 from py_scripts.lib.utils.paths import TalentPaths, translate_datalake_path
@@ -21,6 +23,7 @@ class TargetFile:
 def list_prepared_transcript_files(talents: Iterable[TalentPaths]) -> list[Path]:
     files: list[Path] = []
     for talent in talents:
+        require_path_allowed(talent.talent_path)
         if talent.qualitative_prep_dir.exists():
             files.extend(sorted(talent.qualitative_prep_dir.glob("*.csv")))
     return files
@@ -50,6 +53,7 @@ def row_needs_coding(row: dict[str, str], code_columns: list[str], missing_colum
 
 
 def inspect_target(path: Path, code_columns: list[str]) -> TargetFile:
+    require_path_allowed(path)
     fieldnames, rows = read_csv_dicts(path)
     missing_columns = tuple(col for col in code_columns if col not in fieldnames)
     pending = 0

@@ -1,3 +1,5 @@
+source(here::here("r_scripts", "lib", "talent_lifecycle", "policy.R"))
+
 qualitative_required_packages <- function() {
   required <- c("data.table", "DBI", "digest", "dplyr", "purrr", "stringr")
   missing <- required[
@@ -910,6 +912,7 @@ publish_qualitative_coding_dataset <- function(
     ))
   }
 
+  talent_assert_processing(unique(transcripts$talent_code))
   DBI::dbBegin(con)
   committed <- FALSE
   on.exit({

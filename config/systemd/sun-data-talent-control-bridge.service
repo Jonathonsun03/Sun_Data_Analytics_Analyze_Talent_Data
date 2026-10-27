@@ -1,0 +1,30 @@
+[Unit]
+Description=Authenticated talent lifecycle origin bridge
+After=network-online.target tailscaled.service
+Wants=network-online.target
+AssertPathIsMountPoint=/mnt/storage/local/hdd01
+AssertPathIsDirectory=/mnt/storage/local/hdd01/DataLake/Sun_Data_Analytics/Talent_data/Controls/talents
+
+[Service]
+Type=simple
+User=sun-data-lifecycle
+Group=sun-data-lifecycle
+WorkingDirectory=/home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data
+EnvironmentFile=/etc/sun-data/talent-control-bridge.env
+ExecStart=/home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/.venv/bin/python py_scripts/run/talent_control_bridge.py
+Restart=on-failure
+RestartSec=5
+UMask=0027
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/mnt/storage/local/hdd01/DataLake/Sun_Data_Analytics/Talent_data/Controls/talents
+ReadOnlyPaths=/mnt/storage/local/hdd01/DataLake/Sun_Data_Analytics/Talent_data/Data_lakehouse
+PrivateTmp=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+InaccessiblePaths=-/home/jonathon/.ssh -/home/jonathon/.config -/mnt/storage/local/hdd01/secrets
+InaccessiblePaths=-/home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Analyze_Talent_Data/.env
+InaccessiblePaths=-/home/jonathon/sun_data_analytics_projects/Sun_Data_Analytics_Talent_Repo/.env
+
+[Install]
+WantedBy=multi-user.target

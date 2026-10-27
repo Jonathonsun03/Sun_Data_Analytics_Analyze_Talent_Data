@@ -1,3 +1,5 @@
+source(here::here("r_scripts", "lib", "talent_lifecycle", "policy.R"))
+
 viewer_activity_new_run_id <- function(now = Sys.time()) {
   paste0(
     "viewer_activity_",
@@ -89,7 +91,8 @@ viewer_activity_video_insert_sql <- function() {
    FROM text.chat_messages AS chat
    JOIN catalog.videos AS video
      USING (talent_code, channel_id, video_id)
-   WHERE chat.user_id IS NOT NULL
+   WHERE chat.talent_code NOT IN (SELECT talent_code FROM viewer_activity_paused_talents)
+     AND chat.user_id IS NOT NULL
      AND LENGTH(TRIM(chat.user_id)) > 0
      AND COALESCE(video.actual_start_at, video.published_at) IS NOT NULL
    GROUP BY
@@ -207,7 +210,8 @@ viewer_activity_profile_insert_sql <- function() {
    FROM profile_rollup AS profile
    LEFT JOIN latest_subscriptions AS subscription
      ON subscription.talent_code = profile.talent_code
-    AND subscription.subscriber_channel_id = profile.user_id"
+    AND subscription.subscriber_channel_id = profile.user_id
+   WHERE profile.talent_code NOT IN (SELECT talent_code FROM viewer_activity_paused_talents)"
 }
 
 viewer_activity_company_profile_insert_sql <- function() {
@@ -353,6 +357,13 @@ publish_viewer_activity <- function(
     con,
     company_memberships
   )
+  paused <- talent_paused_codes()
+  duckdb::duckdb_register(
+    con,
+    "viewer_activity_paused_talents",
+    data.frame(talent_code = paused)
+  )
+  on.exit(duckdb::duckdb_unregister(con, "viewer_activity_paused_talents"), add = TRUE)
   summary <- viewer_activity_source_summary(con, memberships)
   if (isTRUE(dry_run)) {
     return(list(
@@ -386,8 +397,14 @@ publish_viewer_activity <- function(
 
       DBI::dbExecute(con, "DELETE FROM analysis.company_viewer_profiles")
       DBI::dbExecute(con, "DELETE FROM analysis.global_viewer_profiles")
-      DBI::dbExecute(con, "DELETE FROM analysis.viewer_profiles")
-      DBI::dbExecute(con, "DELETE FROM analysis.viewer_video_activity")
+      DBI::dbExecute(con, paste(
+        "DELETE FROM analysis.viewer_profiles WHERE talent_code NOT IN",
+        "(SELECT talent_code FROM viewer_activity_paused_talents)"
+      ))
+      DBI::dbExecute(con, paste(
+        "DELETE FROM analysis.viewer_video_activity WHERE talent_code NOT IN",
+        "(SELECT talent_code FROM viewer_activity_paused_talents)"
+      ))
 
       DBI::dbExecute(
         con,

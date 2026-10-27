@@ -825,6 +825,7 @@ suppressPackageStartupMessages({
 source(here::here("r_scripts", "lib", "utils", "repo_env.R"))
 source(here::here("r_scripts", "lib", "utils", "datalake_root.r"))
 source(here::here("r_scripts", "lib", "duckdb", "db_connect.R"))
+source(here::here("r_scripts", "lib", "talent_lifecycle", "dashboard.R"))
 source(
   here::here(
     "r_scripts",
@@ -1137,7 +1138,7 @@ div(
   class = "admin-global-toolbar",
   actionButton("refresh_dashboard", "Refresh dashboard", class = "btn-primary"),
   uiOutput("database_freshness"),
-  tags$span(class = "admin-note", "Read-only administration")
+  tags$span(class = "admin-note", "Read-only data; optional talent controls")
 )
 ```
 
@@ -1327,6 +1328,7 @@ tags$div(
     "processing_admin_view",
     c(
       "Summary" = "summary",
+      "Talent Controls" = "talent_controls",
       "Transcript Processes" = "transcripts",
       "Transcript Lookup" = "transcript_lookup",
       "Pipeline Activity" = "activity"
@@ -1345,6 +1347,12 @@ tags$div(
         uiOutput("processing_latest_pull_success")
       )
     )
+  ),
+  admin_view_panel(
+    "processing_admin_view",
+    "talent_controls",
+    admin_panel("Talent Controls", "Separate retrieval and processing controls; no data deletion.",
+                talent_control_ui())
   ),
   admin_view_panel(
     "processing_admin_view",
@@ -1622,6 +1630,8 @@ tags$div(
 #| context: server
 #| include: false
 
+
+talent_control_server(input, output, session, raw_admin_database_path)
 
 transcript_runs <- reactive({
   input$refresh_dashboard

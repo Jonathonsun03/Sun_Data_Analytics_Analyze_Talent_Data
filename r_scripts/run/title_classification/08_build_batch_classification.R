@@ -119,6 +119,7 @@ custom_id_map <- list()
 prompt_profiles <- list()
 if (nrow(pending) > 0L) {
   for (talent_code in unique(pending$talent_code)) {
+    talent_assert_processing(talent_code)
     talent_rows <- pending[pending$talent_code == talent_code, , drop = FALSE]
     prompt_bundle <- load_title_prompt_bundle(
       con,

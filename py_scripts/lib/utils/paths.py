@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from py_scripts.lib.utils.env import load_repo_env
+from py_scripts.lib.talent_lifecycle.policy import allowed
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -121,6 +122,8 @@ def resolve_talent_paths(
     talents: list[TalentPaths] = []
     missing_text: list[str] = []
     for talent_path in sorted(matches):
+        if not allowed(talent_path.name):
+            continue
         text_playback_path = talent_path / "text_playback"
         if must_have_text_playback and not text_playback_path.exists():
             missing_text.append(talent_path.name)

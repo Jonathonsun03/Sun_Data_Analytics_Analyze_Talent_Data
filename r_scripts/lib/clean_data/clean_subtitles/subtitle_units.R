@@ -1,3 +1,5 @@
+source(here::here("r_scripts", "lib", "talent_lifecycle", "policy.R"))
+
 build_ena_units_from_clean_df <- function(df, pause_gap_sec = 2.0) {
   required_cols <- c("start_sec", "stop_sec", "Text")
   missing_cols <- setdiff(required_cols, names(df))
@@ -721,6 +723,7 @@ reconstruct_sentence_units <- function(
   with_inference_machine({
   results <- vector("list", nrow(blocks))
   for (i in seq_len(nrow(blocks))) {
+    talent_assert_processing(blocks$talent_name[[i]])
     block <- blocks[i, , drop = FALSE]
     if (!subtitle_language_is_english(
       block$subtitle_language[[1]],

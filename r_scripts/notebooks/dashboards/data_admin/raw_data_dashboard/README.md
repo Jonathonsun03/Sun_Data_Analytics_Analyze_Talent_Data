@@ -171,3 +171,13 @@ Speaker-turn groupings prefer `inferred_speaker_turn_id` and fall back to the
 source-caption `speaker_turn_id`. They identify stored conversational
 boundaries, not verified speaker identities, so the interface labels them as
 numbered turns rather than assigning people or names.
+
+## Optional talent controls
+
+Processing → Talent Controls adds Archive/Restore retrieval and Pause/Resume
+processing. Data and lakehouse access remain read-only. This is an explicit
+exception to the read-only administration UI: writes are confined to the shared
+control directory, through the Python writer, when `TALENT_CONTROL_UI_ENABLED=true`.
+See `py_scripts/lib/talent_lifecycle/README.md` for deployment steps and limits.
+The UI reports requested policy; it does not claim that every remote job has
+acknowledged a pause. There is no data-deletion action.

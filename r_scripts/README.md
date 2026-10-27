@@ -253,3 +253,10 @@ The host-side guard implementation is now available at
 for its coordinator contract, tests, and deployment layout. It remains disabled
 until service coverage and batch reservations are verified; the example config
 intentionally refuses shutdown. No production server or power state was changed.
+
+## Talent lifecycle controls
+
+`lib/talent_lifecycle/` contains the shared-control reader and internal dashboard
+adapter. Archive affects retrieval only; pause affects processing. See the Python
+lifecycle subsystem README for the single contract and container setup. Keep
+paused per-talent derived rows when refreshing active talents.

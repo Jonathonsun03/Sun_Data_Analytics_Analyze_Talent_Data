@@ -1,3 +1,5 @@
+source(here::here("r_scripts", "lib", "talent_lifecycle", "policy.R"))
+
 title_classification_connect <- function(db_path = NULL, read_only = FALSE) {
   if (is.null(db_path) || !nzchar(db_path)) {
     db_path <- talent_lakehouse_db_path()
@@ -347,6 +349,10 @@ list_pending_title_classifications <- function(
     params <- c(params, list(version$title_version_id[[1]]))
   }
 
+  for (code in talent_paused_codes()) {
+    where_parts <- c(where_parts, "video.talent_code <> ?")
+    params <- c(params, list(code))
+  }
   limit_sql <- ""
   if (!is.na(limit) && limit > 0L) {
     limit_sql <- sprintf(" LIMIT %d", as.integer(limit))
@@ -362,7 +368,8 @@ list_pending_title_classifications <- function(
     " ORDER BY video.talent_code, video.published_at, video.video_id",
     limit_sql
   )
-  DBI::dbGetQuery(con, sql, params = params)
+  rows <- DBI::dbGetQuery(con, sql, params = params)
+  talent_processing_filter(rows)
 }
 
 insert_title_classification_results <- function(
@@ -386,6 +393,7 @@ insert_title_classification_results <- function(
   inserted <- 0L
 
   for (i in seq_len(nrow(rows))) {
+    talent_assert_processing(rows$talent_code[[i]])
     exists <- DBI::dbGetQuery(
       con,
       "SELECT EXISTS (

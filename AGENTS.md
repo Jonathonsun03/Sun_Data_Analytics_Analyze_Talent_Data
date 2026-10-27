@@ -91,3 +91,9 @@
 - Treat previously generated analysis outputs as read-only unless the current task explicitly targets them.
 - Do not use generated outputs as primary evidence for new analysis unless the user explicitly requests a comparison or audit.
 - When a task defines completion by output files, check for those files first and skip completed units of work unless asked to rerun them.
+
+## Talent lifecycle controls
+- Archive disables retrieval only; pause disables downstream processing only. Neither deletes data.
+- Read `py_scripts/lib/talent_lifecycle/README.md` before changing lifecycle behavior.
+- New maintained workers must check the shared policy before work and at safe checkpoints.
+- Do not reuse catalog visibility or client permissions as processing state.

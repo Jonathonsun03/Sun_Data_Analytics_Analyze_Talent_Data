@@ -3,6 +3,8 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
+from py_scripts.lib.talent_lifecycle.policy import require_path_allowed
+
 
 def read_csv_dicts(path: Path) -> tuple[list[str], list[dict[str, str]]]:
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
@@ -13,6 +15,7 @@ def read_csv_dicts(path: Path) -> tuple[list[str], list[dict[str, str]]]:
 
 
 def write_csv_dicts(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> None:
+    require_path_allowed(path)
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()

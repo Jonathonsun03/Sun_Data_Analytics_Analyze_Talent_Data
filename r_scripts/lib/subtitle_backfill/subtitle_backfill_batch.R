@@ -1,6 +1,7 @@
 # Load and process one candidate track for the batch runner.
 
 subtitle_backfill_process_track <- function(track, config, pipeline_run_id, label) {
+  talent_assert_processing(track$talent_code[[1]])
   video_input <- subtitle_backfill_with_reader(
     config$db_path,
     config$collection_marker,
@@ -68,7 +69,10 @@ subtitle_backfill_process_track <- function(track, config, pipeline_run_id, labe
             url = config$speaker_change_url,
             model = config$speaker_change_model,
             timeout_sec = config$speaker_change_timeout_sec,
-            stop_requested_fn = function() subtitle_backfill_stop_requested(config$stop_request_path)
+            stop_requested_fn = function() {
+              talent_assert_processing(track$talent_code[[1]])
+              subtitle_backfill_stop_requested(config$stop_request_path)
+            }
           )
         }
       } else {
@@ -80,17 +84,23 @@ subtitle_backfill_process_track <- function(track, config, pipeline_run_id, labe
         prompt = subtitle_speaker_change_prompt()
       ),
       stop_requested_fn = function() {
+        talent_assert_processing(track$talent_code[[1]])
         subtitle_backfill_stop_requested(config$stop_request_path)
       },
       before_publish = function() {
+        talent_assert_processing(track$talent_code[[1]])
         subtitle_backfill_wait_for_collection(
           config$collection_marker,
           "publishing completed video"
         )
+        talent_assert_processing(track$talent_code[[1]])
         subtitle_backfill_assert_running(config$stop_request_path)
       }
     )
     c(list(status = "published", examined = TRUE, is_new = TRUE), result)
+  },
+  talent_processing_paused = function(error) {
+    list(status = "cancelled", error = error, examined = TRUE, is_new = TRUE)
   },
   subtitle_backfill_stop_requested = function(error) {
     list(status = "cancelled", error = error, examined = TRUE, is_new = TRUE)
