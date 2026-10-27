@@ -1,8 +1,19 @@
-# Reviewed lifecycle rollout — approval required
+# Talent lifecycle deployment and rollback
 
-Status: source integrated and isolated tests run; **not deployed or configured**.
-No production control directory, account, secret, environment setting, service,
-Tunnel route, Cloudflare deployment or permission change has been made.
+Production rollout was authorized and completed on 2026-10-27. The bridge runs
+on CT 104, maintained backend workers load the shared control root, and the
+existing Cloudflare Worker and permission admin page use the real catalog.
+The origin returned all 10 canonical talents in a read-only check from the
+Cloudflare edge. No real talent switches or client permissions were changed.
+
+Initial reviewed app version was pushed first as `9199635`; the clearer
+Stop processing labels followed as `bb78120`. Analysis implementation was pushed
+as `183c7b0` and ingestion implementation as `a1a8944` on its existing `refactor`
+branch. Source checkout changes unrelated to lifecycle were preserved.
+
+The remaining sections retain the exact rollout commands for reproducibility;
+do not rerun creation commands over the existing account, directory or records.
+Operational rollback must retain the control authority and worker enforcement.
 
 ## Architecture and inspected baseline
 
@@ -31,12 +42,12 @@ Tunnel route, Cloudflare deployment or permission change has been made.
   proxying lifecycle requests. The same permission admin page provides the controls.
   D1 stores no lifecycle state. The client talent dashboard receives no changes.
 
-## Inputs to resolve before approval/execution
+## Deployment records and future rollout inputs
 
 Obtain the existing CT 105 Tunnel's `CF_ACCOUNT_ID`, `CF_TUNNEL_ID`, `CF_ZONE_ID`
 and a suitably scoped Cloudflare API token through the existing administration
-channel. These identifiers and live Cloudflare topology were not fetched during
-source testing. Confirm that the new origin hostname is not covered by an
+channel. These identifiers were resolved during the authorized production rollout and
+are retained in the private deployment ledger on CT 105. Confirm that the new origin hostname is not covered by an
 interactive Access login policy; its authentication is the separate bridge secret.
 If a wildcard Access policy covers it, stop and review that topology rather than
 weakening any existing policy. Confirm CT 105 can reach CT 104 over the tailnet.
@@ -177,8 +188,8 @@ with urllib.request.urlopen(request, timeout=10) as response:
 PY
 ```
 
-The service sandbox is staged source, not yet tested under production systemd
-isolation. If namespace restrictions in this unprivileged LXC prevent startup,
+The service sandbox was verified running under production systemd isolation
+during the 2026-10-27 rollout. If namespace restrictions in this unprivileged LXC prevent startup,
 stop and review the specific restriction; do not disable the sandbox wholesale.
 If the canonical DuckDB has an incompatible writer lock, the bridge returns 503;
 retry after that writer finishes. It does not open a writable catalog connection.
@@ -214,9 +225,9 @@ path = f'/accounts/{a}/cfd_tunnel/{t}/configurations'
 old = api(path)['config']
 assert not any(rule.get('hostname') == host for rule in old['ingress'])
 assert not api(f'/zones/{z}/dns_records?name={host}')
-ledger = Path('/root/talent-lifecycle-cloudflare-route.json')
+ledger = Path('/root/talent-lifecycle-rollout-20261027/origin-route-ledger.json')
 fd = os.open(ledger, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-with os.fdopen(fd, 'w') as output: json.dump({'previous_config': old, 'tunnel': t, 'zone': z}, output)
+with os.fdopen(fd, 'w') as output: json.dump({'old_config': old, 'tunnel': t, 'zone': z}, output)
 record = api(f'/zones/{z}/dns_records', 'POST', {'type': 'CNAME', 'name': host, 'content': t + '.cfargotunnel.com', 'proxied': True, 'ttl': 1})
 state = json.loads(ledger.read_text()); state['dns_id'] = record['id']; ledger.write_text(json.dumps(state))
 config = {**old, 'ingress': [{'hostname': host, 'service': 'http://100.118.151.32:8765'}, *old['ingress']]}
@@ -338,7 +349,7 @@ git push origin HEAD:main
 python3 - <<'PY'
 import json, os, urllib.request
 from pathlib import Path
-state = json.loads(Path('/root/talent-lifecycle-cloudflare-route.json').read_text())
+state = json.loads(Path('/root/talent-lifecycle-rollout-20261027/origin-route-ledger.json').read_text())
 host = 'talent-control-origin.sun-dataanalytics.com'
 a, t, z = os.environ['CF_ACCOUNT_ID'], state['tunnel'], state['zone']
 def api(path, method='GET', body=None):
@@ -400,3 +411,45 @@ request/download, admitted prompt job or remote batch may finish; controls are
 cooperative checks at maintained boundaries. Custom notebooks and old processes
 without configured policy are outside that coverage. A saved pause is never proof
 that every running job has stopped. Removal is outside this integration.
+
+
+## Verified production state (2026-10-27)
+
+- UI: `https://apps.sun-dataanalytics.com/admin.html`, behind the existing Access
+  application and Worker administrator checks. Stop collection/Resume collection
+  map to `archive`/`restore`; Stop processing/Resume processing map to `pause`/`resume`.
+- Origin: `https://talent-control-origin.sun-dataanalytics.com`, forwarded by the
+  existing CT 105 Tunnel to `http://100.118.151.32:8765` on CT 104 over Tailscale.
+- Authority: the shared directory documented above. It was empty after rollout;
+  absent individual records retain prior enabled behavior. Only explicit operator
+  actions create per-talent records. No seed operation changed real talent state.
+- Owner UID/GID: `sun-data-lifecycle` 60001/60001. Directory owner is that UID,
+  read group is existing GID 1000, mode 2750. New JSON is 0640; lock is 0600.
+  Runtime checks confirmed both containers' `jonathon` account reads but cannot
+  write; the dedicated bridge account has control-directory write access.
+- Both backend repository environments contain `TALENT_CONTROL_ROOT` and
+  `TALENT_CONTROL_MOUNT`. Actual Python ingestion, analysis and R processing
+  configuration checks confirmed the same authority. No active job was killed.
+- Tests passed: 26 Worker/frontend tests, 8 policy/bridge tests, ingestion guard
+  test, earlier viewer-activity preservation tests, cross-container lock/atomic
+  replacement, and production service startup and account-access checks.
+- Cloudflare edge GET using the separate bridge credential returned HTTP 200 and
+  all 10 real catalog talents. An external automated browser request can still
+  receive a Cloudflare challenge; the Worker-to-origin path succeeds. No WAF,
+  Access or global bot protection setting was weakened. Private unauthenticated
+  origin requests returned 401.
+- A temporary scheduled read-only edge check proved the real connection and was
+  removed when normal Worker source was activated. It did not write talent/D1
+  state. The temporary local remote-preview credential was removed as well.
+- Original Worker rollback version: `3dd66761-acff-4a18-a07d-06e065fed8b5`.
+  Original published frontend commit: `4c5067ecd5e39940cce47a41eb6e8b4208bc10ba`.
+  Private ledger: `/root/talent-lifecycle-rollout-20261027` on CT 105; original
+  backend environment backups are in the same-named directory on CT 104.
+
+For Tunnel/DNS rollback use CT 105's `origin-route-ledger.json`, whose
+`old_config`, `tunnel`, `zone` and `dns_id` fields identify the original config and
+our added record. Preserve other routes added later. Prefer a refreshed current
+config with only this rollout's exact hostname removed over a blanket restore.
+The independent `rollback-version.json` records the original Worker/frontend
+versions and initial app commit. Do not infer original versions from later
+metadata inspection snapshots.
