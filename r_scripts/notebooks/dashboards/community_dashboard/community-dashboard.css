@@ -379,6 +379,19 @@ body {
   overflow-y: visible;
 }
 
+.community-participation-section .sd-heatmap__frame {
+  max-width: 780px;
+  margin-inline: auto;
+}
+
+.community-participation-section .sd-heatmap__frame svg {
+  display: block;
+  width: 100%;
+  min-width: 620px;
+  max-width: none;
+  height: auto;
+}
+
 .community-analysis-section .sd-video-explorer__empty {
   min-height: 240px;
   border-color: var(--sda-soft-line);

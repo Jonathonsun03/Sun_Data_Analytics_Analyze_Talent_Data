@@ -18,6 +18,10 @@ Drop-in, Returning, and Regular. The cross tab shows attendance counts for
 every main topic by selected layer. Missing main topics are Unclassified, and
 streams without mapped tags are Untagged.
 
+The Participation heatmap starts with 10 streams and 20 chatters. Its chart
+frame is capped at 780 pixels wide, with horizontal scrolling on narrow
+screens. The stream and chatter pickers still permit larger selections.
+
 The visual system uses a compact 260-pixel filter rail, a single horizontal summary bar, navy
 typography, selective blue accents, and flat analytical sections. The page is
 the primary vertical scroll container; chart frames retain horizontal overflow

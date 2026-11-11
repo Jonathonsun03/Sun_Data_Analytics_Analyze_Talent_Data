@@ -201,7 +201,7 @@ htmltools::tagList(
 community_section(
   "Chatter–Stream Participation",
   uiOutput("community_heatmap"),
-  class = "community-primary-section"
+  class = "community-primary-section community-participation-section"
 )
 ```
 
@@ -566,9 +566,9 @@ output$community_heatmap <- renderUI({
       data$explorer,
       view = "heatmap",
       dataset_id = community_dataset_id("heatmap"),
-      initial_video_count = 12L,
+      initial_video_count = 10L,
       max_selected = 18L,
-      max_users = 28L,
+      max_users = 20L,
       height = 520L,
       compact = TRUE
     )
