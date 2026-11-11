@@ -64,6 +64,8 @@ dashboard_load_community_data <- function(
       available_videos = available_videos,
       explorer = NULL,
       community_shape = NULL,
+      layer_attendance = NULL,
+      layer_tags = NULL,
       summary = list(
         chatters = 0L,
         available_live_videos = nrow(available_videos),
@@ -92,12 +94,17 @@ dashboard_load_community_data <- function(
     activity,
     max_overlap_videos = overlap_max_videos
   )
+  layer_attendance <- dashboard_community_layer_attendance(
+    activity, community_shape$profiles, classifications$filter_topics
+  )
 
   list(
     activity = activity,
     available_videos = available_videos,
     explorer = explorer,
     community_shape = community_shape,
+    layer_attendance = layer_attendance,
+    layer_tags = classifications$filter_keywords,
     summary = list(
       chatters = nrow(community_shape$profiles),
       available_live_videos = nrow(available_videos),

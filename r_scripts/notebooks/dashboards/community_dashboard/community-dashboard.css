@@ -18,6 +18,12 @@
   --sda-sans: "Aptos", "Inter", "Montserrat", "Avenir Next", "Helvetica Neue", Arial, ui-sans-serif, system-ui, sans-serif;
 }
 
+.community-layer-note {
+  color: var(--sda-muted);
+  font-size: 0.82rem;
+  margin: 0 0 12px;
+}
+
 html,
 body,
 .quarto-dashboard-content,

@@ -6,10 +6,19 @@ dashboard because its filters use stream dates and its interactive D3 payloads
 have a different performance profile from analytics-snapshot reporting.
 
 The application reuses the shared viewer-activity loaders and visualization
-components. Its Overview, Chatter Flows, Participation, Audience Overlap, and
+components. Its Overview, Chatter Flows, Community Layers, Participation, Audience Overlap, and
 Methodology pages are ordinary top-level dashboard tabs that all use one
-applied talent, stream-date window, and minimum message threshold. The visual
-system uses a compact 260-pixel filter rail, a single horizontal summary bar, navy
+applied talent, stream-date window, and minimum message threshold.
+
+The Community Layers tab aggregates every observed chatter in that scope by
+layer, main title topic, tag, and stream. One flow unit is one chatter
+attending one stream; it is split evenly over that stream's tags. Its Plotly
+Sankey groups smaller topics, tags, and streams. Layer checkboxes default to
+Drop-in, Returning, and Regular. The cross tab shows attendance counts for
+every main topic by selected layer. Missing main topics are Unclassified, and
+streams without mapped tags are Untagged.
+
+The visual system uses a compact 260-pixel filter rail, a single horizontal summary bar, navy
 typography, selective blue accents, and flat analytical sections. The page is
 the primary vertical scroll container; chart frames retain horizontal overflow
 only when preserving readable labels requires it at narrow widths.

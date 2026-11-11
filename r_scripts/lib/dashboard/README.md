@@ -28,6 +28,10 @@ chatter community dashboard. That application uses the same fail-closed access
 context as the creator dashboard and validates its selected talent before each
 lakehouse query.
 
+`metrics/community_layers.R` groups the shared viewer activity by the
+date-scoped community layer and main title topic. `adapters/community_layers.R`
+renders the aggregate Plotly Sankey; the dashboard supplies the full table.
+
 ## Naming
 
 Filenames use their layer and domain rather than repeating `dashboard_`; the

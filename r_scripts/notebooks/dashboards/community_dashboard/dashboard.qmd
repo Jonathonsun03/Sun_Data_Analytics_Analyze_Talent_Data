@@ -165,6 +165,36 @@ community_section(
 )
 ```
 
+# Community Layers {scrolling="true"}
+
+```{r}
+htmltools::tagList(
+  community_section(
+    "What Each Layer Attends",
+    htmltools::tags$p(
+      class = "community-layer-note",
+      "All observed chatters in the selected layers are included. Each flow unit is one chatter attending one stream. A stream's unit is split evenly across its tags so the widths stay consistent. Layers are assigned within the applied date range."
+    ),
+    checkboxGroupInput(
+      "community_visible_layers", "Community layers",
+      choices = c("Drop-in", "Returning", "Regular", "Core"),
+      selected = c("Drop-in", "Returning", "Regular"),
+      inline = TRUE
+    ),
+    plotly::plotlyOutput("community_layer_flow", height = "640px"),
+    class = "community-primary-section"
+  ),
+  community_section(
+    "Layer × Main Topic",
+    htmltools::tags$p(
+      class = "community-layer-note",
+      "Each cell counts chatter–stream attendances for that layer and main topic. A chatter attending multiple streams contributes once per stream. All topics, including Unclassified, are shown."
+    ),
+    DT::dataTableOutput("community_layer_table")
+  )
+)
+```
+
 # Participation {scrolling="true"}
 
 ```{r}
@@ -216,12 +246,19 @@ community_section(
     htmltools::tags$li(
       htmltools::tags$span("04"),
       htmltools::tags$div(
+        htmltools::tags$h3("Community layer attendance"),
+        htmltools::tags$p("Counts distinct chatters per stream, then groups those attendances by main topic. A stream's attendance is divided evenly across its tags in the flow, so each stage has the same total width.")
+      )
+    ),
+    htmltools::tags$li(
+      htmltools::tags$span("05"),
+      htmltools::tags$div(
         htmltools::tags$h3("Audience overlap"),
         htmltools::tags$p("Uses Jaccard similarity based on shared identified chatters.")
       )
     ),
     htmltools::tags$li(
-      htmltools::tags$span("05"),
+      htmltools::tags$span("06"),
       htmltools::tags$div(
         htmltools::tags$h3("Authorized scope"),
         htmltools::tags$p("Chart selectors only narrow the server-authorized talent and stream-date scope.")
@@ -480,6 +517,43 @@ output$community_sankey <- renderUI({
       max_selected = 16L,
       max_users = 24L,
       height = 560L
+    )
+  )
+})
+
+community_layer_rows <- reactive({
+  data <- community_data_reactive()
+  if (!community_has_data(data)) return(NULL)
+  rows <- data$layer_attendance
+  selected_layers <- input$community_visible_layers
+  if (is.null(selected_layers)) selected_layers <- character()
+  rows <- dplyr::filter(rows, .data$layer %in% selected_layers)
+  rows
+})
+
+output$community_layer_flow <- plotly::renderPlotly({
+  rows <- community_layer_rows()
+  if (is.null(rows) || nrow(rows) == 0L) return(NULL)
+  tags <- community_data_reactive()$layer_tags
+  dashboard_community_layer_sankey(dashboard_community_layer_flow(rows, tags))
+})
+
+output$community_layer_table <- DT::renderDataTable({
+  rows <- community_layer_rows()
+  if (is.null(rows)) return(NULL)
+  if (nrow(rows) == 0L) return(NULL)
+  table <- dashboard_community_layer_crosstab(rows)
+  topic_columns <- names(table)[-1]
+  maximum <- max(as.matrix(table[topic_columns]))
+  widget <- DT::datatable(
+    table, rownames = FALSE,
+    options = list(dom = "t", ordering = FALSE, scrollX = TRUE)
+  )
+  DT::formatStyle(
+    widget, columns = topic_columns,
+    backgroundColor = DT::styleInterval(
+      c(0, maximum * 0.1, maximum * 0.3, maximum * 0.6),
+      c("#f1f5f9", "#e8f1fa", "#d4e6f4", "#a7cde8", "#6ba5d3")
     )
   )
 })
